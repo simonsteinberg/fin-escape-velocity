@@ -12,24 +12,28 @@ run = "uv run ruff format ."
 
 [tasks.coverage]
 description = "Run tests with coverage report"
-run = "uv run pytest --cov=finescape --cov-report=term-missing"
+run = "uv run pytest --cov=finev --cov-report=term-missing"
 
 [tasks.coverage-ci]
 description = "Run tests for CI with JUnit XML and HTML coverage artifacts"
-run = "mkdir -p reports && uv run pytest --junitxml=reports/junit.xml --cov=finescape --cov-report=term-missing --cov-report=html:reports/htmlcov --cov-report=xml:reports/coverage.xml"
+run = "mkdir -p reports && uv run pytest --junitxml=reports/junit.xml --cov=finev --cov-report=term-missing --cov-report=html:reports/htmlcov --cov-report=xml:reports/coverage.xml"
 
 [tasks.lint]
 description = "Run lint checks"
 run = "uv run ruff check ."
 
 [tasks.run]
-description = "Run greeting script"
-run = "uv run python -m finescape.greet"
+description = "Run wealth forecast and print yearly totals"
+run = "uv run python -m finev.cli"
+
+[tasks.app]
+description = "Launch the wealth forecast application"
+run = "uv run finev-app"
 
 [tasks.sync]
 description = "Install project dependencies"
 run = "uv sync"
 
 [tasks.setup-repo]
-description = "Rename project from 'finescape' to a specified name"
+description = "Rename project from 'finev' to a specified name"
 run = ".tasks/setup-repo.sh"

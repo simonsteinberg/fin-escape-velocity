@@ -3,29 +3,33 @@ requires = ["hatchling>=1.24"]
 build-backend = "hatchling.build"
 
 [project]
-name = "finescape"
+name = "finev"
 version = "0.0.0"
-description = "Barista example project"
+description = "Fin-Escape-Velocity example project"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+  "pandas>=2.2",
+  "nicegui>=3.12.1",
+]
 
 [project.scripts]
-finescape-greet = "finescape.greet:main"
+finev-version = "finev.greet:main"
+finev-app = "finev.app:main"
 
 [dependency-groups]
 dev = [
-  "pre-commit>=3.7",
-  "pytest>=8.0",
+  "pre-commit>=4.6.0",
+  "pytest>=9.0.3",
   "pytest-cov>=5.0",
-  "ruff>=0.6",
+  "ruff>=0.15.14",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
 [tool.coverage.run]
-source = ["finescape"]
+source = ["finev"]
 branch = true
 
 [tool.coverage.report]
@@ -41,4 +45,4 @@ line-length = 79
 target-version = "py312"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/finescape"]
+packages = ["src/finev"]
