@@ -156,9 +156,10 @@ def build_wealth_page() -> None:
                 currency = ui.input(label="Currency", value="EUR")
                 average_inflation_rate = ui.number(
                     label="Average inflation rate (%)",
-                    value=0.0,
+                    value=2.0,
                     format="%.2f",
                     min=-100,
+                    step=0.1,
                 )
 
         with ui.card().classes("w-full p-3"):

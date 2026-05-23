@@ -39,7 +39,7 @@ class UserProfile:
     retirement_age: int = 67
     end_age: int = 100
     currency: str = "EUR"
-    average_inflation_rate: float = 0.0
+    average_inflation_rate: float = 0.02
 
 
 @dataclass(frozen=True)

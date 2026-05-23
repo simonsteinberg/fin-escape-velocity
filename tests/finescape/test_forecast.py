@@ -43,7 +43,12 @@ def test_contributions_applied_before_retirement() -> None:
 
 def test_withdrawal_proportional_after_retirement() -> None:
     """Withdraw proportionally across assets after retirement."""
-    profile = UserProfile(current_age_years=67, retirement_age=67, end_age=68)
+    profile = UserProfile(
+        current_age_years=67,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
     assets = [
         Asset(
             name="Asset A",
@@ -73,7 +78,12 @@ def test_withdrawal_proportional_after_retirement() -> None:
 
 def test_withdrawal_exceeding_total_floors_balances() -> None:
     """Floor balances to zero when withdrawals exceed total."""
-    profile = UserProfile(current_age_years=67, retirement_age=67, end_age=68)
+    profile = UserProfile(
+        current_age_years=67,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
     assets = [
         Asset(
             name="Asset A",
@@ -133,7 +143,12 @@ def test_withdrawal_inflates_with_average_rate() -> None:
 
 def test_etf_withdrawal_applies_tax_on_gains() -> None:
     """Apply ETF taxes based on the gains portion of the withdrawal."""
-    profile = UserProfile(current_age_years=67, retirement_age=67, end_age=68)
+    profile = UserProfile(
+        current_age_years=67,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
     asset = Asset(
         name="ETF",
         asset_type=AssetType.ETF,
@@ -155,7 +170,12 @@ def test_etf_withdrawal_applies_tax_on_gains() -> None:
 
 def test_non_etf_withdrawal_has_no_tax() -> None:
     """Do not apply taxes to non-ETF withdrawals."""
-    profile = UserProfile(current_age_years=67, retirement_age=67, end_age=68)
+    profile = UserProfile(
+        current_age_years=67,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
     asset = Asset(
         name="Cash",
         asset_type=AssetType.CASH,
