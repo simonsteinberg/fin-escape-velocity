@@ -31,6 +31,7 @@ class UserProfile:
         retirement_age: Retirement age in years.
         end_age: Forecast end age in years.
         currency: Currency code used for display.
+        average_inflation_rate: Average annual inflation rate as a decimal.
     """
 
     current_age_years: int
@@ -38,6 +39,7 @@ class UserProfile:
     retirement_age: int = 67
     end_age: int = 100
     currency: str = "EUR"
+    average_inflation_rate: float = 0.0
 
 
 @dataclass(frozen=True)

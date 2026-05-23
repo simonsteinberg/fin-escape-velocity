@@ -45,6 +45,23 @@ def _annual_to_monthly_rate(annual_rate: float) -> float:
     return (1 + annual_rate) ** (1 / 12) - 1
 
 
+def _inflation_multiplier(
+    annual_rate: float,
+    months_since_start: int,
+) -> float:
+    """Return the cumulative inflation multiplier for a number of months.
+
+    Args:
+        annual_rate: Average annual inflation rate as a decimal fraction.
+        months_since_start: Number of months since the forecast start.
+
+    Returns:
+        Inflation multiplier to apply to today's currency.
+    """
+    monthly_rate = _annual_to_monthly_rate(annual_rate)
+    return (1 + monthly_rate) ** months_since_start
+
+
 def _validate_profile(profile: UserProfile) -> ForecastMetadata:
     """Validate user profile inputs and derive timeline metadata.
 
@@ -67,6 +84,8 @@ def _validate_profile(profile: UserProfile) -> ForecastMetadata:
         raise ValueError("End age must be positive")
     if profile.end_age < profile.retirement_age:
         raise ValueError("End age must be at or after retirement age")
+    if profile.average_inflation_rate <= -1:
+        raise ValueError("Average inflation rate must be greater than -100%")
 
     start_age_months = (
         profile.current_age_years * 12 + profile.current_age_months
@@ -206,7 +225,14 @@ def forecast_wealth(
                 ]
                 net_cashflow = float(sum(contributions))
             else:
-                withdrawal_amount = float(withdrawal.monthly_withdrawal)
+                months_since_start = age_months - metadata.start_age_months
+                inflation_multiplier = _inflation_multiplier(
+                    profile.average_inflation_rate,
+                    months_since_start,
+                )
+                withdrawal_amount = (
+                    float(withdrawal.monthly_withdrawal) * inflation_multiplier
+                )
                 total_balance = float(sum(balances))
                 if withdrawal_amount > 0 and total_balance > 0:
                     actual_withdrawn = min(withdrawal_amount, total_balance)

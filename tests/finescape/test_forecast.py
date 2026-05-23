@@ -101,6 +101,36 @@ def test_withdrawal_exceeding_total_floors_balances() -> None:
     assert result.loc[1, "net_cashflow"] == pytest.approx(-30.0)
 
 
+def test_withdrawal_inflates_with_average_rate() -> None:
+    """Increase withdrawal target using average inflation rate."""
+    profile = UserProfile(
+        current_age_years=40,
+        retirement_age=41,
+        end_age=42,
+        average_inflation_rate=0.12,
+    )
+    asset = Asset(
+        name="Cash",
+        asset_type=AssetType.CASH,
+        current_value=20_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    withdrawal = WithdrawalPlan(monthly_withdrawal=1_000.0)
+
+    result = forecast_wealth(
+        profile=profile, assets=[asset], withdrawal=withdrawal
+    )
+
+    monthly_rate = (1 + 0.12) ** (1 / 12) - 1
+    expected_first = 1_000.0 * (1 + monthly_rate) ** 12
+    expected_next = 1_000.0 * (1 + monthly_rate) ** 13
+
+    assert result.loc[12, "net_cashflow"] == pytest.approx(-expected_first)
+    assert result.loc[13, "net_cashflow"] == pytest.approx(-expected_next)
+    assert result.loc[12, "taxes"] == pytest.approx(0.0)
+
+
 def test_etf_withdrawal_applies_tax_on_gains() -> None:
     """Apply ETF taxes based on the gains portion of the withdrawal."""
     profile = UserProfile(current_age_years=67, retirement_age=67, end_age=68)

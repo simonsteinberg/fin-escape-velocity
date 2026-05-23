@@ -138,7 +138,7 @@ def build_wealth_page() -> None:
         ui.label("Wealth Forecast").classes("text-2xl font-bold")
         with ui.card().classes("w-full p-3"):
             ui.label("Profile").classes("text-lg font-semibold")
-            with ui.grid(columns=5).classes("w-full gap-3"):
+            with ui.grid(columns=6).classes("w-full gap-3"):
                 current_age_years = ui.number(
                     label="Current age (years)", value=40, format="%.0f"
                 )
@@ -154,6 +154,12 @@ def build_wealth_page() -> None:
                 )
                 end_age = ui.number(label="End age", value=100, format="%.0f")
                 currency = ui.input(label="Currency", value="EUR")
+                average_inflation_rate = ui.number(
+                    label="Average inflation rate (%)",
+                    value=0.0,
+                    format="%.2f",
+                    min=-100,
+                )
 
         with ui.card().classes("w-full p-3"):
             ui.label("Assets").classes("text-lg font-semibold")
@@ -249,6 +255,10 @@ def build_wealth_page() -> None:
                     retirement_age=int(retirement_age.value or 0),
                     end_age=int(end_age.value or 0),
                     currency=str(currency.value or "EUR"),
+                    average_inflation_rate=float(
+                        average_inflation_rate.value or 0.0
+                    )
+                    / 100,
                 )
                 assets = build_assets()
                 withdrawal = WithdrawalPlan(
