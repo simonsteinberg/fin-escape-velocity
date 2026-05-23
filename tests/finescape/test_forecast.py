@@ -43,7 +43,12 @@ def test_contributions_applied_before_retirement() -> None:
 
 def test_withdrawal_proportional_after_retirement() -> None:
     """Withdraw proportionally across assets after retirement."""
-    profile = UserProfile(current_age_years=67, retirement_age=67, end_age=68)
+    profile = UserProfile(
+        current_age_years=67,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
     assets = [
         Asset(
             name="Asset A",
@@ -73,7 +78,12 @@ def test_withdrawal_proportional_after_retirement() -> None:
 
 def test_withdrawal_exceeding_total_floors_balances() -> None:
     """Floor balances to zero when withdrawals exceed total."""
-    profile = UserProfile(current_age_years=67, retirement_age=67, end_age=68)
+    profile = UserProfile(
+        current_age_years=67,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
     assets = [
         Asset(
             name="Asset A",
@@ -101,9 +111,44 @@ def test_withdrawal_exceeding_total_floors_balances() -> None:
     assert result.loc[1, "net_cashflow"] == pytest.approx(-30.0)
 
 
+def test_withdrawal_inflates_with_average_rate() -> None:
+    """Increase withdrawal target using average inflation rate."""
+    profile = UserProfile(
+        current_age_years=40,
+        retirement_age=41,
+        end_age=42,
+        average_inflation_rate=0.12,
+    )
+    asset = Asset(
+        name="Cash",
+        asset_type=AssetType.CASH,
+        current_value=20_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    withdrawal = WithdrawalPlan(monthly_withdrawal=1_000.0)
+
+    result = forecast_wealth(
+        profile=profile, assets=[asset], withdrawal=withdrawal
+    )
+
+    monthly_rate = (1 + 0.12) ** (1 / 12) - 1
+    expected_first = 1_000.0 * (1 + monthly_rate) ** 12
+    expected_next = 1_000.0 * (1 + monthly_rate) ** 13
+
+    assert result.loc[12, "net_cashflow"] == pytest.approx(-expected_first)
+    assert result.loc[13, "net_cashflow"] == pytest.approx(-expected_next)
+    assert result.loc[12, "taxes"] == pytest.approx(0.0)
+
+
 def test_etf_withdrawal_applies_tax_on_gains() -> None:
     """Apply ETF taxes based on the gains portion of the withdrawal."""
-    profile = UserProfile(current_age_years=67, retirement_age=67, end_age=68)
+    profile = UserProfile(
+        current_age_years=67,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
     asset = Asset(
         name="ETF",
         asset_type=AssetType.ETF,
@@ -118,14 +163,24 @@ def test_etf_withdrawal_applies_tax_on_gains() -> None:
         profile=profile, assets=[asset], withdrawal=withdrawal
     )
 
-    assert result.loc[1, "ETF"] == pytest.approx(99_000.0)
-    assert result.loc[1, "taxes"] == pytest.approx(73.5)
-    assert result.loc[1, "net_cashflow"] == pytest.approx(-926.5)
+    tax_factor = 0.4 * 0.7 * 0.2625
+    gross_withdrawal = 1_000.0 / (1 - tax_factor)
+    expected_taxes = gross_withdrawal * tax_factor
+    expected_balance = 100_000.0 - gross_withdrawal
+
+    assert result.loc[1, "ETF"] == pytest.approx(expected_balance)
+    assert result.loc[1, "taxes"] == pytest.approx(expected_taxes)
+    assert result.loc[1, "net_cashflow"] == pytest.approx(-1_000.0)
 
 
 def test_non_etf_withdrawal_has_no_tax() -> None:
     """Do not apply taxes to non-ETF withdrawals."""
-    profile = UserProfile(current_age_years=67, retirement_age=67, end_age=68)
+    profile = UserProfile(
+        current_age_years=67,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
     asset = Asset(
         name="Cash",
         asset_type=AssetType.CASH,

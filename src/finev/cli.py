@@ -27,6 +27,7 @@ def build_default_profile() -> UserProfile:
         retirement_age=67,
         end_age=100,
         currency="EUR",
+        average_inflation_rate=0.02,
     )
 
 
