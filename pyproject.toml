@@ -3,7 +3,7 @@ requires = ["hatchling>=1.24"]
 build-backend = "hatchling.build"
 
 [project]
-name = "barista"
+name = "finescape"
 version = "0.0.0"
 description = "Barista example project"
 readme = "README.md"
@@ -11,7 +11,7 @@ requires-python = ">=3.12"
 dependencies = []
 
 [project.scripts]
-barista-greet = "barista.greet:main"
+finescape-greet = "finescape.greet:main"
 
 [dependency-groups]
 dev = [
@@ -25,7 +25,7 @@ dev = [
 testpaths = ["tests"]
 
 [tool.coverage.run]
-source = ["barista"]
+source = ["finescape"]
 branch = true
 
 [tool.coverage.report]
@@ -41,4 +41,4 @@ line-length = 79
 target-version = "py312"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/barista"]
+packages = ["src/finescape"]

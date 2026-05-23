@@ -14,7 +14,7 @@ def get_version() -> str:
 
 def main() -> None:
     version = get_version()
-    print(f"Hello barista (version {version})")
+    print(f"Hello finescape (version {version})")
 
 
 if __name__ == "__main__":

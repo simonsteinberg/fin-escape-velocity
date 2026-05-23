@@ -1,7 +1,7 @@
-# barista
+# Fin-Escape-Velocity
 
-[![CI](https://github.com/simonsteinberg/barista/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/simonsteinberg/barista/actions/workflows/ci.yml)
-[![Coverage](https://codecov.io/gh/simonsteinberg/barista/branch/main/graph/badge.svg)](https://codecov.io/gh/simonsteinberg/barista)
+[![CI](https://github.com/simonsteinberg/finescape/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/simonsteinberg/finescape/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/simonsteinberg/finescape/branch/main/graph/badge.svg)](https://codecov.io/gh/simonsteinberg/finescape)
 
 Minimal Python project managed with mise and uv.
 
@@ -20,26 +20,26 @@ uv run pre-commit install
 
 3. Run the greeting CLI:
 ```bash
-uv run barista-greet
+uv run finescape-greet
 ```
 
 Expected output:
 
-	Hello barista (version <CURRENT_VERSION>)
+	Hello finescape (version <CURRENT_VERSION>)
 
 ## Project Setup and Customization
 
 ### Rename the project
 
-Use the `setup-repo` task to rename the entire project from `barista` to your desired project name:
+Use the `setup-repo` task to rename the entire project from `finescape` to your desired project name:
 
 ```bash
 mise run setup-repo -- myproject
 ```
 
 This task will:
-- Rename the `src/barista/` directory to `src/myproject/`
-- Replace all occurrences of `barista` with `myproject` across the repository (in Python files, configuration files, documentation, etc.)
+- Rename the `src/finescape/` directory to `src/myproject/`
+- Replace all occurrences of `finescape` with `myproject` across the repository (in Python files, configuration files, documentation, etc.)
 - Exclude git, cache, and build directories from the search
 
 **Example:**

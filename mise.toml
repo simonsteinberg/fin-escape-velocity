@@ -12,11 +12,11 @@ run = "uv run ruff format ."
 
 [tasks.coverage]
 description = "Run tests with coverage report"
-run = "uv run pytest --cov=barista --cov-report=term-missing"
+run = "uv run pytest --cov=finescape --cov-report=term-missing"
 
 [tasks.coverage-ci]
 description = "Run tests for CI with JUnit XML and HTML coverage artifacts"
-run = "mkdir -p reports && uv run pytest --junitxml=reports/junit.xml --cov=barista --cov-report=term-missing --cov-report=html:reports/htmlcov --cov-report=xml:reports/coverage.xml"
+run = "mkdir -p reports && uv run pytest --junitxml=reports/junit.xml --cov=finescape --cov-report=term-missing --cov-report=html:reports/htmlcov --cov-report=xml:reports/coverage.xml"
 
 [tasks.lint]
 description = "Run lint checks"
@@ -24,12 +24,12 @@ run = "uv run ruff check ."
 
 [tasks.run]
 description = "Run greeting script"
-run = "uv run python -m barista.greet"
+run = "uv run python -m finescape.greet"
 
 [tasks.sync]
 description = "Install project dependencies"
 run = "uv sync"
 
 [tasks.setup-repo]
-description = "Rename project from 'barista' to a specified name"
+description = "Rename project from 'finescape' to a specified name"
 run = ".tasks/setup-repo.sh"

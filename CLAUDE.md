@@ -1,8 +1,8 @@
-# Barista Agent — CLAUDE.md
+# Fin-Escape-Velocity (finescape) Agent — CLAUDE.md
 
 ## Project layout
 
-- Application/business logic: `src/barista/`
+- Application/business logic: `src/finescape/`
 - Agentic projects (isolated): `.agents/<subproject>/` — each with its own `pyproject.toml`, `mise.toml`, and `src/` tree
 - Tests: `tests/`
 - Project metadata and tool config: `pyproject.toml`, `mise.toml`
@@ -132,7 +132,7 @@ Commit message format: `<type>(<scope>): <concise description of what and why>`
 
 Types: `feat` | `fix` | `chore` | `docs` | `refactor` | `test` | `ci`
 
-Example: `feat(barista): add retry backoff to espresso tool`
+Example: `feat(finescape): add retry backoff to espresso tool`
 
 ## Continuous integration discipline
 
