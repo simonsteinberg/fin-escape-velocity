@@ -76,6 +76,7 @@ minimal rework. Specific expectations:
 | End age | 100 | Configurable. |
 | Currency label | EUR | Display only; no FX conversion. |
 | Monthly withdrawal target | — | Net amount the user wants to receive each month in retirement (see §Withdrawal Target Interpretation). |
+| Average inflation rate | 0 % | Annual rate used to inflate the retirement withdrawal target from today's currency. |
 
 ### Assets
 
@@ -100,6 +101,8 @@ Contributions may be zero.
   taxes (see §ETF Withdrawal Tax).
 - Allocation strategy (default): **proportional to asset balances** at the time of each
   withdrawal.
+- The net withdrawal target is specified in **today's currency** and is inflated using the
+  average inflation rate (see §Inflation Adjustment).
 
 #### Withdrawal Target Interpretation
 
@@ -110,6 +113,19 @@ debited by the gross amount while the user receives the net amount.
 > **Example:** Target net = 3,000 EUR; if 40 % of withdrawals come from ETFs with a 40 %
 > gains ratio, the required gross withdrawal is higher than 3,000 EUR. The engine iterates
 > (or solves analytically) to find the gross amount that yields exactly 3,000 EUR net.
+
+#### Inflation Adjustment
+
+The net withdrawal target is defined in **today's currency**. For each retirement month,
+inflate the target using the user-specified average inflation rate:
+
+```
+inflated_target = base_target × (1 + average_inflation_rate)^(months_since_current_age / 12)
+```
+
+> **Example:** Base target = 3,000 EUR, average inflation rate = 2 %, retirement age = 67,
+> current age = 40 (27 years). First retirement year target:
+> 3,000 × (1 + 0.02)^27 = 5,120 EUR per month.
 
 ---
 
@@ -250,6 +266,12 @@ and the withdrawal is grossed up so the user receives the specified net target.
 The user can override global default gain rates and set individual gain rates per asset
 without affecting assets for which no override is provided.
 
+### FR6 — Inflation-Adjusted Withdrawals
+
+The user can specify an average inflation rate. The net monthly withdrawal target is
+inflated from today's currency to each retirement month using compound inflation before
+gross-up and withdrawal allocation.
+
 ---
 
 ## Acceptance Criteria
@@ -263,3 +285,4 @@ without affecting assets for which no override is provided.
 | AC5 | The gross withdrawal is computed such that the resulting net cashflow equals the user's specified net target. |
 | AC6 | Cost basis for each ETF asset is updated correctly on contribution and on withdrawal. |
 | AC7 | Where no gain rate is provided for an asset, the type default is used; user-provided overrides take precedence. |
+| AC8 | Retirement withdrawals are inflated from today's currency using the specified average inflation rate before gross-up. |
