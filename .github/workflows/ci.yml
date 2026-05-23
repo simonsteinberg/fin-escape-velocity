@@ -28,6 +28,9 @@ jobs:
       - name: Lint
         run: mise run lint
 
+      - name: Unit tests
+        run: mise run test
+
       - name: Coverage (terminal + JUnit XML + HTML)
         run: mise run coverage-ci
 
