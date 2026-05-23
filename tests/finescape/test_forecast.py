@@ -163,9 +163,14 @@ def test_etf_withdrawal_applies_tax_on_gains() -> None:
         profile=profile, assets=[asset], withdrawal=withdrawal
     )
 
-    assert result.loc[1, "ETF"] == pytest.approx(99_000.0)
-    assert result.loc[1, "taxes"] == pytest.approx(73.5)
-    assert result.loc[1, "net_cashflow"] == pytest.approx(-926.5)
+    tax_factor = 0.4 * 0.7 * 0.2625
+    gross_withdrawal = 1_000.0 / (1 - tax_factor)
+    expected_taxes = gross_withdrawal * tax_factor
+    expected_balance = 100_000.0 - gross_withdrawal
+
+    assert result.loc[1, "ETF"] == pytest.approx(expected_balance)
+    assert result.loc[1, "taxes"] == pytest.approx(expected_taxes)
+    assert result.loc[1, "net_cashflow"] == pytest.approx(-1_000.0)
 
 
 def test_non_etf_withdrawal_has_no_tax() -> None:

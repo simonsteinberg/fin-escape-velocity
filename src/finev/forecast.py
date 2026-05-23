@@ -230,12 +230,35 @@ def forecast_wealth(
                     profile.average_inflation_rate,
                     months_since_start,
                 )
-                withdrawal_amount = (
+                withdrawal_target = (
                     float(withdrawal.monthly_withdrawal) * inflation_multiplier
                 )
                 total_balance = float(sum(balances))
-                if withdrawal_amount > 0 and total_balance > 0:
-                    actual_withdrawn = min(withdrawal_amount, total_balance)
+                if withdrawal_target > 0 and total_balance > 0:
+                    tax_factor = 0.0
+                    for asset, balance, cost_basis in zip(
+                        assets_list, balances, cost_bases
+                    ):
+                        if asset.asset_type != AssetType.ETF or balance <= 0:
+                            continue
+                        gains = balance - cost_basis
+                        if gains <= 0:
+                            continue
+                        gains_ratio = gains / balance
+                        tax_factor += (
+                            (balance / total_balance)
+                            * gains_ratio
+                            * ETF_TAXABLE_SHARE
+                            * ETF_TAX_RATE
+                        )
+
+                    effective_rate = 1 - tax_factor
+                    gross_target = (
+                        withdrawal_target / effective_rate
+                        if effective_rate > 0
+                        else total_balance
+                    )
+                    actual_withdrawn = min(gross_target, total_balance)
                     new_balances: list[float] = []
                     new_cost_bases: list[float] = []
                     for asset, balance, cost_basis in zip(

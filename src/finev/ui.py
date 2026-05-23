@@ -158,7 +158,7 @@ def build_wealth_page() -> None:
                     label="Average inflation rate (%)",
                     value=2.0,
                     format="%.2f",
-                    min=-100,
+                    min=-99.9,
                     step=0.1,
                 )
 
