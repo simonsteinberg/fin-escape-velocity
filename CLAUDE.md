@@ -84,11 +84,12 @@
 These rules apply to correctness tests (unit, integration, replay). For benchmarking and optimization loops, see the next section.
 
 - Use `pytest` (not `unittest`)
+- Always implement tests for new code; do not merge new functionality without coverage unless explicitly waived.
 - Tests live in `tests/`; mirror the source tree for unit tests:
   - `tests/agents/` — agent behavior tests with mocked tools/models
   - `tests/tools/` — deterministic tool unit tests
   - `tests/workflows/` — workflow integration and replay tests
-- Follow TDD for new functionality:
+- Follow TDD (red-green-refactor) for new functionality:
   1. Write failing tests first
   2. Implement the minimum code to pass
   3. Refactor while keeping tests green
