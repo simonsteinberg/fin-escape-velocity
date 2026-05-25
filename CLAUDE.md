@@ -14,6 +14,10 @@
 - Tests: `tests/`
 - Project metadata and tool config: `pyproject.toml`, `mise.toml`
 
+## Git worktrees
+
+- When asked to work in a git worktree, create it under `.worktree/<worktree-name>` (for example, `.worktree/new-feature-i-m-working-on`).
+
 ## Python and tooling
 
 - Python 3.12
