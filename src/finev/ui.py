@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from typing import Any
+
+import pandas as pd
 from nicegui import ui
 
 from finev.forecast import forecast_wealth
@@ -71,6 +73,15 @@ def _build_chart_options() -> dict[str, Any]:
         "yAxis": {"type": "value"},
         "series": [],
     }
+
+
+def _yearly_display_frame(df: pd.DataFrame) -> pd.DataFrame:
+    """Return a yearly-sampled DataFrame for presentation."""
+    if df.empty:
+        return df
+    yearly = df[df["month_index"] % 12 == 0].copy()
+    yearly["year_index"] = (yearly["month_index"] // 12).astype(int)
+    return yearly.reset_index(drop=True)
 
 
 def build_wealth_page() -> None:
@@ -274,19 +285,20 @@ def build_wealth_page() -> None:
                 ui.notify(str(error), type="negative")
                 return
 
+            display_df = _yearly_display_frame(df)
             age_labels = [
                 f"{int(row.age_years)}y {int(row.age_months)}m"
-                for row in df.itertuples()
+                for row in display_df.itertuples()
             ]
-            rounded = df.copy()
+            rounded = display_df.copy()
             rounded["age"] = age_labels
             rounded = rounded.round(2)
 
             columns = [
                 {
-                    "name": "month_index",
-                    "label": "Month",
-                    "field": "month_index",
+                    "name": "year_index",
+                    "label": "Year",
+                    "field": "year_index",
                     "sortable": True,
                 },
                 {
