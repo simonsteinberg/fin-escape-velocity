@@ -146,6 +146,16 @@ Types: `feat` | `fix` | `chore` | `docs` | `refactor` | `test` | `ci`
 
 Example: `feat(finev): add retry backoff to espresso tool`
 
+## Pull request workflow
+
+- Start from an up-to-date `main` and create a short-lived branch.
+- Make the smallest change that fully solves the task.
+- Complete the pre-commit checklist (format, lint, tests).
+- Commit with the required message format.
+- Open a PR with a clear summary and explicit testing notes.
+- Do not merge until CI is green and any required reviews are complete.
+- Merge and delete the branch; sync `main`.
+
 ## Continuous integration discipline
 
 - Integrate with the mainline branch frequently — at minimum daily, ideally every completed unit of work
