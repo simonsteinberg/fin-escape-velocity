@@ -37,3 +37,7 @@ run = "uv sync"
 [tasks.setup-repo]
 description = "Rename project from 'finev' to a specified name"
 run = ".tasks/setup-repo.sh"
+
+[tasks.branch-clean-up]
+description = "Delete all local and remote branches except main, develop, and the current branch"
+run = ".tasks/branch-clean-up.sh"
