@@ -9,6 +9,7 @@ from nicegui import ui
 
 from finev.forecast import forecast_wealth
 from finev.models import (
+    DEFAULT_ANNUAL_GAIN_RATES,
     Asset,
     AssetType,
     UserProfile,
@@ -26,7 +27,12 @@ def _format_currency(value: float, currency: str) -> str:
     Returns:
         Formatted currency string.
     """
-    return f"{value:,.2f} {currency}".strip()
+    return f"{value:,.0f} {currency}".strip()
+
+
+def _default_gain_pct(asset_type: AssetType) -> float:
+    """Return the default annual gain percentage for an asset type."""
+    return DEFAULT_ANNUAL_GAIN_RATES[asset_type] * 100
 
 
 def _default_asset_rows() -> list[dict[str, Any]]:
@@ -40,21 +46,21 @@ def _default_asset_rows() -> list[dict[str, Any]]:
             "name": "ETF MSCI World",
             "type": AssetType.ETF.value,
             "current_value": 100_000.0,
-            "annual_gain_rate_pct": None,
+            "annual_gain_rate_pct": _default_gain_pct(AssetType.ETF),
             "monthly_contribution": 500.0,
         },
         {
             "name": "bAV",
             "type": AssetType.BAV.value,
             "current_value": 20_000.0,
-            "annual_gain_rate_pct": None,
+            "annual_gain_rate_pct": _default_gain_pct(AssetType.BAV),
             "monthly_contribution": 100.0,
         },
         {
             "name": "Daily account",
             "type": AssetType.CASH.value,
             "current_value": 50_000.0,
-            "annual_gain_rate_pct": None,
+            "annual_gain_rate_pct": _default_gain_pct(AssetType.CASH),
             "monthly_contribution": 0.0,
         },
     ]
@@ -96,7 +102,21 @@ def build_wealth_page() -> None:
             field: Field name to update.
             value: New field value.
         """
-        asset_rows[index][field] = value
+        current_row = asset_rows[index]
+        if field == "type":
+            previous_type = AssetType(str(current_row.get("type")))
+            new_type = AssetType(str(value))
+            current_default = _default_gain_pct(previous_type)
+            if current_row.get("annual_gain_rate_pct") in (
+                None,
+                "",
+                current_default,
+            ):
+                current_row["annual_gain_rate_pct"] = _default_gain_pct(
+                    new_type
+                )
+        current_row[field] = value
+        run_forecast()
 
     def remove_asset_row(index: int) -> None:
         """Remove an asset row from the list.
@@ -106,6 +126,7 @@ def build_wealth_page() -> None:
         """
         asset_rows.pop(index)
         render_asset_rows()
+        run_forecast()
 
     def add_asset_row() -> None:
         """Append a new blank asset row."""
@@ -114,11 +135,12 @@ def build_wealth_page() -> None:
                 "name": "New asset",
                 "type": AssetType.ETF.value,
                 "current_value": 0.0,
-                "annual_gain_rate_pct": None,
+                "annual_gain_rate_pct": _default_gain_pct(AssetType.ETF),
                 "monthly_contribution": 0.0,
             }
         )
         render_asset_rows()
+        run_forecast()
 
     def build_assets() -> list[Asset]:
         """Build asset objects from the current UI rows.
@@ -147,32 +169,6 @@ def build_wealth_page() -> None:
 
     with ui.column().classes("w-full max-w-[1200px] mx-auto p-4 gap-4"):
         ui.label("Wealth Forecast").classes("text-2xl font-bold")
-        with ui.card().classes("w-full p-3"):
-            ui.label("Profile").classes("text-lg font-semibold")
-            with ui.grid(columns=6).classes("w-full gap-3"):
-                current_age_years = ui.number(
-                    label="Current age (years)", value=40, format="%.0f"
-                )
-                current_age_months = ui.number(
-                    label="Current age (months)",
-                    value=0,
-                    format="%.0f",
-                    min=0,
-                    max=11,
-                )
-                retirement_age = ui.number(
-                    label="Retirement age", value=67, format="%.0f"
-                )
-                end_age = ui.number(label="End age", value=100, format="%.0f")
-                currency = ui.input(label="Currency", value="EUR")
-                average_inflation_rate = ui.number(
-                    label="Average inflation rate (%)",
-                    value=2.0,
-                    format="%.2f",
-                    min=-99.9,
-                    step=0.1,
-                )
-
         with ui.card().classes("w-full p-3"):
             ui.label("Assets").classes("text-lg font-semibold")
             ui.label(
@@ -205,8 +201,9 @@ def build_wealth_page() -> None:
                             ui.number(
                                 label="Current value",
                                 value=row["current_value"],
-                                format="%.2f",
+                                format="%.0f",
                                 min=0,
+                                step=1000,
                                 on_change=lambda e, i=index: update_asset_row(
                                     i, "current_value", e.value
                                 ),
@@ -214,7 +211,8 @@ def build_wealth_page() -> None:
                             ui.number(
                                 label="Annual gain (%)",
                                 value=row["annual_gain_rate_pct"],
-                                format="%.2f",
+                                format="%.1f",
+                                step=0.1,
                                 on_change=lambda e, i=index: update_asset_row(
                                     i, "annual_gain_rate_pct", e.value
                                 ),
@@ -222,8 +220,9 @@ def build_wealth_page() -> None:
                             ui.number(
                                 label="Monthly contribution",
                                 value=row["monthly_contribution"],
-                                format="%.2f",
+                                format="%.0f",
                                 min=0,
+                                step=50,
                                 on_change=lambda e, i=index: update_asset_row(
                                     i, "monthly_contribution", e.value
                                 ),
@@ -240,15 +239,55 @@ def build_wealth_page() -> None:
             )
 
         with ui.card().classes("w-full p-3"):
-            ui.label("Retirement withdrawals").classes("text-lg font-semibold")
-            withdrawal_input = ui.number(
-                label="Monthly withdrawal after retirement",
-                value=3000,
-                format="%.2f",
-                min=0,
-            )
-
-        run_button = ui.button("Run forecast").props("color=green-4")
+            ui.label("Profile").classes("text-lg font-semibold")
+            with ui.grid(columns=6).classes("w-full gap-3"):
+                current_age_years = ui.number(
+                    label="Current age (years)",
+                    value=40,
+                    format="%.0f",
+                    on_change=lambda _: run_forecast(),
+                )
+                current_age_months = ui.number(
+                    label="Current age (months)",
+                    value=0,
+                    format="%.0f",
+                    min=0,
+                    max=11,
+                    on_change=lambda _: run_forecast(),
+                )
+                retirement_age = ui.number(
+                    label="Retirement age",
+                    value=67,
+                    format="%.0f",
+                    on_change=lambda _: run_forecast(),
+                )
+                end_age = ui.number(
+                    label="End age",
+                    value=100,
+                    format="%.0f",
+                    on_change=lambda _: run_forecast(),
+                )
+                currency = ui.input(
+                    label="Currency",
+                    value="EUR",
+                    on_change=lambda _: run_forecast(),
+                )
+                average_inflation_rate = ui.number(
+                    label="Average inflation rate (%)",
+                    value=2.0,
+                    format="%.2f",
+                    min=-99.9,
+                    step=0.1,
+                    on_change=lambda _: run_forecast(),
+                )
+                withdrawal_input = ui.number(
+                    label="Monthly withdrawal",
+                    value=3000,
+                    format="%.0f",
+                    min=0,
+                    step=50,
+                    on_change=lambda _: run_forecast(),
+                )
 
         summary_label = ui.label("No forecast yet.").classes("text-sm")
         chart = ui.echart(_build_chart_options()).classes("w-full h-72")
@@ -287,12 +326,14 @@ def build_wealth_page() -> None:
 
             display_df = _yearly_display_frame(df)
             age_labels = [
-                f"{int(row.age_years)}y {int(row.age_months)}m"
-                for row in display_df.itertuples()
+                f"{int(row.age_years)}" for row in display_df.itertuples()
             ]
             rounded = display_df.copy()
             rounded["age"] = age_labels
-            rounded = rounded.round(2)
+            numeric_columns = rounded.select_dtypes(include="number").columns
+            rounded[numeric_columns] = (
+                rounded[numeric_columns].round(0).astype(int)
+            )
 
             columns = [
                 {
@@ -309,13 +350,13 @@ def build_wealth_page() -> None:
                 },
                 {
                     "name": "net_cashflow",
-                    "label": "Net cashflow",
+                    "label": "Net Cashflow p.m.",
                     "field": "net_cashflow",
                     "sortable": True,
                 },
                 {
                     "name": "taxes",
-                    "label": "Taxes",
+                    "label": "Taxes p.m.",
                     "field": "taxes",
                     "sortable": True,
                 },
@@ -357,4 +398,4 @@ def build_wealth_page() -> None:
                 f"{_format_currency(final_total, profile.currency)}"
             )
 
-        run_button.on_click(run_forecast)
+        run_forecast()
