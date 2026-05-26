@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import os
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -69,6 +72,203 @@ def _default_asset_rows() -> list[dict[str, Any]]:
     ]
 
 
+def _state_path() -> Path:
+    """Return the cache path for persisted UI state."""
+    env_path = os.getenv("WEALTH_APP_STATE_PATH")
+    if env_path:
+        return Path(env_path).expanduser()
+    repo_root = Path(__file__).resolve().parents[2]
+    return repo_root / ".cache" / "finev" / "wealth_state.json"
+
+
+def _load_cached_state() -> dict[str, Any] | None:
+    """Load cached UI state from disk if present."""
+    path = _state_path()
+    if not path.exists():
+        return None
+    with path.open("r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    if not isinstance(data, dict):
+        raise ValueError("Cached state must be a JSON object")
+    return data
+
+
+def _save_cached_state(state: dict[str, Any]) -> None:
+    """Persist UI state to disk."""
+    path = _state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        json.dump(state, handle, indent=2, sort_keys=True)
+
+
+def _clear_cached_state() -> None:
+    """Remove the cached UI state file if it exists."""
+    path = _state_path()
+    if path.exists():
+        path.unlink()
+
+
+def _default_profile_state() -> dict[str, Any]:
+    """Return default profile values for UI inputs."""
+    return {
+        "current_age_years": 40,
+        "current_age_months": 0,
+        "retirement_age": 67,
+        "end_age": 100,
+        "currency": "EUR",
+        "average_inflation_rate_pct": 2.0,
+    }
+
+
+def _default_withdrawal_state() -> dict[str, Any]:
+    """Return default withdrawal values for UI inputs."""
+    return {"monthly_withdrawal": 3000.0}
+
+
+def _coerce_float(value: Any, field_name: str) -> float:
+    """Convert a cached value to float or raise a descriptive error."""
+    try:
+        return float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"Cached state field '{field_name}' must be a number"
+        ) from exc
+
+
+def _coerce_int(value: Any, field_name: str) -> int:
+    """Convert a cached value to int or raise a descriptive error."""
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"Cached state field '{field_name}' must be an integer"
+        ) from exc
+
+
+def _normalize_asset_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a cached asset row into a consistent structure."""
+    name = str(row.get("name", "")).strip() or "New asset"
+    try:
+        asset_type = AssetType(str(row.get("type", AssetType.ETF.value)))
+    except ValueError:
+        asset_type = AssetType.ETF
+    current_value_raw = row.get("current_value")
+    if current_value_raw in (None, ""):
+        current_value = 0.0
+    else:
+        current_value = _coerce_float(
+            current_value_raw, "assets.current_value"
+        )
+    current_value = max(current_value, 0.0)
+    rate_value = row.get("annual_gain_rate_pct")
+    if rate_value in (None, ""):
+        annual_gain_rate_pct = _default_gain_pct(asset_type)
+    else:
+        annual_gain_rate_pct = _coerce_float(
+            rate_value, "assets.annual_gain_rate_pct"
+        )
+    monthly_contribution_raw = row.get("monthly_contribution")
+    if monthly_contribution_raw in (None, ""):
+        monthly_contribution = 0.0
+    else:
+        monthly_contribution = _coerce_float(
+            monthly_contribution_raw, "assets.monthly_contribution"
+        )
+    unrealized_gains_raw = row.get("unrealized_gains")
+    if unrealized_gains_raw in (None, ""):
+        unrealized_gains = 0.0
+    else:
+        unrealized_gains = _coerce_float(
+            unrealized_gains_raw, "assets.unrealized_gains"
+        )
+    unrealized_gains = max(min(unrealized_gains, current_value), 0.0)
+    return {
+        "name": name,
+        "type": asset_type.value,
+        "current_value": current_value,
+        "unrealized_gains": unrealized_gains,
+        "annual_gain_rate_pct": annual_gain_rate_pct,
+        "monthly_contribution": monthly_contribution,
+    }
+
+
+def _load_asset_rows(
+    cached_state: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Load asset rows from cached state or fall back to defaults."""
+    if not cached_state:
+        return _default_asset_rows()
+    raw_assets = cached_state.get("assets")
+    if raw_assets is None:
+        return _default_asset_rows()
+    if not isinstance(raw_assets, list):
+        raise ValueError("Cached assets must be a list")
+    rows: list[dict[str, Any]] = []
+    for row in raw_assets:
+        if not isinstance(row, dict):
+            raise ValueError("Cached asset rows must be objects")
+        rows.append(_normalize_asset_row(row))
+    if not rows:
+        raise ValueError("Cached assets must not be empty")
+    return rows
+
+
+def _load_profile_state(cached_state: dict[str, Any] | None) -> dict[str, Any]:
+    """Load profile state from cached data or fall back to defaults."""
+    profile_state = _default_profile_state()
+    if not cached_state:
+        return profile_state
+    raw_profile = cached_state.get("profile")
+    if raw_profile is None:
+        return profile_state
+    if not isinstance(raw_profile, dict):
+        raise ValueError("Cached profile must be an object")
+    if raw_profile.get("current_age_years") not in (None, ""):
+        profile_state["current_age_years"] = _coerce_int(
+            raw_profile.get("current_age_years"), "profile.current_age_years"
+        )
+    if raw_profile.get("current_age_months") not in (None, ""):
+        profile_state["current_age_months"] = _coerce_int(
+            raw_profile.get("current_age_months"), "profile.current_age_months"
+        )
+    if raw_profile.get("retirement_age") not in (None, ""):
+        profile_state["retirement_age"] = _coerce_int(
+            raw_profile.get("retirement_age"), "profile.retirement_age"
+        )
+    if raw_profile.get("end_age") not in (None, ""):
+        profile_state["end_age"] = _coerce_int(
+            raw_profile.get("end_age"), "profile.end_age"
+        )
+    if "currency" in raw_profile:
+        profile_state["currency"] = str(raw_profile.get("currency") or "EUR")
+    if raw_profile.get("average_inflation_rate_pct") not in (None, ""):
+        profile_state["average_inflation_rate_pct"] = _coerce_float(
+            raw_profile.get("average_inflation_rate_pct"),
+            "profile.average_inflation_rate_pct",
+        )
+    return profile_state
+
+
+def _load_withdrawal_state(
+    cached_state: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Load withdrawal state from cached data or fall back to defaults."""
+    withdrawal_state = _default_withdrawal_state()
+    if not cached_state:
+        return withdrawal_state
+    raw_withdrawal = cached_state.get("withdrawal")
+    if raw_withdrawal is None:
+        return withdrawal_state
+    if not isinstance(raw_withdrawal, dict):
+        raise ValueError("Cached withdrawal must be an object")
+    if raw_withdrawal.get("monthly_withdrawal") not in (None, ""):
+        withdrawal_state["monthly_withdrawal"] = _coerce_float(
+            raw_withdrawal.get("monthly_withdrawal"),
+            "withdrawal.monthly_withdrawal",
+        )
+    return withdrawal_state
+
+
 def _asset_from_row(row: dict[str, Any]) -> Asset:
     """Build an Asset instance from a UI row definition."""
     asset_type = AssetType(str(row.get("type")))
@@ -114,7 +314,20 @@ def _yearly_display_frame(df: pd.DataFrame) -> pd.DataFrame:
 
 def build_wealth_page() -> None:
     """Construct UI and bind update logic."""
-    asset_rows = _default_asset_rows()
+    state_error: str | None = None
+    cached_state: dict[str, Any] | None = None
+    try:
+        cached_state = _load_cached_state()
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        state_error = f"Failed to load cached state: {exc}"
+        cached_state = None
+
+    asset_rows = _load_asset_rows(cached_state)
+    profile_state = _load_profile_state(cached_state)
+    withdrawal_state = _load_withdrawal_state(cached_state)
+    default_profile_state = _default_profile_state()
+    default_withdrawal_state = _default_withdrawal_state()
+    suppress_cache_save = False
 
     def update_asset_row(index: int, field: str, value: Any) -> None:
         """Update a field on a specific asset row.
@@ -139,6 +352,9 @@ def build_wealth_page() -> None:
                 )
             if current_row.get("unrealized_gains") in (None, ""):
                 current_row["unrealized_gains"] = 0.0
+        if field == "unrealized_gains":
+            current_value = float(current_row.get("current_value") or 0)
+            value = max(min(float(value or 0), current_value), 0.0)
         if field == "current_value":
             unrealized_gains = float(current_row.get("unrealized_gains") or 0)
             current_row["unrealized_gains"] = min(
@@ -173,6 +389,37 @@ def build_wealth_page() -> None:
         )
         render_asset_rows()
         run_forecast()
+
+    def reset_state() -> None:
+        """Reset UI values to defaults and clear cached state."""
+        nonlocal suppress_cache_save
+        suppress_cache_save = True
+        asset_rows[:] = _default_asset_rows()
+        current_age_years.value = default_profile_state["current_age_years"]
+        current_age_years.update()
+        current_age_months.value = default_profile_state["current_age_months"]
+        current_age_months.update()
+        retirement_age.value = default_profile_state["retirement_age"]
+        retirement_age.update()
+        end_age.value = default_profile_state["end_age"]
+        end_age.update()
+        currency.value = default_profile_state["currency"]
+        currency.update()
+        average_inflation_rate.value = default_profile_state[
+            "average_inflation_rate_pct"
+        ]
+        average_inflation_rate.update()
+        withdrawal_input.value = default_withdrawal_state["monthly_withdrawal"]
+        withdrawal_input.update()
+        render_asset_rows()
+        run_forecast()
+        suppress_cache_save = False
+        try:
+            _clear_cached_state()
+        except OSError as error:
+            ui.notify(
+                f"Failed to clear cached state: {error}", type="negative"
+            )
 
     def build_assets() -> list[Asset]:
         """Build asset objects from the current UI rows.
@@ -221,7 +468,7 @@ def build_wealth_page() -> None:
                                 value=row["current_value"],
                                 format="%.0f",
                                 min=0,
-                                step=1000,
+                                step=10000,
                                 on_change=lambda e, i=index: update_asset_row(
                                     i, "current_value", e.value
                                 ),
@@ -232,7 +479,7 @@ def build_wealth_page() -> None:
                                 format="%.0f",
                                 min=0,
                                 max=current_value,
-                                step=100,
+                                step=10000,
                                 on_change=lambda e, i=index: update_asset_row(
                                     i, "unrealized_gains", e.value
                                 ),
@@ -263,22 +510,26 @@ def build_wealth_page() -> None:
 
             render_asset_rows()
 
-            ui.button("Add asset", on_click=add_asset_row).props(
-                "outline color=green-4"
-            )
+            with ui.row().classes("gap-2"):
+                ui.button("Add asset", on_click=add_asset_row).props(
+                    "outline color=green-4"
+                )
+                ui.button("Reset", on_click=reset_state).props(
+                    "outline color=red"
+                )
 
         with ui.card().classes("w-full p-3"):
             ui.label("Profile").classes("text-lg font-semibold")
             with ui.grid(columns=6).classes("w-full gap-3"):
                 current_age_years = ui.number(
                     label="Current age (years)",
-                    value=40,
+                    value=profile_state["current_age_years"],
                     format="%.0f",
                     on_change=lambda _: run_forecast(),
                 )
                 current_age_months = ui.number(
                     label="Current age (months)",
-                    value=0,
+                    value=profile_state["current_age_months"],
                     format="%.0f",
                     min=0,
                     max=11,
@@ -286,24 +537,24 @@ def build_wealth_page() -> None:
                 )
                 retirement_age = ui.number(
                     label="Retirement age",
-                    value=67,
+                    value=profile_state["retirement_age"],
                     format="%.0f",
                     on_change=lambda _: run_forecast(),
                 )
                 end_age = ui.number(
                     label="End age",
-                    value=100,
+                    value=profile_state["end_age"],
                     format="%.0f",
                     on_change=lambda _: run_forecast(),
                 )
                 currency = ui.input(
                     label="Currency",
-                    value="EUR",
+                    value=profile_state["currency"],
                     on_change=lambda _: run_forecast(),
                 )
                 average_inflation_rate = ui.number(
                     label="Average inflation rate (%)",
-                    value=2.0,
+                    value=profile_state["average_inflation_rate_pct"],
                     format="%.2f",
                     min=-99.9,
                     step=0.1,
@@ -311,7 +562,7 @@ def build_wealth_page() -> None:
                 )
                 withdrawal_input = ui.number(
                     label="Monthly withdrawal",
-                    value=3000,
+                    value=withdrawal_state["monthly_withdrawal"],
                     format="%.0f",
                     min=0,
                     step=50,
@@ -426,5 +677,38 @@ def build_wealth_page() -> None:
                 f"Total at age {profile.end_age}: "
                 f"{_format_currency(final_total, profile.currency)}"
             )
+            if suppress_cache_save:
+                return
+            try:
+                state_snapshot = {
+                    "assets": [
+                        _normalize_asset_row(row) for row in asset_rows
+                    ],
+                    "profile": {
+                        "current_age_years": int(current_age_years.value or 0),
+                        "current_age_months": int(
+                            current_age_months.value or 0
+                        ),
+                        "retirement_age": int(retirement_age.value or 0),
+                        "end_age": int(end_age.value or 0),
+                        "currency": str(currency.value or "EUR"),
+                        "average_inflation_rate_pct": float(
+                            average_inflation_rate.value or 0.0
+                        ),
+                    },
+                    "withdrawal": {
+                        "monthly_withdrawal": float(
+                            withdrawal_input.value or 0
+                        )
+                    },
+                }
+                _save_cached_state(state_snapshot)
+            except (OSError, ValueError) as error:
+                ui.notify(
+                    f"Failed to save cached state: {error}",
+                    type="negative",
+                )
 
         run_forecast()
+        if state_error:
+            ui.notify(state_error, type="negative")

@@ -7,6 +7,9 @@ from finev.ui import (
     _build_chart_options,
     _default_asset_rows,
     _format_currency,
+    _load_cached_state,
+    _normalize_asset_row,
+    _save_cached_state,
     _yearly_display_frame,
 )
 
@@ -105,3 +108,44 @@ def test_asset_from_row_maps_unrealized_gains_for_non_etf() -> None:
     )
 
     assert asset.initial_cost_basis == pytest.approx(8_000.0)
+
+
+def test_normalize_asset_row_clamps_unrealized_gains() -> None:
+    normalized = _normalize_asset_row(
+        {
+            "name": "Cash",
+            "type": AssetType.CASH.value,
+            "current_value": 100.0,
+            "unrealized_gains": 200.0,
+            "annual_gain_rate_pct": 0.5,
+            "monthly_contribution": 0.0,
+        }
+    )
+
+    assert normalized["unrealized_gains"] == pytest.approx(100.0)
+
+
+def test_cached_state_roundtrip(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache_path = tmp_path / "state.json"
+    monkeypatch.setenv("WEALTH_APP_STATE_PATH", str(cache_path))
+    state = {
+        "assets": _default_asset_rows(),
+        "profile": {"current_age_years": 42},
+        "withdrawal": {"monthly_withdrawal": 2500.0},
+    }
+
+    _save_cached_state(state)
+    loaded = _load_cached_state()
+
+    assert loaded == state
+
+
+def test_load_cached_state_missing_returns_none(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache_path = tmp_path / "missing.json"
+    monkeypatch.setenv("WEALTH_APP_STATE_PATH", str(cache_path))
+
+    assert _load_cached_state() is None
