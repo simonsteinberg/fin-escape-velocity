@@ -46,6 +46,7 @@ def _default_asset_rows() -> list[dict[str, Any]]:
             "name": "ETF MSCI World",
             "type": AssetType.ETF.value,
             "current_value": 100_000.0,
+            "unrealized_gains": 0.0,
             "annual_gain_rate_pct": _default_gain_pct(AssetType.ETF),
             "monthly_contribution": 500.0,
         },
@@ -53,6 +54,7 @@ def _default_asset_rows() -> list[dict[str, Any]]:
             "name": "bAV",
             "type": AssetType.BAV.value,
             "current_value": 20_000.0,
+            "unrealized_gains": 0.0,
             "annual_gain_rate_pct": _default_gain_pct(AssetType.BAV),
             "monthly_contribution": 100.0,
         },
@@ -60,10 +62,30 @@ def _default_asset_rows() -> list[dict[str, Any]]:
             "name": "Daily account",
             "type": AssetType.CASH.value,
             "current_value": 50_000.0,
+            "unrealized_gains": 0.0,
             "annual_gain_rate_pct": _default_gain_pct(AssetType.CASH),
             "monthly_contribution": 0.0,
         },
     ]
+
+
+def _asset_from_row(row: dict[str, Any]) -> Asset:
+    """Build an Asset instance from a UI row definition."""
+    asset_type = AssetType(str(row.get("type")))
+    rate_pct = row.get("annual_gain_rate_pct")
+    annual_rate = None if rate_pct in (None, "") else float(rate_pct) / 100
+    current_value = float(row.get("current_value") or 0)
+    unrealized_gains = float(row.get("unrealized_gains") or 0)
+    unrealized_gains = min(unrealized_gains, current_value)
+    initial_cost_basis = current_value - unrealized_gains
+    return Asset(
+        name=str(row.get("name", "")).strip(),
+        asset_type=asset_type,
+        current_value=current_value,
+        initial_cost_basis=initial_cost_basis,
+        annual_gain_rate=annual_rate,
+        monthly_contribution=float(row.get("monthly_contribution") or 0),
+    )
 
 
 def _build_chart_options() -> dict[str, Any]:
@@ -115,7 +137,16 @@ def build_wealth_page() -> None:
                 current_row["annual_gain_rate_pct"] = _default_gain_pct(
                     new_type
                 )
+            if current_row.get("unrealized_gains") in (None, ""):
+                current_row["unrealized_gains"] = 0.0
+        if field == "current_value":
+            unrealized_gains = float(current_row.get("unrealized_gains") or 0)
+            current_row["unrealized_gains"] = min(
+                unrealized_gains, float(value or 0)
+            )
         current_row[field] = value
+        if field in {"type", "current_value"}:
+            render_asset_rows()
         run_forecast()
 
     def remove_asset_row(index: int) -> None:
@@ -135,6 +166,7 @@ def build_wealth_page() -> None:
                 "name": "New asset",
                 "type": AssetType.ETF.value,
                 "current_value": 0.0,
+                "unrealized_gains": 0.0,
                 "annual_gain_rate_pct": _default_gain_pct(AssetType.ETF),
                 "monthly_contribution": 0.0,
             }
@@ -148,24 +180,7 @@ def build_wealth_page() -> None:
         Returns:
             List of assets for the forecast.
         """
-        assets: list[Asset] = []
-        for row in asset_rows:
-            rate_pct = row.get("annual_gain_rate_pct")
-            annual_rate = (
-                None if rate_pct in (None, "") else float(rate_pct) / 100
-            )
-            assets.append(
-                Asset(
-                    name=str(row.get("name", "")).strip(),
-                    asset_type=AssetType(str(row.get("type"))),
-                    current_value=float(row.get("current_value") or 0),
-                    annual_gain_rate=annual_rate,
-                    monthly_contribution=float(
-                        row.get("monthly_contribution") or 0
-                    ),
-                )
-            )
-        return assets
+        return [_asset_from_row(row) for row in asset_rows]
 
     with ui.column().classes("w-full max-w-[1200px] mx-auto p-4 gap-4"):
         ui.label("Wealth Forecast").classes("text-2xl font-bold")
@@ -183,6 +198,9 @@ def build_wealth_page() -> None:
                 for index, row in enumerate(asset_rows):
                     with assets_container:
                         with ui.row().classes("w-full gap-2 items-end"):
+                            current_value = float(
+                                row.get("current_value") or 0
+                            )
                             ui.input(
                                 label="Name",
                                 value=row["name"],
@@ -208,6 +226,17 @@ def build_wealth_page() -> None:
                                     i, "current_value", e.value
                                 ),
                             ).classes("w-32")
+                            ui.number(
+                                label="Unrealized gains",
+                                value=row.get("unrealized_gains") or 0,
+                                format="%.0f",
+                                min=0,
+                                max=current_value,
+                                step=100,
+                                on_change=lambda e, i=index: update_asset_row(
+                                    i, "unrealized_gains", e.value
+                                ),
+                            ).classes("w-36")
                             ui.number(
                                 label="Annual gain (%)",
                                 value=row["annual_gain_rate_pct"],
