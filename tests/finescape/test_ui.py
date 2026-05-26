@@ -3,6 +3,7 @@ import pytest
 
 from finev.models import AssetType, DEFAULT_ANNUAL_GAIN_RATES
 from finev.ui import (
+    _asset_from_row,
     _build_chart_options,
     _default_asset_rows,
     _format_currency,
@@ -60,6 +61,9 @@ def test_default_asset_rows_match_expected_defaults() -> None:
     assert rows[2]["annual_gain_rate_pct"] == pytest.approx(
         DEFAULT_ANNUAL_GAIN_RATES[AssetType.CASH] * 100
     )
+    assert rows[0]["unrealized_gains"] == pytest.approx(0.0)
+    assert rows[1]["unrealized_gains"] == pytest.approx(0.0)
+    assert rows[2]["unrealized_gains"] == pytest.approx(0.0)
 
 
 def test_build_chart_options_has_expected_shape() -> None:
@@ -71,3 +75,33 @@ def test_build_chart_options_has_expected_shape() -> None:
     assert options["xAxis"]["data"] == []
     assert options["yAxis"]["type"] == "value"
     assert options["series"] == []
+
+
+def test_asset_from_row_maps_unrealized_gains_to_cost_basis() -> None:
+    asset = _asset_from_row(
+        {
+            "name": "ETF",
+            "type": AssetType.ETF.value,
+            "current_value": 400_000.0,
+            "unrealized_gains": 100_000.0,
+            "annual_gain_rate_pct": 5.0,
+            "monthly_contribution": 0.0,
+        }
+    )
+
+    assert asset.initial_cost_basis == pytest.approx(300_000.0)
+
+
+def test_asset_from_row_maps_unrealized_gains_for_non_etf() -> None:
+    asset = _asset_from_row(
+        {
+            "name": "Cash",
+            "type": AssetType.CASH.value,
+            "current_value": 10_000.0,
+            "unrealized_gains": 2_000.0,
+            "annual_gain_rate_pct": 0.5,
+            "monthly_contribution": 0.0,
+        }
+    )
+
+    assert asset.initial_cost_basis == pytest.approx(8_000.0)
