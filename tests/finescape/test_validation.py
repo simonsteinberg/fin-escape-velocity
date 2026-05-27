@@ -6,7 +6,13 @@ from finev.forecast import (
     _validate_withdrawal,
     forecast_wealth,
 )
-from finev.models import Asset, AssetType, UserProfile, WithdrawalPlan
+from finev.models import (
+    Asset,
+    AssetType,
+    BAVStrategy,
+    UserProfile,
+    WithdrawalPlan,
+)
 
 
 def _valid_profile() -> UserProfile:
@@ -129,6 +135,57 @@ def test_validate_assets_rejects_negative_cost_basis() -> None:
 
     with pytest.raises(ValueError, match="cost basis must be non-negative"):
         _validate_assets([asset])
+
+
+def test_validate_assets_rejects_invalid_bav_transfer_window() -> None:
+    asset = _valid_asset(
+        asset_type=AssetType.BAV,
+        bav_transfer_start_age=70,
+        bav_transfer_end_age=65,
+    )
+
+    with pytest.raises(
+        ValueError, match="bAV transfer end age must be at or after"
+    ):
+        _validate_assets([asset])
+
+
+def test_validate_assets_rejects_invalid_bav_transfer_ratio() -> None:
+    asset = _valid_asset(
+        asset_type=AssetType.BAV,
+        bav_strategy=BAVStrategy.TRANSFER,
+        bav_transfer_etf_ratio=1.5,
+    )
+
+    with pytest.raises(
+        ValueError, match="bAV transfer ETF ratio must be between 0 and 1"
+    ):
+        _validate_assets([asset])
+
+
+def test_bav_transfer_requires_target_assets() -> None:
+    profile = _valid_profile()
+    assets = [
+        Asset(
+            name="bAV",
+            asset_type=AssetType.BAV,
+            current_value=1000.0,
+            monthly_contribution=0.0,
+            bav_strategy=BAVStrategy.TRANSFER,
+            bav_transfer_etf_ratio=0.5,
+        ),
+        Asset(
+            name="Cash",
+            asset_type=AssetType.CASH,
+            current_value=0.0,
+            monthly_contribution=0.0,
+        ),
+    ]
+
+    with pytest.raises(
+        ValueError, match="bAV transfer requires at least one ETF asset"
+    ):
+        forecast_wealth(profile=profile, assets=assets)
 
 
 def test_validate_withdrawal_rejects_invalid_inputs() -> None:

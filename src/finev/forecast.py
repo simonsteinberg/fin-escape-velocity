@@ -10,12 +10,14 @@ import pandas as pd
 from finev.models import (
     Asset,
     AssetType,
+    BAVStrategy,
     UserProfile,
     WithdrawalPlan,
 )
 
 ETF_TAX_RATE = 0.2625
 ETF_TAXABLE_SHARE = 0.70
+BAV_TAX_RATE = 0.2625
 
 
 @dataclass(frozen=True)
@@ -31,6 +33,24 @@ class ForecastMetadata:
     start_age_months: int
     end_age_months: int
     retirement_age_months: int
+
+
+def _allocate_amount(
+    amount: float,
+    indices: list[int],
+    balances: list[float],
+) -> list[tuple[int, float]]:
+    """Allocate an amount across target assets by balance weight."""
+    if amount <= 0 or not indices:
+        return []
+    total_balance = sum(balances[index] for index in indices)
+    if total_balance > 0:
+        return [
+            (index, amount * (balances[index] / total_balance))
+            for index in indices
+        ]
+    share = amount / len(indices)
+    return [(index, share) for index in indices]
 
 
 def _annual_to_monthly_rate(annual_rate: float) -> float:
@@ -148,6 +168,37 @@ def _validate_assets(assets: Iterable[Asset]) -> list[Asset]:
             raise ValueError(
                 f"Asset '{asset.name}' cost basis must be non-negative"
             )
+        if asset.asset_type == AssetType.BAV:
+            try:
+                BAVStrategy(asset.bav_strategy)
+            except ValueError as exc:
+                valid_strategies = ", ".join(
+                    strategy.value for strategy in BAVStrategy
+                )
+                raise ValueError(
+                    f"Asset '{asset.name}' bAV strategy must be one of: "
+                    f"{valid_strategies}"
+                ) from exc
+            if asset.bav_transfer_start_age < 0:
+                raise ValueError(
+                    f"Asset '{asset.name}' bAV transfer start age must be "
+                    "non-negative"
+                )
+            if asset.bav_transfer_end_age < 0:
+                raise ValueError(
+                    f"Asset '{asset.name}' bAV transfer end age must be "
+                    "non-negative"
+                )
+            if asset.bav_transfer_end_age < asset.bav_transfer_start_age:
+                raise ValueError(
+                    f"Asset '{asset.name}' bAV transfer end age must be "
+                    "at or after the start age"
+                )
+            if not 0 <= asset.bav_transfer_etf_ratio <= 1:
+                raise ValueError(
+                    f"Asset '{asset.name}' bAV transfer ETF ratio must be "
+                    "between 0 and 1"
+                )
 
     return assets_list
 
@@ -191,6 +242,34 @@ def forecast_wealth(
     assets_list = _validate_assets(assets)
     withdrawal = withdrawal or WithdrawalPlan()
     _validate_withdrawal(withdrawal)
+
+    etf_indices = [
+        index
+        for index, asset in enumerate(assets_list)
+        if asset.asset_type == AssetType.ETF
+    ]
+    cash_indices = [
+        index
+        for index, asset in enumerate(assets_list)
+        if asset.asset_type == AssetType.CASH
+    ]
+    transfer_assets = [
+        asset
+        for asset in assets_list
+        if asset.asset_type == AssetType.BAV
+        and BAVStrategy(asset.bav_strategy) == BAVStrategy.TRANSFER
+    ]
+    if transfer_assets:
+        if (
+            any(asset.bav_transfer_etf_ratio > 0 for asset in transfer_assets)
+            and not etf_indices
+        ):
+            raise ValueError("bAV transfer requires at least one ETF asset")
+        if (
+            any(asset.bav_transfer_etf_ratio < 1 for asset in transfer_assets)
+            and not cash_indices
+        ):
+            raise ValueError("bAV transfer requires at least one Cash asset")
 
     months = metadata.end_age_months - metadata.start_age_months
     monthly_rates = [
@@ -297,9 +376,63 @@ def forecast_wealth(
                     cost_bases = new_cost_bases
                     net_cashflow = -actual_withdrawn + taxes
 
+            effective_rates = list(monthly_rates)
+            for index, asset in enumerate(assets_list):
+                if (
+                    asset.asset_type == AssetType.BAV
+                    and BAVStrategy(asset.bav_strategy) == BAVStrategy.TRANSFER
+                ):
+                    start_months = asset.bav_transfer_start_age * 12
+                    end_months = (asset.bav_transfer_end_age + 1) * 12 - 1
+                    if not (start_months <= age_months <= end_months):
+                        continue
+                    remaining_months = end_months - age_months + 1
+                    if remaining_months <= 0:
+                        continue
+                    transfer_fraction = 1 / remaining_months
+                    gross_transfer = balances[index] * transfer_fraction
+                    if gross_transfer <= 0:
+                        continue
+                    cost_basis_transfer = cost_bases[index] * transfer_fraction
+                    gains = gross_transfer - cost_basis_transfer
+                    tax = BAV_TAX_RATE * max(gains, 0.0)
+                    taxes += tax
+                    net_cashflow -= tax
+                    net_transfer = gross_transfer - tax
+                    etf_amount = net_transfer * asset.bav_transfer_etf_ratio
+                    cash_amount = net_transfer - etf_amount
+                    for target_index, allocation in _allocate_amount(
+                        etf_amount, etf_indices, balances
+                    ):
+                        balances[target_index] += allocation
+                        cost_bases[target_index] += allocation
+                    for target_index, allocation in _allocate_amount(
+                        cash_amount, cash_indices, balances
+                    ):
+                        balances[target_index] += allocation
+                        cost_bases[target_index] += allocation
+                    balances[index] -= gross_transfer
+                    cost_bases[index] = max(
+                        cost_bases[index] - cost_basis_transfer, 0.0
+                    )
+
+            if age_months >= metadata.retirement_age_months:
+                for index, asset in enumerate(assets_list):
+                    if (
+                        asset.asset_type == AssetType.BAV
+                        and BAVStrategy(asset.bav_strategy)
+                        == BAVStrategy.INCOME
+                    ):
+                        monthly_gain = balances[index] * monthly_rates[index]
+                        if monthly_gain > 0:
+                            tax = monthly_gain * BAV_TAX_RATE
+                            taxes += tax
+                            net_cashflow += monthly_gain - tax
+                        effective_rates[index] = 0.0
+
             balances = [
                 balance * (1 + rate)
-                for balance, rate in zip(balances, monthly_rates)
+                for balance, rate in zip(balances, effective_rates)
             ]
 
         row: dict[str, float | int] = {

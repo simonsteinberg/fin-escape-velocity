@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from finev.models import AssetType, DEFAULT_ANNUAL_GAIN_RATES
+from finev.models import AssetType, BAVStrategy, DEFAULT_ANNUAL_GAIN_RATES
 from finev.ui import (
     _asset_from_row,
     _build_chart_options,
@@ -67,6 +67,10 @@ def test_default_asset_rows_match_expected_defaults() -> None:
     assert rows[0]["unrealized_gains"] == pytest.approx(0.0)
     assert rows[1]["unrealized_gains"] == pytest.approx(0.0)
     assert rows[2]["unrealized_gains"] == pytest.approx(0.0)
+    assert rows[1]["bav_strategy"] == BAVStrategy.TRANSFER.value
+    assert rows[1]["bav_transfer_start_age"] == 67
+    assert rows[1]["bav_transfer_end_age"] == 72
+    assert rows[1]["bav_transfer_etf_ratio_pct"] == pytest.approx(50.0)
 
 
 def test_build_chart_options_has_expected_shape() -> None:
@@ -93,6 +97,7 @@ def test_asset_from_row_maps_unrealized_gains_to_cost_basis() -> None:
     )
 
     assert asset.initial_cost_basis == pytest.approx(300_000.0)
+    assert asset.bav_strategy == BAVStrategy.TRANSFER
 
 
 def test_asset_from_row_maps_unrealized_gains_for_non_etf() -> None:
@@ -110,6 +115,26 @@ def test_asset_from_row_maps_unrealized_gains_for_non_etf() -> None:
     assert asset.initial_cost_basis == pytest.approx(8_000.0)
 
 
+def test_asset_from_row_maps_bav_ratio_pct() -> None:
+    asset = _asset_from_row(
+        {
+            "name": "bAV",
+            "type": AssetType.BAV.value,
+            "current_value": 100_000.0,
+            "unrealized_gains": 20_000.0,
+            "annual_gain_rate_pct": 2.0,
+            "monthly_contribution": 0.0,
+            "bav_strategy": BAVStrategy.INCOME.value,
+            "bav_transfer_start_age": 68,
+            "bav_transfer_end_age": 70,
+            "bav_transfer_etf_ratio_pct": 75.0,
+        }
+    )
+
+    assert asset.bav_strategy == BAVStrategy.INCOME
+    assert asset.bav_transfer_etf_ratio == pytest.approx(0.75)
+
+
 def test_normalize_asset_row_clamps_unrealized_gains() -> None:
     normalized = _normalize_asset_row(
         {
@@ -119,10 +144,12 @@ def test_normalize_asset_row_clamps_unrealized_gains() -> None:
             "unrealized_gains": 200.0,
             "annual_gain_rate_pct": 0.5,
             "monthly_contribution": 0.0,
+            "bav_transfer_etf_ratio_pct": 140.0,
         }
     )
 
     assert normalized["unrealized_gains"] == pytest.approx(100.0)
+    assert normalized["bav_transfer_etf_ratio_pct"] == pytest.approx(100.0)
 
 
 def test_cached_state_roundtrip(

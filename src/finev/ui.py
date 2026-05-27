@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from pathlib import Path
@@ -15,6 +16,7 @@ from finev.models import (
     DEFAULT_ANNUAL_GAIN_RATES,
     Asset,
     AssetType,
+    BAVStrategy,
     UserProfile,
     WithdrawalPlan,
 )
@@ -52,6 +54,10 @@ def _default_asset_rows() -> list[dict[str, Any]]:
             "unrealized_gains": 0.0,
             "annual_gain_rate_pct": _default_gain_pct(AssetType.ETF),
             "monthly_contribution": 500.0,
+            "bav_strategy": BAVStrategy.TRANSFER.value,
+            "bav_transfer_start_age": 67,
+            "bav_transfer_end_age": 72,
+            "bav_transfer_etf_ratio_pct": 50.0,
         },
         {
             "name": "bAV",
@@ -60,6 +66,10 @@ def _default_asset_rows() -> list[dict[str, Any]]:
             "unrealized_gains": 0.0,
             "annual_gain_rate_pct": _default_gain_pct(AssetType.BAV),
             "monthly_contribution": 100.0,
+            "bav_strategy": BAVStrategy.TRANSFER.value,
+            "bav_transfer_start_age": 67,
+            "bav_transfer_end_age": 72,
+            "bav_transfer_etf_ratio_pct": 50.0,
         },
         {
             "name": "Daily account",
@@ -68,6 +78,10 @@ def _default_asset_rows() -> list[dict[str, Any]]:
             "unrealized_gains": 0.0,
             "annual_gain_rate_pct": _default_gain_pct(AssetType.CASH),
             "monthly_contribution": 0.0,
+            "bav_strategy": BAVStrategy.TRANSFER.value,
+            "bav_transfer_start_age": 67,
+            "bav_transfer_end_age": 72,
+            "bav_transfer_etf_ratio_pct": 50.0,
         },
     ]
 
@@ -182,6 +196,35 @@ def _normalize_asset_row(row: dict[str, Any]) -> dict[str, Any]:
             unrealized_gains_raw, "assets.unrealized_gains"
         )
     unrealized_gains = max(min(unrealized_gains, current_value), 0.0)
+    strategy_value = row.get("bav_strategy", BAVStrategy.TRANSFER.value)
+    try:
+        bav_strategy = BAVStrategy(str(strategy_value)).value
+    except ValueError:
+        bav_strategy = BAVStrategy.TRANSFER.value
+    start_age_raw = row.get("bav_transfer_start_age")
+    if start_age_raw in (None, ""):
+        bav_transfer_start_age = 67
+    else:
+        bav_transfer_start_age = max(
+            _coerce_int(start_age_raw, "assets.bav_transfer_start_age"), 0
+        )
+    end_age_raw = row.get("bav_transfer_end_age")
+    if end_age_raw in (None, ""):
+        bav_transfer_end_age = 72
+    else:
+        bav_transfer_end_age = max(
+            _coerce_int(end_age_raw, "assets.bav_transfer_end_age"), 0
+        )
+    ratio_raw = row.get("bav_transfer_etf_ratio_pct")
+    if ratio_raw in (None, ""):
+        bav_transfer_etf_ratio_pct = 50.0
+    else:
+        bav_transfer_etf_ratio_pct = _coerce_float(
+            ratio_raw, "assets.bav_transfer_etf_ratio_pct"
+        )
+    bav_transfer_etf_ratio_pct = max(
+        min(bav_transfer_etf_ratio_pct, 100.0), 0.0
+    )
     return {
         "name": name,
         "type": asset_type.value,
@@ -189,6 +232,10 @@ def _normalize_asset_row(row: dict[str, Any]) -> dict[str, Any]:
         "unrealized_gains": unrealized_gains,
         "annual_gain_rate_pct": annual_gain_rate_pct,
         "monthly_contribution": monthly_contribution,
+        "bav_strategy": bav_strategy,
+        "bav_transfer_start_age": bav_transfer_start_age,
+        "bav_transfer_end_age": bav_transfer_end_age,
+        "bav_transfer_etf_ratio_pct": bav_transfer_etf_ratio_pct,
     }
 
 
@@ -278,6 +325,15 @@ def _asset_from_row(row: dict[str, Any]) -> Asset:
     unrealized_gains = float(row.get("unrealized_gains") or 0)
     unrealized_gains = min(unrealized_gains, current_value)
     initial_cost_basis = current_value - unrealized_gains
+    strategy_value = row.get("bav_strategy", BAVStrategy.TRANSFER.value)
+    try:
+        bav_strategy = BAVStrategy(str(strategy_value))
+    except ValueError:
+        bav_strategy = BAVStrategy.TRANSFER
+    bav_transfer_start_age = int(row.get("bav_transfer_start_age") or 67)
+    bav_transfer_end_age = int(row.get("bav_transfer_end_age") or 72)
+    ratio_pct = float(row.get("bav_transfer_etf_ratio_pct") or 50.0)
+    bav_transfer_etf_ratio = min(max(ratio_pct / 100, 0.0), 1.0)
     return Asset(
         name=str(row.get("name", "")).strip(),
         asset_type=asset_type,
@@ -285,6 +341,10 @@ def _asset_from_row(row: dict[str, Any]) -> Asset:
         initial_cost_basis=initial_cost_basis,
         annual_gain_rate=annual_rate,
         monthly_contribution=float(row.get("monthly_contribution") or 0),
+        bav_strategy=bav_strategy,
+        bav_transfer_start_age=bav_transfer_start_age,
+        bav_transfer_end_age=bav_transfer_end_age,
+        bav_transfer_etf_ratio=bav_transfer_etf_ratio,
     )
 
 
@@ -328,6 +388,36 @@ def build_wealth_page() -> None:
     default_profile_state = _default_profile_state()
     default_withdrawal_state = _default_withdrawal_state()
     suppress_cache_save = False
+    debounce_seconds = 0.5
+    pending_handle: asyncio.Handle | None = None
+    pending_rebuild = False
+
+    def _run_scheduled() -> None:
+        nonlocal pending_handle, pending_rebuild
+        pending_handle = None
+        if pending_rebuild:
+            pending_rebuild = False
+            render_asset_rows()
+        run_forecast()
+
+    def schedule_forecast(rebuild_assets: bool = False) -> None:
+        nonlocal pending_handle, pending_rebuild
+        pending_rebuild = pending_rebuild or rebuild_assets
+        if pending_handle is not None:
+            pending_handle.cancel()
+        pending_handle = asyncio.get_running_loop().call_later(
+            debounce_seconds, _run_scheduled
+        )
+
+    def run_immediate(rebuild_assets: bool = False) -> None:
+        nonlocal pending_handle, pending_rebuild
+        if pending_handle is not None:
+            pending_handle.cancel()
+            pending_handle = None
+        if rebuild_assets:
+            pending_rebuild = False
+            render_asset_rows()
+        run_forecast()
 
     def update_asset_row(index: int, field: str, value: Any) -> None:
         """Update a field on a specific asset row.
@@ -352,18 +442,40 @@ def build_wealth_page() -> None:
                 )
             if current_row.get("unrealized_gains") in (None, ""):
                 current_row["unrealized_gains"] = 0.0
+            if current_row.get("bav_strategy") in (None, ""):
+                current_row["bav_strategy"] = BAVStrategy.TRANSFER.value
+            if current_row.get("bav_transfer_start_age") in (None, ""):
+                current_row["bav_transfer_start_age"] = 67
+            if current_row.get("bav_transfer_end_age") in (None, ""):
+                current_row["bav_transfer_end_age"] = 72
+            if current_row.get("bav_transfer_etf_ratio_pct") in (None, ""):
+                current_row["bav_transfer_etf_ratio_pct"] = 50.0
+        if field == "bav_strategy":
+            try:
+                value = BAVStrategy(str(value)).value
+            except ValueError:
+                value = BAVStrategy.TRANSFER.value
         if field == "unrealized_gains":
             current_value = float(current_row.get("current_value") or 0)
             value = max(min(float(value or 0), current_value), 0.0)
+        if field in {"bav_transfer_start_age", "bav_transfer_end_age"}:
+            value = max(int(value or 0), 0)
+        if field == "bav_transfer_etf_ratio_pct":
+            value = max(min(float(value or 0), 100.0), 0.0)
         if field == "current_value":
             unrealized_gains = float(current_row.get("unrealized_gains") or 0)
             current_row["unrealized_gains"] = min(
                 unrealized_gains, float(value or 0)
             )
         current_row[field] = value
-        if field in {"type", "current_value"}:
+        if field in {"type", "bav_strategy"}:
             render_asset_rows()
-        run_forecast()
+            run_immediate()
+            return
+        if field == "current_value":
+            schedule_forecast(rebuild_assets=True)
+            return
+        schedule_forecast()
 
     def remove_asset_row(index: int) -> None:
         """Remove an asset row from the list.
@@ -373,7 +485,7 @@ def build_wealth_page() -> None:
         """
         asset_rows.pop(index)
         render_asset_rows()
-        run_forecast()
+        run_immediate()
 
     def add_asset_row() -> None:
         """Append a new blank asset row."""
@@ -385,10 +497,14 @@ def build_wealth_page() -> None:
                 "unrealized_gains": 0.0,
                 "annual_gain_rate_pct": _default_gain_pct(AssetType.ETF),
                 "monthly_contribution": 0.0,
+                "bav_strategy": BAVStrategy.TRANSFER.value,
+                "bav_transfer_start_age": 67,
+                "bav_transfer_end_age": 72,
+                "bav_transfer_etf_ratio_pct": 50.0,
             }
         )
         render_asset_rows()
-        run_forecast()
+        run_immediate()
 
     def reset_state() -> None:
         """Reset UI values to defaults and clear cached state."""
@@ -412,7 +528,7 @@ def build_wealth_page() -> None:
         withdrawal_input.value = default_withdrawal_state["monthly_withdrawal"]
         withdrawal_input.update()
         render_asset_rows()
-        run_forecast()
+        run_immediate()
         suppress_cache_save = False
         try:
             _clear_cached_state()
@@ -445,6 +561,7 @@ def build_wealth_page() -> None:
                 for index, row in enumerate(asset_rows):
                     with assets_container:
                         with ui.row().classes("w-full gap-2 items-end"):
+                            asset_type = AssetType(str(row.get("type")))
                             current_value = float(
                                 row.get("current_value") or 0
                             )
@@ -463,6 +580,79 @@ def build_wealth_page() -> None:
                                     i, "type", e.value
                                 ),
                             ).classes("w-28")
+                            if asset_type == AssetType.BAV:
+                                ui.select(
+                                    options={
+                                        BAVStrategy.TRANSFER.value: (
+                                            "Transfer to ETF/Cash"
+                                        ),
+                                        BAVStrategy.INCOME.value: (
+                                            "Monthly gains income"
+                                        ),
+                                    },
+                                    value=row.get(
+                                        "bav_strategy",
+                                        BAVStrategy.TRANSFER.value,
+                                    ),
+                                    label="bAV mode",
+                                    on_change=lambda e, i=index: (
+                                        update_asset_row(
+                                            i, "bav_strategy", e.value
+                                        )
+                                    ),
+                                ).classes("w-48")
+                                if row.get("bav_strategy") == (
+                                    BAVStrategy.TRANSFER.value
+                                ):
+                                    ui.number(
+                                        label="Transfer start age",
+                                        value=row.get(
+                                            "bav_transfer_start_age", 67
+                                        ),
+                                        format="%.0f",
+                                        min=0,
+                                        step=1,
+                                        on_change=lambda e, i=index: (
+                                            update_asset_row(
+                                                i,
+                                                "bav_transfer_start_age",
+                                                e.value,
+                                            )
+                                        ),
+                                    ).classes("w-32")
+                                    ui.number(
+                                        label="Transfer end age",
+                                        value=row.get(
+                                            "bav_transfer_end_age", 72
+                                        ),
+                                        format="%.0f",
+                                        min=0,
+                                        step=1,
+                                        on_change=lambda e, i=index: (
+                                            update_asset_row(
+                                                i,
+                                                "bav_transfer_end_age",
+                                                e.value,
+                                            )
+                                        ),
+                                    ).classes("w-32")
+                                    ui.number(
+                                        label="ETF share (%)",
+                                        value=row.get(
+                                            "bav_transfer_etf_ratio_pct", 50.0
+                                        ),
+                                        format="%.0f",
+                                        min=0,
+                                        max=100,
+                                        step=5,
+                                        on_change=lambda e, i=index: (
+                                            update_asset_row(
+                                                i,
+                                                "bav_transfer_etf_ratio_pct",
+                                                e.value,
+                                            )
+                                        ),
+                                    ).classes("w-28")
                             ui.number(
                                 label="Current value",
                                 value=row["current_value"],
@@ -525,7 +715,7 @@ def build_wealth_page() -> None:
                     label="Current age (years)",
                     value=profile_state["current_age_years"],
                     format="%.0f",
-                    on_change=lambda _: run_forecast(),
+                    on_change=lambda _: schedule_forecast(),
                 )
                 current_age_months = ui.number(
                     label="Current age (months)",
@@ -533,24 +723,24 @@ def build_wealth_page() -> None:
                     format="%.0f",
                     min=0,
                     max=11,
-                    on_change=lambda _: run_forecast(),
+                    on_change=lambda _: schedule_forecast(),
                 )
                 retirement_age = ui.number(
                     label="Retirement age",
                     value=profile_state["retirement_age"],
                     format="%.0f",
-                    on_change=lambda _: run_forecast(),
+                    on_change=lambda _: schedule_forecast(),
                 )
                 end_age = ui.number(
                     label="End age",
                     value=profile_state["end_age"],
                     format="%.0f",
-                    on_change=lambda _: run_forecast(),
+                    on_change=lambda _: schedule_forecast(),
                 )
                 currency = ui.input(
                     label="Currency",
                     value=profile_state["currency"],
-                    on_change=lambda _: run_forecast(),
+                    on_change=lambda _: schedule_forecast(),
                 )
                 average_inflation_rate = ui.number(
                     label="Average inflation rate (%)",
@@ -558,7 +748,7 @@ def build_wealth_page() -> None:
                     format="%.2f",
                     min=-99.9,
                     step=0.1,
-                    on_change=lambda _: run_forecast(),
+                    on_change=lambda _: schedule_forecast(),
                 )
                 withdrawal_input = ui.number(
                     label="Monthly withdrawal",
@@ -566,7 +756,7 @@ def build_wealth_page() -> None:
                     format="%.0f",
                     min=0,
                     step=50,
-                    on_change=lambda _: run_forecast(),
+                    on_change=lambda _: schedule_forecast(),
                 )
 
         summary_label = ui.label("No forecast yet.").classes("text-sm")
