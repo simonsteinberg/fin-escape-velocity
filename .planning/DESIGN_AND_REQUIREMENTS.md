@@ -1,10 +1,11 @@
-# Wealth Forecast App — Requirements
+# Wealth Forecast App — Design and Requirements
 
 ## Overview
 
 The Wealth Forecast App projects the monthly value of a user's assets from their current age
 through age 100. It models asset-specific growth, pre-retirement contributions, and
-post-retirement withdrawals, including German capital-gains tax on ETF withdrawals.
+post-retirement withdrawals, including German capital-gains tax on ETF withdrawals and
+bAV-specific payout strategies.
 
 ---
 
@@ -31,6 +32,8 @@ post-retirement withdrawals, including German capital-gains tax on ETF withdrawa
 | **Gains** | Current balance minus cost basis; floored at zero (cost basis is never written down). |
 | **Gross withdrawal** | Amount deducted from the portfolio before tax. |
 | **Net cashflow** | Amount the user actually receives after ETF withdrawal taxes are deducted. |
+| **bAV strategy** | Rule that governs how bAV assets pay out (transfer window or monthly gains income). |
+| **Transfer window** | Age range over which a bAV balance is transferred into ETF/Cash. |
 
 ---
 
@@ -85,9 +88,18 @@ Each asset has:
 | Field | Required | Notes |
 |---|---|---|
 | Name | Yes | Free text, e.g. "ETF MSCI World". |
-| Type | Yes | One of: `ETF`, `pension` (bAV), `cash`. |
+| Type | Yes | One of: `ETF`, `bAV`, `cash`. |
 | Current value | Yes | Starting balance in the chosen currency. |
 | Annual gain rate | No | Falls back to the type default if omitted. |
+
+#### bAV-specific fields
+
+| Field | Required | Notes |
+|---|---|---|
+| bAV strategy | Yes (for bAV) | `transfer` or `income`. |
+| Transfer start age | If strategy = transfer | Age in years when the transfer window begins. |
+| Transfer end age | If strategy = transfer | Age in years when the transfer window ends. |
+| Transfer ETF ratio | If strategy = transfer | Share of the net transfer allocated to ETF; remainder goes to Cash. |
 
 ### Contributions (pre-retirement)
 
@@ -212,6 +224,21 @@ cost_basis_reduction = gross_withdrawal_share × (cost_basis / balance)
 
 This ensures the gains ratio reflects accumulated gains correctly in subsequent months.
 
+### 7 — bAV Strategies
+
+Two bAV strategies are supported:
+
+1. **Transfer window**
+   - Between the configured start/end ages, transfer an equal monthly fraction of the
+     remaining bAV balance into ETF/Cash.
+   - Tax applies to **100 % of the gains portion** at **26.25 %**.
+   - The net transfer (after tax) is allocated to ETF and Cash based on the ETF ratio.
+
+2. **Monthly gains income**
+   - Starting at retirement, pay out the bAV monthly gains as income.
+   - Tax applies to **100 % of the gains portion** at **26.25 %**.
+   - The bAV balance does **not** grow from gains in months where income is paid out.
+
 ---
 
 ## Outputs
@@ -228,7 +255,7 @@ Each monthly record contains:
 | Total portfolio balance | Sum of all asset balances. |
 | Gross cashflow | Positive = total contributions; negative = total gross withdrawal. |
 | Net cashflow | Same as gross cashflow for non-ETF months; reduced by ETF taxes in retirement. |
-| ETF tax paid | Total tax deducted in the month (zero pre-retirement). |
+| Tax paid | Total tax deducted in the month (ETF + bAV). |
 
 An optional **annual summary** (total portfolio value at year-end) may be derived from the
 monthly data without additional calculation.
@@ -272,6 +299,11 @@ The user can specify an average inflation rate. The net monthly withdrawal targe
 inflated from today's currency to each retirement month using compound inflation before
 gross-up and withdrawal allocation.
 
+### FR7 — bAV Strategies
+
+The app supports bAV transfer windows (with configurable ages and ETF ratio) and bAV
+monthly-gains income. bAV gains are fully taxable at 26.25 % in both strategies.
+
 ---
 
 ## Acceptance Criteria
@@ -286,3 +318,4 @@ gross-up and withdrawal allocation.
 | AC6 | Cost basis for each ETF asset is updated correctly on contribution and on withdrawal. |
 | AC7 | Where no gain rate is provided for an asset, the type default is used; user-provided overrides take precedence. |
 | AC8 | Retirement withdrawals are inflated from today's currency using the specified average inflation rate before gross-up. |
+| AC9 | bAV transfer windows allocate net balances to ETF/Cash and apply full-gains tax; bAV income pays out monthly gains with tax and no reinvestment. |

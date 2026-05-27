@@ -10,6 +10,7 @@ from finev.forecast import forecast_wealth
 from finev.models import (
     Asset,
     AssetType,
+    BAVStrategy,
     UserProfile,
     WithdrawalPlan,
 )
@@ -49,6 +50,10 @@ def build_default_assets() -> list[Asset]:
             asset_type=AssetType.BAV,
             current_value=20_000.0,
             monthly_contribution=100.0,
+            bav_strategy=BAVStrategy.TRANSFER,
+            bav_transfer_start_age=67,
+            bav_transfer_end_age=72,
+            bav_transfer_etf_ratio=0.5,
         ),
         Asset(
             name="Daily account",

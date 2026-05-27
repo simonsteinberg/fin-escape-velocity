@@ -14,6 +14,13 @@ class AssetType(StrEnum):
     CASH = "Cash"
 
 
+class BAVStrategy(StrEnum):
+    """Enum for bAV handling strategies."""
+
+    TRANSFER = "transfer"
+    INCOME = "income"
+
+
 DEFAULT_ANNUAL_GAIN_RATES: dict[AssetType, float] = {
     AssetType.ETF: 0.05,
     AssetType.BAV: 0.02,
@@ -53,6 +60,10 @@ class Asset:
         initial_cost_basis: Optional cost basis at forecast start.
         annual_gain_rate: Optional annual gain rate override.
         monthly_contribution: Monthly contribution before retirement.
+        bav_strategy: Strategy for handling bAV assets.
+        bav_transfer_start_age: Start age (years) for bAV transfer window.
+        bav_transfer_end_age: End age (years) for bAV transfer window.
+        bav_transfer_etf_ratio: Share of transfer allocated to ETF assets.
     """
 
     name: str
@@ -61,6 +72,10 @@ class Asset:
     initial_cost_basis: float | None = None
     annual_gain_rate: float | None = None
     monthly_contribution: float = 0.0
+    bav_strategy: BAVStrategy = BAVStrategy.TRANSFER
+    bav_transfer_start_age: int = 67
+    bav_transfer_end_age: int = 72
+    bav_transfer_etf_ratio: float = 0.5
 
     def effective_cost_basis(self) -> float:
         """Return the starting cost basis for this asset.

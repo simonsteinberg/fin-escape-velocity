@@ -1,7 +1,13 @@
 import pytest
 
 from finev.forecast import forecast_wealth
-from finev.models import Asset, AssetType, UserProfile, WithdrawalPlan
+from finev.models import (
+    Asset,
+    AssetType,
+    BAVStrategy,
+    UserProfile,
+    WithdrawalPlan,
+)
 
 
 def test_default_rate_used_for_missing_rate() -> None:
@@ -196,3 +202,96 @@ def test_non_etf_withdrawal_has_no_tax() -> None:
 
     assert result.loc[1, "taxes"] == pytest.approx(0.0)
     assert result.loc[1, "net_cashflow"] == pytest.approx(-500.0)
+
+
+def test_bav_transfer_moves_balance_to_targets_and_taxes_gains() -> None:
+    profile = UserProfile(
+        current_age_years=67,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
+    assets = [
+        Asset(
+            name="bAV",
+            asset_type=AssetType.BAV,
+            current_value=100_000.0,
+            initial_cost_basis=60_000.0,
+            annual_gain_rate=0.0,
+            monthly_contribution=0.0,
+            bav_strategy=BAVStrategy.TRANSFER,
+            bav_transfer_start_age=67,
+            bav_transfer_end_age=67,
+            bav_transfer_etf_ratio=0.75,
+        ),
+        Asset(
+            name="ETF",
+            asset_type=AssetType.ETF,
+            current_value=0.0,
+            annual_gain_rate=0.0,
+            monthly_contribution=0.0,
+        ),
+        Asset(
+            name="Cash",
+            asset_type=AssetType.CASH,
+            current_value=0.0,
+            annual_gain_rate=0.0,
+            monthly_contribution=0.0,
+        ),
+    ]
+    withdrawal = WithdrawalPlan(monthly_withdrawal=0.0)
+
+    result = forecast_wealth(
+        profile=profile, assets=assets, withdrawal=withdrawal
+    )
+
+    start_months = 67 * 12
+    end_months = (67 + 1) * 12 - 1
+    age_months = start_months + 1
+    remaining_months = end_months - age_months + 1
+    transfer_fraction = 1 / remaining_months
+
+    gross_transfer = 100_000.0 * transfer_fraction
+    gains = 40_000.0 * transfer_fraction
+    expected_tax = gains * 0.2625
+    expected_net = gross_transfer - expected_tax
+    expected_etf = expected_net * 0.75
+    expected_cash = expected_net * 0.25
+    expected_bav = 100_000.0 - gross_transfer
+
+    assert result.loc[1, "bAV"] == pytest.approx(expected_bav)
+    assert result.loc[1, "ETF"] == pytest.approx(expected_etf)
+    assert result.loc[1, "Cash"] == pytest.approx(expected_cash)
+    assert result.loc[1, "taxes"] == pytest.approx(expected_tax)
+    assert result.loc[1, "net_cashflow"] == pytest.approx(-expected_tax)
+
+
+def test_bav_income_pays_monthly_gains_after_retirement() -> None:
+    profile = UserProfile(
+        current_age_years=67,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
+    asset = Asset(
+        name="bAV",
+        asset_type=AssetType.BAV,
+        current_value=120_000.0,
+        annual_gain_rate=0.12,
+        monthly_contribution=0.0,
+        bav_strategy=BAVStrategy.INCOME,
+    )
+    withdrawal = WithdrawalPlan(monthly_withdrawal=0.0)
+
+    result = forecast_wealth(
+        profile=profile, assets=[asset], withdrawal=withdrawal
+    )
+
+    monthly_rate = (1 + 0.12) ** (1 / 12) - 1
+    expected_gain = 120_000.0 * monthly_rate
+    expected_tax = expected_gain * 0.2625
+    expected_net = expected_gain - expected_tax
+
+    assert result.loc[1, "bAV"] == pytest.approx(120_000.0)
+    assert result.loc[1, "taxes"] == pytest.approx(expected_tax)
+    assert result.loc[1, "net_cashflow"] == pytest.approx(expected_net)
