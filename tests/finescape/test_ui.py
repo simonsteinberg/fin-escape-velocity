@@ -6,6 +6,7 @@ from finev.ui import (
     _asset_from_row,
     _build_chart_options,
     _default_asset_rows,
+    _default_withdrawal_state,
     _format_currency,
     _load_cached_state,
     _normalize_asset_row,
@@ -82,6 +83,15 @@ def test_build_chart_options_has_expected_shape() -> None:
     assert options["xAxis"]["data"] == []
     assert options["yAxis"]["type"] == "value"
     assert options["series"] == []
+
+
+def test_default_withdrawal_state_includes_state_pension_inputs() -> None:
+    state = _default_withdrawal_state()
+
+    assert state["monthly_withdrawal"] == pytest.approx(3000.0)
+    assert state["state_pension_current_monthly_amount"] == pytest.approx(0.0)
+    assert state["state_pension_growth_per_working_year"] == pytest.approx(0.0)
+    assert state["state_pension_start_age"] == 67
 
 
 def test_asset_from_row_maps_unrealized_gains_to_cost_basis() -> None:

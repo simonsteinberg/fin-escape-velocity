@@ -5,6 +5,7 @@ from finev.models import (
     Asset,
     AssetType,
     BAVStrategy,
+    StatePension,
     UserProfile,
     WithdrawalPlan,
 )
@@ -295,3 +296,81 @@ def test_bav_income_pays_monthly_gains_after_retirement() -> None:
     assert result.loc[1, "bAV"] == pytest.approx(120_000.0)
     assert result.loc[1, "taxes"] == pytest.approx(expected_tax)
     assert result.loc[1, "net_cashflow"] == pytest.approx(expected_net)
+
+
+def test_state_pension_reduces_withdrawal_from_start_age() -> None:
+    profile = UserProfile(
+        current_age_years=40,
+        retirement_age=42,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
+    asset = Asset(
+        name="Cash",
+        asset_type=AssetType.CASH,
+        current_value=2_000_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    withdrawal = WithdrawalPlan(
+        monthly_withdrawal=3_000.0,
+        state_pension=StatePension(
+            current_monthly_amount=1_000.0,
+            monthly_growth_per_working_year=30.0,
+            start_age=67,
+        ),
+    )
+
+    result = forecast_wealth(
+        profile=profile, assets=[asset], withdrawal=withdrawal
+    )
+
+    pre_start_month = (67 - 40) * 12 - 1
+    start_month = (67 - 40) * 12
+    expected_net_pension = (1_000.0 + 2 * 30.0) * (1 - 0.35)
+    expected_withdrawal = 3_000.0 - expected_net_pension
+
+    assert result.loc[pre_start_month, "net_cashflow"] == pytest.approx(
+        -3_000.0
+    )
+    assert result.loc[start_month, "net_cashflow"] == pytest.approx(
+        -expected_withdrawal
+    )
+
+
+def test_state_pension_inflation_adjusted_with_time() -> None:
+    profile = UserProfile(
+        current_age_years=40,
+        retirement_age=42,
+        end_age=68,
+        average_inflation_rate=0.02,
+    )
+    asset = Asset(
+        name="Cash",
+        asset_type=AssetType.CASH,
+        current_value=2_000_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    withdrawal = WithdrawalPlan(
+        monthly_withdrawal=3_000.0,
+        state_pension=StatePension(
+            current_monthly_amount=1_000.0,
+            monthly_growth_per_working_year=30.0,
+            start_age=67,
+        ),
+    )
+
+    result = forecast_wealth(
+        profile=profile, assets=[asset], withdrawal=withdrawal
+    )
+
+    start_month = (67 - 40) * 12
+    monthly_rate = (1 + 0.02) ** (1 / 12) - 1
+    inflation_multiplier = (1 + monthly_rate) ** start_month
+    base_net_gap = 3_000.0 - ((1_000.0 + 2 * 30.0) * (1 - 0.35))
+    expected_withdrawal = base_net_gap * inflation_multiplier
+
+    assert result.loc[start_month, "net_cashflow"] == pytest.approx(
+        -expected_withdrawal
+    )

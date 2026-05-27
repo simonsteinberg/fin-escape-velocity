@@ -101,13 +101,34 @@ class Asset:
 
 
 @dataclass(frozen=True)
+class StatePension:
+    """State pension configuration.
+
+    Attributes:
+        current_monthly_amount: Current gross monthly state pension value in
+            today's currency.
+        monthly_growth_per_working_year: Additional gross monthly pension earned
+            per year the user keeps working until retirement.
+        start_age: Age (years) when state pension starts, between 63 and 67.
+        tax_rate: Flat tax rate applied to monthly state pension.
+    """
+
+    current_monthly_amount: float = 0.0
+    monthly_growth_per_working_year: float = 0.0
+    start_age: int = 67
+    tax_rate: float = 0.35
+
+
+@dataclass(frozen=True)
 class WithdrawalPlan:
     """Withdrawal configuration for retirement.
 
     Attributes:
         monthly_withdrawal: Amount withdrawn each month after retirement.
         allocation_strategy: Strategy for allocating withdrawals.
+        state_pension: Optional state pension inputs.
     """
 
     monthly_withdrawal: float = 0.0
     allocation_strategy: str = "proportional"
+    state_pension: StatePension | None = None
