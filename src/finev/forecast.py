@@ -11,6 +11,7 @@ from finev.models import (
     Asset,
     AssetType,
     BAVStrategy,
+    StatePension,
     UserProfile,
     WithdrawalPlan,
 )
@@ -218,6 +219,43 @@ def _validate_withdrawal(withdrawal: WithdrawalPlan) -> None:
         raise ValueError(
             "Only proportional withdrawal allocation is supported"
         )
+    state_pension = withdrawal.state_pension
+    if state_pension is None:
+        return
+    if state_pension.current_monthly_amount < 0:
+        raise ValueError("State pension amount must be non-negative")
+    if state_pension.monthly_growth_per_working_year < 0:
+        raise ValueError("State pension growth must be non-negative")
+    if not 63 <= state_pension.start_age <= 67:
+        raise ValueError("State pension start age must be between 63 and 67")
+    if not 0 <= state_pension.tax_rate < 1:
+        raise ValueError("State pension tax rate must be between 0 and 1")
+
+
+def _net_state_pension_for_month(
+    profile: UserProfile,
+    metadata: ForecastMetadata,
+    state_pension: StatePension | None,
+    age_months: int,
+) -> float:
+    """Return net monthly state pension for the given month."""
+    if state_pension is None:
+        return 0.0
+    if age_months < state_pension.start_age * 12:
+        return 0.0
+    working_years = (
+        max(metadata.retirement_age_months - metadata.start_age_months, 0) / 12
+    )
+    accrued_monthly_pension = state_pension.current_monthly_amount + (
+        working_years * state_pension.monthly_growth_per_working_year
+    )
+    months_since_start = age_months - metadata.start_age_months
+    inflation_multiplier = _inflation_multiplier(
+        profile.average_inflation_rate,
+        months_since_start,
+    )
+    gross_monthly_pension = accrued_monthly_pension * inflation_multiplier
+    return gross_monthly_pension * (1 - state_pension.tax_rate)
 
 
 def forecast_wealth(
@@ -311,6 +349,16 @@ def forecast_wealth(
                 )
                 withdrawal_target = (
                     float(withdrawal.monthly_withdrawal) * inflation_multiplier
+                )
+                withdrawal_target = max(
+                    withdrawal_target
+                    - _net_state_pension_for_month(
+                        profile=profile,
+                        metadata=metadata,
+                        state_pension=withdrawal.state_pension,
+                        age_months=age_months,
+                    ),
+                    0.0,
                 )
                 total_balance = float(sum(balances))
                 if withdrawal_target > 0 and total_balance > 0:

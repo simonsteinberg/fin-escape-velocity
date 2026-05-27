@@ -10,6 +10,7 @@ from finev.models import (
     Asset,
     AssetType,
     BAVStrategy,
+    StatePension,
     UserProfile,
     WithdrawalPlan,
 )
@@ -201,6 +202,45 @@ def test_validate_withdrawal_rejects_invalid_inputs() -> None:
         _validate_withdrawal(
             WithdrawalPlan(
                 monthly_withdrawal=100.0, allocation_strategy="lifo"
+            )
+        )
+
+    with pytest.raises(
+        ValueError, match="State pension amount must be non-negative"
+    ):
+        _validate_withdrawal(
+            WithdrawalPlan(
+                state_pension=StatePension(
+                    current_monthly_amount=-1.0,
+                    monthly_growth_per_working_year=0.0,
+                    start_age=67,
+                )
+            )
+        )
+
+    with pytest.raises(
+        ValueError, match="State pension growth must be non-negative"
+    ):
+        _validate_withdrawal(
+            WithdrawalPlan(
+                state_pension=StatePension(
+                    current_monthly_amount=1.0,
+                    monthly_growth_per_working_year=-1.0,
+                    start_age=67,
+                )
+            )
+        )
+
+    with pytest.raises(
+        ValueError, match="State pension start age must be between 63 and 67"
+    ):
+        _validate_withdrawal(
+            WithdrawalPlan(
+                state_pension=StatePension(
+                    current_monthly_amount=1.0,
+                    monthly_growth_per_working_year=0.0,
+                    start_age=62,
+                )
             )
         )
 

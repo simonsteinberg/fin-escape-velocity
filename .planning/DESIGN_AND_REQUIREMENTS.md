@@ -81,6 +81,17 @@ minimal rework. Specific expectations:
 | Monthly withdrawal target | — | Net amount the user wants to receive each month in retirement (see §Withdrawal Target Interpretation). |
 | Average inflation rate | 0 % | Annual rate used to inflate the retirement withdrawal target from today's currency. |
 
+### State Pension
+
+| Field | Required | Notes |
+|---|---|---|
+| Current monthly state pension (today-value at age 67) | Yes | Monthly gross state pension in today's currency if the user stopped working today. |
+| Monthly state pension growth per working year | Yes | Additional gross monthly pension earned for each year the user keeps working until retirement. |
+| State pension start age | Yes | Must be between 63 and 67 (inclusive). |
+
+State pension is taxed at a fixed rate of **35 %** and therefore only the net amount
+reduces withdrawals.
+
 ### Assets
 
 Each asset has:
@@ -304,6 +315,34 @@ gross-up and withdrawal allocation.
 The app supports bAV transfer windows (with configurable ages and ETF ratio) and bAV
 monthly-gains income. bAV gains are fully taxable at 26.25 % in both strategies.
 
+### FR8 — State Pension Integration
+
+The app supports a state pension stream that starts between age 63 and 67. Before start,
+state pension is 0. From start onward, monthly state pension is:
+
+```
+gross_state_pension(month) =
+  (
+    current_state_pension_at_age_67_today
+    + (working_years_until_retirement × pension_growth_per_working_year)
+  ) × inflation_multiplier(month)
+```
+
+where `working_years_until_retirement` is derived from current age to retirement age.
+The net state pension is:
+
+```
+net_state_pension(month) = gross_state_pension(month) × (1 − 0.35)
+```
+
+For retirement months, the withdrawal target is reduced by net state pension and floored
+at zero before ETF gross-up and allocation:
+
+```
+effective_withdrawal_target(month) =
+  max(0, inflated_withdrawal_target(month) − net_state_pension(month))
+```
+
 ---
 
 ## Acceptance Criteria
@@ -319,3 +358,21 @@ monthly-gains income. bAV gains are fully taxable at 26.25 % in both strategies.
 | AC7 | Where no gain rate is provided for an asset, the type default is used; user-provided overrides take precedence. |
 | AC8 | Retirement withdrawals are inflated from today's currency using the specified average inflation rate before gross-up. |
 | AC9 | bAV transfer windows allocate net balances to ETF/Cash and apply full-gains tax; bAV income pays out monthly gains with tax and no reinvestment. |
+| AC10 | State pension start age is validated to 63..67 and net state pension (after 35 % tax) reduces retirement withdrawals from the pension-start month onward. |
+| AC11 | State pension amount reflects both earned growth until retirement and monthly inflation adjustment over forecast time. |
+
+---
+
+## Implementation Plan — State Pension
+
+1. Extend domain model with a typed state pension input structure and wire it into
+   withdrawal configuration.
+2. Add forecast validation and pension cashflow helpers to compute net state pension per
+   month (growth-until-retirement + inflation + fixed 35 % tax).
+3. Adjust retirement withdrawal logic to subtract net state pension before ETF gross-up.
+4. Expose the new state pension inputs in the NiceGUI form and persist them in cached UI
+   state.
+5. Add tests for:
+   - validation (start-age range and numeric constraints),
+   - withdrawal reduction from pension-start month,
+   - inflation-adjusted pension behavior.

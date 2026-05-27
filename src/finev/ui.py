@@ -17,6 +17,7 @@ from finev.models import (
     Asset,
     AssetType,
     BAVStrategy,
+    StatePension,
     UserProfile,
     WithdrawalPlan,
 )
@@ -136,7 +137,12 @@ def _default_profile_state() -> dict[str, Any]:
 
 def _default_withdrawal_state() -> dict[str, Any]:
     """Return default withdrawal values for UI inputs."""
-    return {"monthly_withdrawal": 3000.0}
+    return {
+        "monthly_withdrawal": 3000.0,
+        "state_pension_current_monthly_amount": 0.0,
+        "state_pension_growth_per_working_year": 0.0,
+        "state_pension_start_age": 67,
+    }
 
 
 def _coerce_float(value: Any, field_name: str) -> float:
@@ -312,6 +318,31 @@ def _load_withdrawal_state(
         withdrawal_state["monthly_withdrawal"] = _coerce_float(
             raw_withdrawal.get("monthly_withdrawal"),
             "withdrawal.monthly_withdrawal",
+        )
+    if raw_withdrawal.get("state_pension_current_monthly_amount") not in (
+        None,
+        "",
+    ):
+        withdrawal_state["state_pension_current_monthly_amount"] = (
+            _coerce_float(
+                raw_withdrawal.get("state_pension_current_monthly_amount"),
+                "withdrawal.state_pension_current_monthly_amount",
+            )
+        )
+    if raw_withdrawal.get("state_pension_growth_per_working_year") not in (
+        None,
+        "",
+    ):
+        withdrawal_state["state_pension_growth_per_working_year"] = (
+            _coerce_float(
+                raw_withdrawal.get("state_pension_growth_per_working_year"),
+                "withdrawal.state_pension_growth_per_working_year",
+            )
+        )
+    if raw_withdrawal.get("state_pension_start_age") not in (None, ""):
+        withdrawal_state["state_pension_start_age"] = _coerce_int(
+            raw_withdrawal.get("state_pension_start_age"),
+            "withdrawal.state_pension_start_age",
         )
     return withdrawal_state
 
@@ -527,6 +558,18 @@ def build_wealth_page() -> None:
         average_inflation_rate.update()
         withdrawal_input.value = default_withdrawal_state["monthly_withdrawal"]
         withdrawal_input.update()
+        state_pension_current_monthly_amount.value = default_withdrawal_state[
+            "state_pension_current_monthly_amount"
+        ]
+        state_pension_current_monthly_amount.update()
+        state_pension_growth_per_working_year.value = default_withdrawal_state[
+            "state_pension_growth_per_working_year"
+        ]
+        state_pension_growth_per_working_year.update()
+        state_pension_start_age.value = default_withdrawal_state[
+            "state_pension_start_age"
+        ]
+        state_pension_start_age.update()
         render_asset_rows()
         run_immediate()
         suppress_cache_save = False
@@ -710,7 +753,7 @@ def build_wealth_page() -> None:
 
         with ui.card().classes("w-full p-3"):
             ui.label("Profile").classes("text-lg font-semibold")
-            with ui.grid(columns=6).classes("w-full gap-3"):
+            with ui.grid(columns=9).classes("w-full gap-3"):
                 current_age_years = ui.number(
                     label="Current age (years)",
                     value=profile_state["current_age_years"],
@@ -758,6 +801,35 @@ def build_wealth_page() -> None:
                     step=50,
                     on_change=lambda _: schedule_forecast(),
                 )
+                state_pension_current_monthly_amount = ui.number(
+                    label="State pension now (monthly)",
+                    value=withdrawal_state[
+                        "state_pension_current_monthly_amount"
+                    ],
+                    format="%.0f",
+                    min=0,
+                    step=50,
+                    on_change=lambda _: schedule_forecast(),
+                )
+                state_pension_growth_per_working_year = ui.number(
+                    label="State pension growth / working year",
+                    value=withdrawal_state[
+                        "state_pension_growth_per_working_year"
+                    ],
+                    format="%.0f",
+                    min=0,
+                    step=5,
+                    on_change=lambda _: schedule_forecast(),
+                )
+                state_pension_start_age = ui.number(
+                    label="State pension start age",
+                    value=withdrawal_state["state_pension_start_age"],
+                    format="%.0f",
+                    min=63,
+                    max=67,
+                    step=1,
+                    on_change=lambda _: schedule_forecast(),
+                )
 
         summary_label = ui.label("No forecast yet.").classes("text-sm")
         chart = ui.echart(_build_chart_options()).classes("w-full h-72")
@@ -784,6 +856,15 @@ def build_wealth_page() -> None:
                 assets = build_assets()
                 withdrawal = WithdrawalPlan(
                     monthly_withdrawal=float(withdrawal_input.value or 0),
+                    state_pension=StatePension(
+                        current_monthly_amount=float(
+                            state_pension_current_monthly_amount.value or 0
+                        ),
+                        monthly_growth_per_working_year=float(
+                            state_pension_growth_per_working_year.value or 0
+                        ),
+                        start_age=int(state_pension_start_age.value or 67),
+                    ),
                 )
                 df = forecast_wealth(
                     profile=profile,
@@ -889,7 +970,16 @@ def build_wealth_page() -> None:
                     "withdrawal": {
                         "monthly_withdrawal": float(
                             withdrawal_input.value or 0
-                        )
+                        ),
+                        "state_pension_current_monthly_amount": float(
+                            state_pension_current_monthly_amount.value or 0
+                        ),
+                        "state_pension_growth_per_working_year": float(
+                            state_pension_growth_per_working_year.value or 0
+                        ),
+                        "state_pension_start_age": int(
+                            state_pension_start_age.value or 67
+                        ),
                     },
                 }
                 _save_cached_state(state_snapshot)
