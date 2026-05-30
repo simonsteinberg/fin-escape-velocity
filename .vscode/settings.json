@@ -2,6 +2,8 @@
     "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
     "python.analysis.extraPaths": [
         "${workspaceFolder}/src",
-    ]
-
+    ],
+    "workbench.colorCustomizations": {
+        "statusBar.background": "#ff009d"
+    },
 }
