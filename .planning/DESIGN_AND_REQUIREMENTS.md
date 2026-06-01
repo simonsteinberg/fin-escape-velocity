@@ -329,10 +329,18 @@ gross_state_pension(month) =
 ```
 
 where `working_years_until_retirement` is derived from current age to retirement age.
+
+You can choose to start your state penstion retirement earlier than 67, but the pension amount will be reduced by (100 x DRV_RENTENABSCHLAG_PRO_JAHR) % for each yeat of early retirement. For example, with the current DRV_RENTENABSCHLAG_PRO_JAHR of 3.6 %, starting the pension at 65 (2 years early) results in a reduction of 7.2 %.
+
+```
+gross_state_pension_reduced(month) =
+  gross_state_pension(month) * (1 - DRV_RENTENABSCHLAG_PRO_JAHR × (67 - state_pension_start_age))
+```
+
 The net state pension is:
 
 ```
-net_state_pension(month) = gross_state_pension(month) × (1 − 0.35)
+net_state_pension(month) = gross_state_pension_reduced(month) × (1 − DRV_BRUTTO_RENTE_STEUERSATZ)
 ```
 
 For retirement months, the withdrawal target is reduced by net state pension and floored
@@ -342,6 +350,9 @@ at zero before ETF gross-up and allocation:
 effective_withdrawal_target(month) =
   max(0, inflated_withdrawal_target(month) − net_state_pension(month))
 ```
+
+# FR9 - Inheritance
+
 
 ---
 

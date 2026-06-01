@@ -28,7 +28,7 @@ run = "uv run python -m finev.cli"
 
 [tasks.app]
 description = "Launch the wealth forecast application"
-run = "uv run finev-app"
+run = "uv run python -m finev.app"
 
 [tasks.sync]
 description = "Install project dependencies"

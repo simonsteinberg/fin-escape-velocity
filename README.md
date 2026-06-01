@@ -26,6 +26,7 @@ Open http://localhost:8081. To override the starting port:
 ```bash
 WEALTH_APP_PORT=8090 mise run app
 ```
+The task runs `python -m finev.app` through uv, so it does not depend on a pre-installed `finev-app` launcher.
 
 ## Defaults
 

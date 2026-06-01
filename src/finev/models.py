@@ -110,13 +110,14 @@ class StatePension:
         monthly_growth_per_working_year: Additional gross monthly pension earned
             per year the user keeps working until retirement.
         start_age: Age (years) when state pension starts, between 63 and 67.
-        tax_rate: Flat tax rate applied to monthly state pension.
+        tax_rate: Optional flat tax rate applied to monthly state pension. When
+            omitted, the configured default is used.
     """
 
     current_monthly_amount: float = 0.0
     monthly_growth_per_working_year: float = 0.0
     start_age: int = 67
-    tax_rate: float = 0.35
+    tax_rate: float | None = None
 
 
 @dataclass(frozen=True)
