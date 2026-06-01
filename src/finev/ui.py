@@ -663,6 +663,7 @@ def build_wealth_page() -> None:
                                         )
                                     ),
                                 ).classes("w-48")
+                                # Show appropriate inputs depending on chosen bAV mode
                                 if row.get("bav_strategy") == (
                                     BAVStrategy.TRANSFER.value
                                 ):
@@ -715,6 +716,26 @@ def build_wealth_page() -> None:
                                             )
                                         ),
                                     ).classes("w-28")
+                                elif row.get("bav_strategy") == (
+                                    BAVStrategy.INCOME.value
+                                ):
+                                    # For income mode, show a withdraw/start age field (display name: Withdraw start age)
+                                    ui.number(
+                                        label="Withdraw start age",
+                                        value=row.get(
+                                            "bav_transfer_start_age", 67
+                                        ),
+                                        format="%.0f",
+                                        min=0,
+                                        step=1,
+                                        on_change=lambda e, i=index: (
+                                            update_asset_row(
+                                                i,
+                                                "bav_transfer_start_age",
+                                                e.value,
+                                            )
+                                        ),
+                                    ).classes("w-32")
                             ui.number(
                                 label="Current value",
                                 value=row["current_value"],
@@ -911,7 +932,7 @@ def build_wealth_page() -> None:
                     )
                     if years_early > 0:
                         state_pension_penalty_display.text = (
-                            "Estimated early-retirement penalty: -" 
+                            "Estimated early-retirement penalty: -"
                             + _format_currency(penalty_monthly, profile.currency)
                             + f" p.m. ({penalty_fraction * 100:.1f}% reduction)"
                         )

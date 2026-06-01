@@ -384,12 +384,26 @@ def forecast_wealth(
                     ),
                     0.0,
                 )
-                total_balance = float(sum(balances))
+                # Only consider assets that are withdrawable at this age.
+                # ETFs and Cash are always withdrawable; bAV is only withdrawable
+                # once its configured transfer/withdraw start age has been reached.
+                withdrawable_indices = [
+                    i
+                    for i, asset in enumerate(assets_list)
+                    if asset.asset_type in (AssetType.ETF, AssetType.CASH)
+                    or (
+                        asset.asset_type == AssetType.BAV
+                        and age_months >= asset.bav_transfer_start_age * 12
+                    )
+                ]
+                total_balance = float(sum(balances[i] for i in withdrawable_indices)) if withdrawable_indices else 0.0
                 if withdrawal_target > 0 and total_balance > 0:
                     taxable_gains_ratio = 0.0
-                    for asset, balance, cost_basis in zip(
-                        assets_list, balances, cost_bases
-                    ):
+                    # Only ETFs that are withdrawable contribute to taxable gains ratio
+                    for i in withdrawable_indices:
+                        asset = assets_list[i]
+                        balance = balances[i]
+                        cost_basis = cost_bases[i]
                         if asset.asset_type != AssetType.ETF or balance <= 0:
                             continue
                         gains = balance - cost_basis
@@ -397,9 +411,7 @@ def forecast_wealth(
                             continue
                         gains_ratio = gains / balance
                         taxable_gains_ratio += (
-                            (balance / total_balance)
-                            * gains_ratio
-                            * etf_taxable_share
+                            (balance / total_balance) * gains_ratio * etf_taxable_share
                         )
 
                     gross_target = withdrawal_target
@@ -433,45 +445,35 @@ def forecast_wealth(
                     new_balances: list[float] = []
                     new_cost_bases: list[float] = []
                     etf_taxable_gains = 0.0
-                    for asset, balance, cost_basis in zip(
-                        assets_list, balances, cost_bases
+                    # Allocate withdrawals proportionally across withdrawable assets only
+                    for i, (asset, balance, cost_basis) in enumerate(
+                        zip(assets_list, balances, cost_bases)
                     ):
-                        if balance <= 0:
-                            new_balances.append(0.0)
+                        if i not in withdrawable_indices or balance <= 0:
+                            # Asset is not withdrawable now; keep as is
+                            new_balances.append(balance)
                             new_cost_bases.append(max(cost_basis, 0.0))
                             continue
 
-                        asset_withdrawal = actual_withdrawn * (
-                            balance / total_balance
-                        )
-                        withdrawal_ratio = asset_withdrawal / balance
+                        asset_withdrawal = actual_withdrawn * (balance / total_balance)
+                        withdrawal_ratio = asset_withdrawal / balance if balance > 0 else 0.0
                         new_balance = max(balance - asset_withdrawal, 0.0)
                         cost_basis_reduction = cost_basis * withdrawal_ratio
-                        new_cost_basis = max(
-                            cost_basis - cost_basis_reduction, 0.0
-                        )
+                        new_cost_basis = max(cost_basis - cost_basis_reduction, 0.0)
 
                         if asset.asset_type == AssetType.ETF:
                             gains = balance - cost_basis
                             if gains > 0:
-                                gains_portion = asset_withdrawal * (
-                                    gains / balance
-                                )
-                                etf_taxable_gains += (
-                                    gains_portion * etf_taxable_share
-                                )
+                                gains_portion = asset_withdrawal * (gains / balance)
+                                etf_taxable_gains += gains_portion * etf_taxable_share
 
                         new_balances.append(new_balance)
                         new_cost_bases.append(new_cost_basis)
 
                     balances = new_balances
                     cost_bases = new_cost_bases
-                    allowance_used = min(
-                        remaining_etf_allowance, etf_taxable_gains
-                    )
-                    taxable_after_allowance = (
-                        etf_taxable_gains - allowance_used
-                    )
+                    allowance_used = min(remaining_etf_allowance, etf_taxable_gains)
+                    taxable_after_allowance = (etf_taxable_gains - allowance_used)
                     withdrawal_taxes = taxable_after_allowance * etf_tax_rate
                     remaining_etf_allowance -= allowance_used
                     taxes += withdrawal_taxes
