@@ -1007,6 +1007,7 @@ def build_wealth_page() -> None:
                         "average_inflation_rate_pct": float(
                             average_inflation_rate.value or 0.0
                         ),
+                        "annual_income": float(annual_income.value or 0),
                     },
                     "withdrawal": {
                         "monthly_withdrawal": float(
