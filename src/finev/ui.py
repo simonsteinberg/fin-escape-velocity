@@ -578,6 +578,13 @@ def build_wealth_page() -> None:
             + " p.m."
         )
         state_pension_growth_display.update()
+        # Reset penalty display to empty (no penalty by default at retirement age 67)
+        try:
+            state_pension_penalty_display.text = ""
+            state_pension_penalty_display.update()
+        except NameError:
+            # UI not fully constructed yet; ignore
+            pass
         state_pension_start_age.value = default_withdrawal_state[
             "state_pension_start_age"
         ]
@@ -838,6 +845,8 @@ def build_wealth_page() -> None:
                     )
                     + " p.m."
                 )
+                # Read-only display for estimated early-retirement penalty at pension start
+                state_pension_penalty_display = ui.label("")
                 state_pension_start_age = ui.number(
                     label="State pension start age",
                     value=withdrawal_state["state_pension_start_age"],
@@ -891,6 +900,24 @@ def build_wealth_page() -> None:
                         + " p.m."
                     )
                     state_pension_growth_display.update()
+                    # Compute estimated early-retirement penalty at pension start (display-only)
+                    pension_start_age = int(state_pension_start_age.value or 67)
+                    years_early = max(0, 67 - pension_start_age)
+                    penalty_fraction = (
+                        config.drv.rentenabschlag_pro_jahr * years_early
+                    )
+                    penalty_monthly = monthly_growth_per_working_year_computed * (
+                        penalty_fraction
+                    )
+                    if years_early > 0:
+                        state_pension_penalty_display.text = (
+                            "Estimated early-retirement penalty: -" 
+                            + _format_currency(penalty_monthly, profile.currency)
+                            + f" p.m. ({penalty_fraction * 100:.1f}% reduction)"
+                        )
+                    else:
+                        state_pension_penalty_display.text = "No early-retirement penalty"
+                    state_pension_penalty_display.update()
                 except Exception:
                     # UI not yet initialized; ignore
                     pass
