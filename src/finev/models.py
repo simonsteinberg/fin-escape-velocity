@@ -72,6 +72,7 @@ class Asset:
     initial_cost_basis: float | None = None
     annual_gain_rate: float | None = None
     monthly_contribution: float = 0.0
+    active: bool = True
     bav_strategy: BAVStrategy = BAVStrategy.TRANSFER
     bav_transfer_start_age: int = 67
     bav_transfer_end_age: int = 72

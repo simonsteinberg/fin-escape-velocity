@@ -56,6 +56,7 @@ def _default_asset_rows() -> list[dict[str, Any]]:
             "unrealized_gains": 0.0,
             "annual_gain_rate_pct": _default_gain_pct(AssetType.ETF),
             "monthly_contribution": 500.0,
+            "active": True,
             "bav_strategy": BAVStrategy.TRANSFER.value,
             "bav_transfer_start_age": 67,
             "bav_transfer_end_age": 72,
@@ -68,6 +69,7 @@ def _default_asset_rows() -> list[dict[str, Any]]:
             "unrealized_gains": 0.0,
             "annual_gain_rate_pct": _default_gain_pct(AssetType.BAV),
             "monthly_contribution": 100.0,
+            "active": True,
             "bav_strategy": BAVStrategy.TRANSFER.value,
             "bav_transfer_start_age": 67,
             "bav_transfer_end_age": 72,
@@ -80,6 +82,7 @@ def _default_asset_rows() -> list[dict[str, Any]]:
             "unrealized_gains": 0.0,
             "annual_gain_rate_pct": _default_gain_pct(AssetType.CASH),
             "monthly_contribution": 0.0,
+            "active": True,
             "bav_strategy": BAVStrategy.TRANSFER.value,
             "bav_transfer_start_age": 67,
             "bav_transfer_end_age": 72,
@@ -132,9 +135,9 @@ def _default_profile_state() -> dict[str, Any]:
         "retirement_age": 67,
         "end_age": 100,
         "currency": "EUR",
-            "average_inflation_rate_pct": 2.0,
-            "annual_income": 50000.0,
-        }
+        "average_inflation_rate_pct": 2.0,
+        "annual_income": 50000.0,
+    }
 
 
 def _default_withdrawal_state() -> dict[str, Any]:
@@ -233,6 +236,16 @@ def _normalize_asset_row(row: dict[str, Any]) -> dict[str, Any]:
     bav_transfer_etf_ratio_pct = max(
         min(bav_transfer_etf_ratio_pct, 100.0), 0.0
     )
+    # active flag: accept booleans, numbers, or common strings
+    active_raw = row.get("active")
+    if isinstance(active_raw, bool):
+        active = active_raw
+    elif isinstance(active_raw, (int, float)):
+        active = bool(active_raw)
+    elif isinstance(active_raw, str):
+        active = active_raw.strip().lower() in ("1", "true", "yes", "y")
+    else:
+        active = True
     return {
         "name": name,
         "type": asset_type.value,
@@ -240,6 +253,7 @@ def _normalize_asset_row(row: dict[str, Any]) -> dict[str, Any]:
         "unrealized_gains": unrealized_gains,
         "annual_gain_rate_pct": annual_gain_rate_pct,
         "monthly_contribution": monthly_contribution,
+        "active": active,
         "bav_strategy": bav_strategy,
         "bav_transfer_start_age": bav_transfer_start_age,
         "bav_transfer_end_age": bav_transfer_end_age,
@@ -371,13 +385,17 @@ def _asset_from_row(row: dict[str, Any]) -> Asset:
     bav_transfer_end_age = int(row.get("bav_transfer_end_age") or 72)
     ratio_pct = float(row.get("bav_transfer_etf_ratio_pct") or 50.0)
     bav_transfer_etf_ratio = min(max(ratio_pct / 100, 0.0), 1.0)
+    active = bool(row.get("active", True))
     return Asset(
         name=str(row.get("name", "")).strip(),
         asset_type=asset_type,
-        current_value=current_value,
-        initial_cost_basis=initial_cost_basis,
+        current_value=current_value if active else 0.0,
+        initial_cost_basis=initial_cost_basis if active else 0.0,
         annual_gain_rate=annual_rate,
-        monthly_contribution=float(row.get("monthly_contribution") or 0),
+        monthly_contribution=float(row.get("monthly_contribution") or 0)
+        if active
+        else 0.0,
+        active=active,
         bav_strategy=bav_strategy,
         bav_transfer_start_age=bav_transfer_start_age,
         bav_transfer_end_age=bav_transfer_end_age,
@@ -572,7 +590,9 @@ def build_wealth_page() -> None:
         state_pension_current_monthly_amount.update()
         state_pension_growth_display.text = (
             _format_currency(
-                default_withdrawal_state["state_pension_growth_per_working_year"],
+                default_withdrawal_state[
+                    "state_pension_growth_per_working_year"
+                ],
                 default_profile_state["currency"],
             )
             + " p.m."
@@ -627,6 +647,19 @@ def build_wealth_page() -> None:
                             current_value = float(
                                 row.get("current_value") or 0
                             )
+                            # Active toggle (hide/show) for what-if scenarios
+                            ui.button(
+                                icon=(
+                                    "visibility"
+                                    if row.get("active", True)
+                                    else "visibility_off"
+                                ),
+                                on_click=lambda e, i=index: update_asset_row(
+                                    i,
+                                    "active",
+                                    not asset_rows[i].get("active", True),
+                                ),
+                            ).props("dense flat")
                             ui.input(
                                 label="Name",
                                 value=row["name"],
@@ -861,7 +894,9 @@ def build_wealth_page() -> None:
                 )
                 state_pension_growth_display = ui.label(
                     _format_currency(
-                        withdrawal_state["state_pension_growth_per_working_year"],
+                        withdrawal_state[
+                            "state_pension_growth_per_working_year"
+                        ],
                         profile_state["currency"],
                     )
                     + " p.m."
@@ -905,7 +940,8 @@ def build_wealth_page() -> None:
                 config = get_config()
                 annual_income_value = float(annual_income.value or 0)
                 points_per_year = min(
-                    annual_income_value / config.drv.durchschnitts_jahresentgelt_euro,
+                    annual_income_value
+                    / config.drv.durchschnitts_jahresentgelt_euro,
                     config.drv.maximale_rentenpunkte_pro_jahr,
                 )
                 monthly_growth_per_working_year_computed = (
@@ -922,22 +958,29 @@ def build_wealth_page() -> None:
                     )
                     state_pension_growth_display.update()
                     # Compute estimated early-retirement penalty at pension start (display-only)
-                    pension_start_age = int(state_pension_start_age.value or 67)
+                    pension_start_age = int(
+                        state_pension_start_age.value or 67
+                    )
                     years_early = max(0, 67 - pension_start_age)
                     penalty_fraction = (
                         config.drv.rentenabschlag_pro_jahr * years_early
                     )
-                    penalty_monthly = monthly_growth_per_working_year_computed * (
-                        penalty_fraction
+                    penalty_monthly = (
+                        monthly_growth_per_working_year_computed
+                        * (penalty_fraction)
                     )
                     if years_early > 0:
                         state_pension_penalty_display.text = (
                             "Estimated early-retirement penalty: -"
-                            + _format_currency(penalty_monthly, profile.currency)
+                            + _format_currency(
+                                penalty_monthly, profile.currency
+                            )
                             + f" p.m. ({penalty_fraction * 100:.1f}% reduction)"
                         )
                     else:
-                        state_pension_penalty_display.text = "No early-retirement penalty"
+                        state_pension_penalty_display.text = (
+                            "No early-retirement penalty"
+                        )
                     state_pension_penalty_display.update()
                 except Exception:
                     # UI not yet initialized; ignore

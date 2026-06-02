@@ -310,6 +310,73 @@ def test_bav_transfer_moves_balance_to_targets_and_taxes_gains() -> None:
     assert result.loc[1, "net_cashflow"] == pytest.approx(-expected_tax)
 
 
+def test_bav_income_grows_before_withdraw_start_age() -> None:
+    """bAV INCOME balance compounds at annual_gain_rate before bav_transfer_start_age."""
+    profile = UserProfile(
+        current_age_years=62,
+        retirement_age=62,
+        end_age=63,
+        average_inflation_rate=0.0,
+    )
+    asset = Asset(
+        name="bAV",
+        asset_type=AssetType.BAV,
+        current_value=100_000.0,
+        annual_gain_rate=0.12,
+        monthly_contribution=0.0,
+        bav_strategy=BAVStrategy.INCOME,
+        bav_transfer_start_age=67,
+    )
+    withdrawal = WithdrawalPlan(monthly_withdrawal=0.0)
+
+    result = forecast_wealth(
+        profile=profile, assets=[asset], withdrawal=withdrawal
+    )
+
+    monthly_rate = (1 + 0.12) ** (1 / 12) - 1
+    expected_balance = 100_000.0 * (1 + monthly_rate)
+
+    # Balance must grow — income not yet active before withdraw start age
+    assert result.loc[1, "bAV"] == pytest.approx(expected_balance)
+    assert result.loc[1, "net_cashflow"] == pytest.approx(0.0)
+    assert result.loc[1, "taxes"] == pytest.approx(0.0)
+
+
+def test_bav_income_pays_from_withdraw_start_age() -> None:
+    """bAV INCOME pays monthly gains and freezes balance once withdraw start age is reached."""
+    profile = UserProfile(
+        current_age_years=67,
+        retirement_age=62,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
+    asset = Asset(
+        name="bAV",
+        asset_type=AssetType.BAV,
+        current_value=100_000.0,
+        annual_gain_rate=0.12,
+        monthly_contribution=0.0,
+        bav_strategy=BAVStrategy.INCOME,
+        bav_transfer_start_age=67,
+    )
+    withdrawal = WithdrawalPlan(monthly_withdrawal=0.0)
+
+    result = forecast_wealth(
+        profile=profile, assets=[asset], withdrawal=withdrawal
+    )
+
+    config = get_config()
+    monthly_rate = (1 + 0.12) ** (1 / 12) - 1
+    expected_gain = 100_000.0 * monthly_rate
+    expected_tax = expected_gain * config.capital_gains_tax_rate
+    expected_net = expected_gain - expected_tax
+
+    # Balance must stay flat — all gain paid as income
+    assert result.loc[1, "bAV"] == pytest.approx(100_000.0)
+    assert result.loc[1, "taxes"] == pytest.approx(expected_tax)
+    assert result.loc[1, "net_cashflow"] == pytest.approx(expected_net)
+
+
 def test_bav_income_pays_monthly_gains_after_retirement() -> None:
     profile = UserProfile(
         current_age_years=67,

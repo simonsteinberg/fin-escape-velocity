@@ -301,20 +301,23 @@ def forecast_wealth(
     etf_annual_allowance = config.etf.steuerfreibetrag_euro
     bav_tax_rate = config.capital_gains_tax_rate
 
+    # Only consider active assets for allocation targets and transfer validations
     etf_indices = [
         index
         for index, asset in enumerate(assets_list)
-        if asset.asset_type == AssetType.ETF
+        if asset.asset_type == AssetType.ETF and getattr(asset, "active", True)
     ]
     cash_indices = [
         index
         for index, asset in enumerate(assets_list)
         if asset.asset_type == AssetType.CASH
+        and getattr(asset, "active", True)
     ]
     transfer_assets = [
         asset
         for asset in assets_list
         if asset.asset_type == AssetType.BAV
+        and getattr(asset, "active", True)
         and BAVStrategy(asset.bav_strategy) == BAVStrategy.TRANSFER
     ]
     if transfer_assets:
@@ -334,8 +337,17 @@ def forecast_wealth(
         _annual_to_monthly_rate(asset.effective_annual_gain_rate())
         for asset in assets_list
     ]
-    balances = [float(asset.current_value) for asset in assets_list]
-    cost_bases = [float(asset.effective_cost_basis()) for asset in assets_list]
+    # Treat inactive assets as zeroed for forecasting calculations
+    balances = [
+        float(asset.current_value) if getattr(asset, "active", True) else 0.0
+        for asset in assets_list
+    ]
+    cost_bases = [
+        float(asset.effective_cost_basis())
+        if getattr(asset, "active", True)
+        else 0.0
+        for asset in assets_list
+    ]
 
     rows: list[dict[str, float | int]] = []
     remaining_etf_allowance = etf_annual_allowance
@@ -351,7 +363,10 @@ def forecast_wealth(
         if month_index > 0:
             if age_months < metadata.retirement_age_months:
                 contributions = [
-                    float(asset.monthly_contribution) for asset in assets_list
+                    float(asset.monthly_contribution)
+                    if getattr(asset, "active", True)
+                    else 0.0
+                    for asset in assets_list
                 ]
                 balances = [
                     balance + contribution
@@ -390,13 +405,20 @@ def forecast_wealth(
                 withdrawable_indices = [
                     i
                     for i, asset in enumerate(assets_list)
-                    if asset.asset_type in (AssetType.ETF, AssetType.CASH)
-                    or (
-                        asset.asset_type == AssetType.BAV
-                        and age_months >= asset.bav_transfer_start_age * 12
+                    if getattr(asset, "active", True)
+                    and (
+                        asset.asset_type in (AssetType.ETF, AssetType.CASH)
+                        or (
+                            asset.asset_type == AssetType.BAV
+                            and age_months >= asset.bav_transfer_start_age * 12
+                        )
                     )
                 ]
-                total_balance = float(sum(balances[i] for i in withdrawable_indices)) if withdrawable_indices else 0.0
+                total_balance = (
+                    float(sum(balances[i] for i in withdrawable_indices))
+                    if withdrawable_indices
+                    else 0.0
+                )
                 if withdrawal_target > 0 and total_balance > 0:
                     taxable_gains_ratio = 0.0
                     # Only ETFs that are withdrawable contribute to taxable gains ratio
@@ -411,7 +433,9 @@ def forecast_wealth(
                             continue
                         gains_ratio = gains / balance
                         taxable_gains_ratio += (
-                            (balance / total_balance) * gains_ratio * etf_taxable_share
+                            (balance / total_balance)
+                            * gains_ratio
+                            * etf_taxable_share
                         )
 
                     gross_target = withdrawal_target
@@ -455,25 +479,39 @@ def forecast_wealth(
                             new_cost_bases.append(max(cost_basis, 0.0))
                             continue
 
-                        asset_withdrawal = actual_withdrawn * (balance / total_balance)
-                        withdrawal_ratio = asset_withdrawal / balance if balance > 0 else 0.0
+                        asset_withdrawal = actual_withdrawn * (
+                            balance / total_balance
+                        )
+                        withdrawal_ratio = (
+                            asset_withdrawal / balance if balance > 0 else 0.0
+                        )
                         new_balance = max(balance - asset_withdrawal, 0.0)
                         cost_basis_reduction = cost_basis * withdrawal_ratio
-                        new_cost_basis = max(cost_basis - cost_basis_reduction, 0.0)
+                        new_cost_basis = max(
+                            cost_basis - cost_basis_reduction, 0.0
+                        )
 
                         if asset.asset_type == AssetType.ETF:
                             gains = balance - cost_basis
                             if gains > 0:
-                                gains_portion = asset_withdrawal * (gains / balance)
-                                etf_taxable_gains += gains_portion * etf_taxable_share
+                                gains_portion = asset_withdrawal * (
+                                    gains / balance
+                                )
+                                etf_taxable_gains += (
+                                    gains_portion * etf_taxable_share
+                                )
 
                         new_balances.append(new_balance)
                         new_cost_bases.append(new_cost_basis)
 
                     balances = new_balances
                     cost_bases = new_cost_bases
-                    allowance_used = min(remaining_etf_allowance, etf_taxable_gains)
-                    taxable_after_allowance = (etf_taxable_gains - allowance_used)
+                    allowance_used = min(
+                        remaining_etf_allowance, etf_taxable_gains
+                    )
+                    taxable_after_allowance = (
+                        etf_taxable_gains - allowance_used
+                    )
                     withdrawal_taxes = taxable_after_allowance * etf_tax_rate
                     remaining_etf_allowance -= allowance_used
                     taxes += withdrawal_taxes
@@ -481,6 +519,8 @@ def forecast_wealth(
 
             effective_rates = list(monthly_rates)
             for index, asset in enumerate(assets_list):
+                if not getattr(asset, "active", True):
+                    continue
                 if (
                     asset.asset_type == AssetType.BAV
                     and BAVStrategy(asset.bav_strategy) == BAVStrategy.TRANSFER
@@ -521,17 +561,22 @@ def forecast_wealth(
 
             if age_months >= metadata.retirement_age_months:
                 for index, asset in enumerate(assets_list):
+                    if not getattr(asset, "active", True):
+                        continue
                     if (
                         asset.asset_type == AssetType.BAV
                         and BAVStrategy(asset.bav_strategy)
                         == BAVStrategy.INCOME
                     ):
-                        monthly_gain = balances[index] * monthly_rates[index]
-                        if monthly_gain > 0:
-                            tax = monthly_gain * bav_tax_rate
-                            taxes += tax
-                            net_cashflow += monthly_gain - tax
-                        effective_rates[index] = 0.0
+                        if age_months >= asset.bav_transfer_start_age * 12:
+                            monthly_gain = (
+                                balances[index] * monthly_rates[index]
+                            )
+                            if monthly_gain > 0:
+                                tax = monthly_gain * bav_tax_rate
+                                taxes += tax
+                                net_cashflow += monthly_gain - tax
+                            effective_rates[index] = 0.0
 
             balances = [
                 balance * (1 + rate)

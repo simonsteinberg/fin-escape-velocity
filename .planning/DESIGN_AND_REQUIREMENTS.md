@@ -86,12 +86,24 @@ minimal rework. Specific expectations:
 | Field | Required | Notes |
 |---|---|---|
 | Current monthly state pension (today-value at age 67) | Yes | Monthly gross state pension in today's currency if the user stopped working today. |
-| Monthly state pension growth per working year | Yes | Additional gross monthly pension earned for each year the user keeps working until retirement. |
+| Annual income (for pension points) | Yes | User-entered annual gross income. Used to compute pension points and the derived monthly growth per working year (display-only). |
+| Monthly state pension growth per working year | Optional | Additional gross monthly pension earned for each year the user keeps working until retirement. If omitted, the UI computes an estimate from "Annual income" using configurable DRV parameters (see Configuration). This value is shown as a read-only display in the UI.
 | State pension start age | Yes | Must be between 63 and 67 (inclusive). |
 
-State pension is taxed at a fixed rate of **35 %** and therefore only the net amount
-reduces withdrawals.
+State pension taxation and reduction rules are driven from configuration (see §Configuration). Key DRV parameters include:
 
+- `DRV_RENTENABSCHLAG_PRO_JAHR` — early-retirement penalty per year (fraction, e.g. 0.036 for 3.6 %/year);
+- `DRV_RENTE_PRO_RENTENPUNKT_EURO` — euro value of one pension point (monthly);
+- `DRV_DURCHSCHNITTS_JAHRESENTGELT_EURO` — reference annual income used to compute pension points;
+- `DRV_MAXIMALE_RENTENPUNKTE_PRO_JAHR` — cap on pension points per year;
+- `DRV_BRUTTO_RENTE_STEUERSATZ` — flat tax rate applied to gross pension (fraction).
+
+The UI behaviour:
+
+- The user may enter an explicit "Monthly state pension growth per working year" value, or provide their annual income. When annual income is provided (or both), the UI computes and displays a read-only estimate of the monthly growth per working year using the DRV parameters and shows it to the user.
+- The UI additionally displays an estimated early-retirement penalty (read-only) for the selected state pension start age. The penalty is shown separately for clarity but is applied to the final gross pension in the forecast engine (see §Forecast Rules — State Pension reduction).
+
+The forecast engine applies the configured tax rate and the early-retirement reduction when computing the net state pension used to reduce retirement withdrawal targets.
 ### Assets
 
 Each asset has:
@@ -111,6 +123,7 @@ Each asset has:
 | Transfer start age | If strategy = transfer | Age in years when the transfer window begins. |
 | Transfer end age | If strategy = transfer | Age in years when the transfer window ends. |
 | Transfer ETF ratio | If strategy = transfer | Share of the net transfer allocated to ETF; remainder goes to Cash. |
+| Withdraw start age | If strategy = income | Age in years when monthly income payments begin. Before this age the bAV balance continues to compound at the configured annual gain rate and no income is paid out. |
 
 ### Contributions (pre-retirement)
 
@@ -156,12 +169,11 @@ inflated_target = base_target × (1 + average_inflation_rate)^(months_since_curr
 
 | Asset type | Default annual gain rate |
 |---|---|
-| ETF | 6.0 % |
-| Pension / bAV | 4.0 % |
+| ETF | 5.0 % |
+| Pension / bAV | 2.0 % |
 | Cash / daily account | 0.5 % |
 
-These defaults are configurable at a global level and may be overridden per asset.
-
+These defaults are configurable at a global level (via src/finev/config.json) and may be overridden per asset in the UI.
 ---
 
 ## Forecast Rules
@@ -246,7 +258,7 @@ Two bAV strategies are supported:
    - The net transfer (after tax) is allocated to ETF and Cash based on the ETF ratio.
 
 2. **Monthly gains income**
-   - Starting at retirement, pay out the bAV monthly gains as income.
+   - From the configured **withdraw start age** onwards, pay out the bAV monthly gains as income. Before that age the balance continues to compound at the annual gain rate and no income is paid.
    - Tax applies to **100 % of the gains portion** at **26.25 %**.
    - The bAV balance does **not** grow from gains in months where income is paid out.
 
@@ -353,6 +365,17 @@ effective_withdrawal_target(month) =
 
 # FR9 - Inheritance
 
+(Planned: inheritance handling and probate-time transfers. Left intentionally terse for the current iteration.)
+
+### FR10 — Asset activation toggle (what-if / scenario)
+
+Each asset row in the UI shall expose an activation toggle (hide/show). When an asset is deactivated:
+
+- It is excluded from contribution and withdrawal allocation calculations (treated as zero balance for the forecast) but the row remains visible in the UI for editing.
+- Its settings and values are preserved so the user may re-activate the asset to see the effect on the forecast.
+- The UI toggle state is persisted in cached UI state.
+
+This enables quick "what-if" scenario analysis without removing assets from the configuration.
 
 ---
 
@@ -368,22 +391,33 @@ effective_withdrawal_target(month) =
 | AC6 | Cost basis for each ETF asset is updated correctly on contribution and on withdrawal. |
 | AC7 | Where no gain rate is provided for an asset, the type default is used; user-provided overrides take precedence. |
 | AC8 | Retirement withdrawals are inflated from today's currency using the specified average inflation rate before gross-up. |
-| AC9 | bAV transfer windows allocate net balances to ETF/Cash and apply full-gains tax; bAV income pays out monthly gains with tax and no reinvestment. |
-| AC10 | State pension start age is validated to 63..67 and net state pension (after 35 % tax) reduces retirement withdrawals from the pension-start month onward. |
+| AC9 | bAV transfer windows allocate net balances to ETF/Cash and apply full-gains tax; bAV income pays out monthly gains with tax and no reinvestment, starting from the configured withdraw start age (not from retirement). Before the withdraw start age the bAV INCOME balance compounds at the annual gain rate. |
+| AC10 | State pension start age is validated to 63..67 and the configured DRV tax rate (`DRV_BRUTTO_RENTE_STEUERSATZ`) and early-retirement penalty (`DRV_RENTENABSCHLAG_PRO_JAHR`) are applied by the forecast engine when computing the net state pension that reduces retirement withdrawals. |
 | AC11 | State pension amount reflects both earned growth until retirement and monthly inflation adjustment over forecast time. |
+| AC12 | The UI exposes an annual income input and shows a read-only computed "monthly growth per working year" (derived from DRV parameters) and a separate estimated early-retirement penalty display; these are persisted where appropriate. |
+| AC13 | Asset activation toggle: deactivating an asset excludes it from contributions and withdrawal allocation while preserving its row and persisted configuration; re-activating restores it to calculations. |
+| AC14 | bAV withdrawal rules: no withdrawals may be taken from a bAV asset before its configured transfer/withdraw start age; the withdrawal allocation logic ignores bAV balances until they become withdrawable (transfer or income start). |
 
 ---
 
-## Implementation Plan — State Pension
+## Implementation Plan — State Pension & UI
 
-1. Extend domain model with a typed state pension input structure and wire it into
-   withdrawal configuration.
-2. Add forecast validation and pension cashflow helpers to compute net state pension per
-   month (growth-until-retirement + inflation + fixed 35 % tax).
-3. Adjust retirement withdrawal logic to subtract net state pension before ETF gross-up.
-4. Expose the new state pension inputs in the NiceGUI form and persist them in cached UI
-   state.
-5. Add tests for:
-   - validation (start-age range and numeric constraints),
-   - withdrawal reduction from pension-start month,
-   - inflation-adjusted pension behavior.
+1. Add a typed configuration loader (src/finev/config.py) that parses src/finev/config.json and exposes DRV and global defaults to the forecast engine and UI. Validate numeric ranges on load.
+2. Extend domain model (src/finev/models.py) to include an `active: bool` flag on Asset and include state-pension related fields in WithdrawalPlan/StatePension as needed.
+3. Modify the forecast engine (src/finev/forecast.py):
+   - Use configuration values for DRV parameters and global defaults.
+   - Compute net state pension per month by combining current pension, growth-until-retirement (config-driven or user-provided), inflation, early-retirement reduction, and configured pension tax rate. The early-retirement reduction is applied to the final gross pension amount (not to the per-year growth display).
+   - Exclude assets marked inactive from contribution and withdrawal allocation calculations (treat balance as 0 for allocation purposes) while keeping their row state persisted.
+   - Ensure bAV assets are excluded from withdrawal allocation until their transfer/withdraw start age is reached; transfers still move bAV balances to ETF/Cash during the configured window when in TRANSFER mode.
+4. Update the NiceGUI UI (src/finev/ui.py):
+   - Add an "active" toggle control (hide/show icon) on the left of each asset row to enable/disable the asset for forecasting. Persist this flag in the cached state file.
+   - Add an annual income input under Profile and persist it; show a read-only computed monthly growth per working year and an estimated early-retirement penalty display in the Profile card. The read-only growth value is used as the default growth input for the pension if the user does not provide one explicitly.
+   - Adjust bAV mode labels and inputs: show "Withdraw start age" when mode=INCOME and "Transfer start/end" when mode=TRANSFER; ensure the UI communicates that withdrawals from bAV are gated by the start age.
+5. Add unit and integration tests:
+   - Config loader validation and default fallbacks.
+   - Pension computation: growth-from-income path, explicit growth path, early-retirement penalty application (final reduction), and tax application using configured DRV_BRUTTO_RENTE_STEUERSATZ.
+   - Asset activation behavior: deactivated assets ignored in allocations and contributions; persisted toggle state.
+   - bAV withdrawal gating: verify no bAV withdrawals before start age and correct transfer behavior during window.
+6. Update documentation and the Acceptance Criteria in this document. Run formatting, lint, and test suites, and perform manual UI verification.
+
+
