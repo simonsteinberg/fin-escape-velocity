@@ -602,6 +602,8 @@ def build_wealth_page() -> None:
         try:
             state_pension_penalty_display.text = ""
             state_pension_penalty_display.update()
+            state_pension_achieved_display.text = ""
+            state_pension_achieved_display.update()
         except NameError:
             # UI not fully constructed yet; ignore
             pass
@@ -629,6 +631,101 @@ def build_wealth_page() -> None:
 
     with ui.column().classes("w-full max-w-[1200px] mx-auto p-4 gap-4"):
         ui.label("Wealth Forecast").classes("text-2xl font-bold")
+        with ui.card().classes("w-full p-3"):
+            ui.label("Profile").classes("text-lg font-semibold")
+            with ui.grid(columns=7).classes("w-full gap-3"):
+                current_age_years = ui.number(
+                    label="Current age (years)",
+                    value=profile_state["current_age_years"],
+                    format="%.0f",
+                    on_change=lambda _: schedule_forecast(),
+                )
+                current_age_months = ui.number(
+                    label="Current age (months)",
+                    value=profile_state["current_age_months"],
+                    format="%.0f",
+                    min=0,
+                    max=11,
+                    on_change=lambda _: schedule_forecast(),
+                )
+                retirement_age = ui.number(
+                    label="Retirement age",
+                    value=profile_state["retirement_age"],
+                    format="%.0f",
+                    on_change=lambda _: schedule_forecast(),
+                )
+                end_age = ui.number(
+                    label="End age",
+                    value=profile_state["end_age"],
+                    format="%.0f",
+                    on_change=lambda _: schedule_forecast(),
+                )
+                currency = ui.input(
+                    label="Currency",
+                    value=profile_state["currency"],
+                    on_change=lambda _: schedule_forecast(),
+                )
+                average_inflation_rate = ui.number(
+                    label="Average inflation rate (%)",
+                    value=profile_state["average_inflation_rate_pct"],
+                    format="%.2f",
+                    min=-99.9,
+                    step=0.1,
+                    on_change=lambda _: schedule_forecast(),
+                )
+                withdrawal_input = ui.number(
+                    label="Monthly withdrawal",
+                    value=withdrawal_state["monthly_withdrawal"],
+                    format="%.0f",
+                    min=0,
+                    step=50,
+                    on_change=lambda _: schedule_forecast(),
+                )
+
+        with ui.card().classes("w-full p-3"):
+            ui.label("State pension").classes("text-lg font-semibold")
+            with ui.grid(columns=5).classes("w-full gap-3"):
+                annual_income = ui.number(
+                    label="Annual income",
+                    value=profile_state.get("annual_income", 50000.0),
+                    format="%.0f",
+                    min=0,
+                    step=1000,
+                    on_change=lambda _: schedule_forecast(),
+                )
+                state_pension_current_monthly_amount = ui.number(
+                    label="State pension now (monthly)",
+                    value=withdrawal_state[
+                        "state_pension_current_monthly_amount"
+                    ],
+                    format="%.0f",
+                    min=0,
+                    step=50,
+                    on_change=lambda _: schedule_forecast(),
+                )
+                state_pension_growth_display = ui.label(
+                    _format_currency(
+                        withdrawal_state[
+                            "state_pension_growth_per_working_year"
+                        ],
+                        profile_state["currency"],
+                    )
+                    + " p.m."
+                )
+                # Read-only display for estimated early-retirement penalty at pension start
+                state_pension_penalty_display = ui.label("")
+                # Read-only display for total achieved monthly pension at start age
+                state_pension_achieved_display = ui.label("")
+                state_pension_start_age = ui.number(
+                    label="State pension start age",
+                    value=withdrawal_state["state_pension_start_age"],
+                    format="%.0f",
+                    min=63,
+                    max=67,
+                    step=1,
+                    on_change=lambda _: schedule_forecast(),
+                )
+
         with ui.card().classes("w-full p-3"):
             ui.label("Assets").classes("text-lg font-semibold")
             ui.label(
@@ -824,95 +921,6 @@ def build_wealth_page() -> None:
                     "outline color=red"
                 )
 
-        with ui.card().classes("w-full p-3"):
-            ui.label("Profile").classes("text-lg font-semibold")
-            with ui.grid(columns=9).classes("w-full gap-3"):
-                current_age_years = ui.number(
-                    label="Current age (years)",
-                    value=profile_state["current_age_years"],
-                    format="%.0f",
-                    on_change=lambda _: schedule_forecast(),
-                )
-                current_age_months = ui.number(
-                    label="Current age (months)",
-                    value=profile_state["current_age_months"],
-                    format="%.0f",
-                    min=0,
-                    max=11,
-                    on_change=lambda _: schedule_forecast(),
-                )
-                retirement_age = ui.number(
-                    label="Retirement age",
-                    value=profile_state["retirement_age"],
-                    format="%.0f",
-                    on_change=lambda _: schedule_forecast(),
-                )
-                end_age = ui.number(
-                    label="End age",
-                    value=profile_state["end_age"],
-                    format="%.0f",
-                    on_change=lambda _: schedule_forecast(),
-                )
-                currency = ui.input(
-                    label="Currency",
-                    value=profile_state["currency"],
-                    on_change=lambda _: schedule_forecast(),
-                )
-                average_inflation_rate = ui.number(
-                    label="Average inflation rate (%)",
-                    value=profile_state["average_inflation_rate_pct"],
-                    format="%.2f",
-                    min=-99.9,
-                    step=0.1,
-                    on_change=lambda _: schedule_forecast(),
-                )
-                annual_income = ui.number(
-                    label="Annual income",
-                    value=profile_state.get("annual_income", 50000.0),
-                    format="%.0f",
-                    min=0,
-                    step=1000,
-                    on_change=lambda _: schedule_forecast(),
-                )
-                withdrawal_input = ui.number(
-                    label="Monthly withdrawal",
-                    value=withdrawal_state["monthly_withdrawal"],
-                    format="%.0f",
-                    min=0,
-                    step=50,
-                    on_change=lambda _: schedule_forecast(),
-                )
-                state_pension_current_monthly_amount = ui.number(
-                    label="State pension now (monthly)",
-                    value=withdrawal_state[
-                        "state_pension_current_monthly_amount"
-                    ],
-                    format="%.0f",
-                    min=0,
-                    step=50,
-                    on_change=lambda _: schedule_forecast(),
-                )
-                state_pension_growth_display = ui.label(
-                    _format_currency(
-                        withdrawal_state[
-                            "state_pension_growth_per_working_year"
-                        ],
-                        profile_state["currency"],
-                    )
-                    + " p.m."
-                )
-                # Read-only display for estimated early-retirement penalty at pension start
-                state_pension_penalty_display = ui.label("")
-                state_pension_start_age = ui.number(
-                    label="State pension start age",
-                    value=withdrawal_state["state_pension_start_age"],
-                    format="%.0f",
-                    min=63,
-                    max=67,
-                    step=1,
-                    on_change=lambda _: schedule_forecast(),
-                )
-
         summary_label = ui.label("No forecast yet.").classes("text-sm")
         chart = ui.echart(_build_chart_options()).classes("w-full h-72")
         table = (
@@ -982,6 +990,24 @@ def build_wealth_page() -> None:
                             "No early-retirement penalty"
                         )
                     state_pension_penalty_display.update()
+                    # Compute total achieved monthly pension at pension start age
+                    years_remaining = max(
+                        0, profile.retirement_age - profile.current_age_years
+                    )
+                    base_pension = (
+                        float(state_pension_current_monthly_amount.value or 0)
+                        + monthly_growth_per_working_year_computed
+                        * years_remaining
+                    )
+                    net_pension = base_pension * (1 - penalty_fraction)
+                    state_pension_achieved_display.text = (
+                        f"Pension at age {pension_start_age}: "
+                        + _format_currency(net_pension, profile.currency)
+                        + f" p.m. gross"
+                        f" ({years_remaining} working year(s) remaining,"
+                        f" retiring at {profile.retirement_age})"
+                    )
+                    state_pension_achieved_display.update()
                 except Exception:
                     # UI not yet initialized; ignore
                     pass

@@ -41,3 +41,7 @@ run = ".tasks/setup-repo.sh"
 [tasks.branch-clean-up]
 description = "Delete all local and remote branches except main, develop, and the current branch"
 run = ".tasks/branch-clean-up.sh"
+
+[tasks.kill]
+description = "Kill all running fin-escape-velocity app instances (ports 8081–8130)"
+run = "pids=$(for port in $(seq 8081 8130); do lsof -ti tcp:$port 2>/dev/null; done | sort -u); if [ -n \"$pids\" ]; then echo \"Killing PIDs: $pids\"; echo $pids | xargs kill; else echo 'No running instances found.'; fi"
