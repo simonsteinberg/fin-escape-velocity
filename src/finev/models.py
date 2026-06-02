@@ -12,6 +12,7 @@ class AssetType(StrEnum):
     ETF = "ETF"
     BAV = "bAV"
     CASH = "Cash"
+    INHERITANCE = "Inheritance"
 
 
 class BAVStrategy(StrEnum):
@@ -21,10 +22,31 @@ class BAVStrategy(StrEnum):
     INCOME = "income"
 
 
+class InheritanceRelationship(StrEnum):
+    """Heir relationship determining Erbschaftsteuer class and Freibetrag.
+
+    Attributes:
+        EHEGATTE: Ehegatten / eingetragene Lebenspartner (Klasse I, 500 000 €).
+        KIND: Kinder und Stiefkinder (Klasse I, 400 000 €).
+        ENKEL: Enkel (Klasse I, 200 000 €).
+        ELTERNTEIL: Eltern (Klasse I, 100 000 €).
+        KLASSE_II: Geschwister, Nichten, Neffen etc. (Klasse II, 20 000 €).
+        KLASSE_III: Alle übrigen Erben (Klasse III, 20 000 €).
+    """
+
+    EHEGATTE = "ehegatte"
+    KIND = "kind"
+    ENKEL = "enkel"
+    ELTERNTEIL = "elternteil"
+    KLASSE_II = "klasse_ii"
+    KLASSE_III = "klasse_iii"
+
+
 DEFAULT_ANNUAL_GAIN_RATES: dict[AssetType, float] = {
     AssetType.ETF: 0.05,
     AssetType.BAV: 0.02,
     AssetType.CASH: 0.005,
+    AssetType.INHERITANCE: 0.0,
 }
 
 
@@ -56,14 +78,18 @@ class Asset:
     Attributes:
         name: Display name for the asset.
         asset_type: Asset category used for default gain rates.
-        current_value: Starting balance for the asset.
+        current_value: Starting balance for the asset (unused for INHERITANCE).
         initial_cost_basis: Optional cost basis at forecast start.
         annual_gain_rate: Optional annual gain rate override.
         monthly_contribution: Monthly contribution before retirement.
+        active: Whether this asset is included in the forecast.
         bav_strategy: Strategy for handling bAV assets.
         bav_transfer_start_age: Start age (years) for bAV transfer window.
         bav_transfer_end_age: End age (years) for bAV transfer window.
         bav_transfer_etf_ratio: Share of transfer allocated to ETF assets.
+        inheritance_gross_amount: Gross inheritance amount before tax (INHERITANCE only).
+        inheritance_age: Age (years) at which the inheritance is received (INHERITANCE only).
+        inheritance_relationship: Heir relationship key for tax computation (INHERITANCE only).
     """
 
     name: str
@@ -77,6 +103,11 @@ class Asset:
     bav_transfer_start_age: int = 67
     bav_transfer_end_age: int = 72
     bav_transfer_etf_ratio: float = 0.5
+    inheritance_gross_amount: float = 0.0
+    inheritance_age: int = 67
+    inheritance_relationship: InheritanceRelationship = (
+        InheritanceRelationship.KIND
+    )
 
     def effective_cost_basis(self) -> float:
         """Return the starting cost basis for this asset.

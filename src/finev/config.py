@@ -12,6 +12,16 @@ from typing import Any
 CONFIG_PATH = Path(__file__).with_name("config.json")
 MAX_EARLY_RETIREMENT_YEARS = 4
 
+# Ordered taxable-amount thresholds for the Erbschaftsteuer brackets.
+_ERBSCHAFTSTEUER_THRESHOLDS = [
+    75_000.0,
+    300_000.0,
+    600_000.0,
+    6_000_000.0,
+    13_000_000.0,
+    26_000_000.0,
+]
+
 
 @dataclass(frozen=True)
 class DrvConfig:
@@ -48,14 +58,111 @@ class EtfTaxConfig:
 
 
 @dataclass(frozen=True)
-class InheritanceTaxConfig:
-    """Configuration for inheritance tax thresholds and rates."""
+class InheritanceTaxBrackets:
+    """Flat tax rates for each Erbschaftsteuer bracket.
+
+    German Erbschaftsteuer is not a marginal tax: the applicable rate is applied
+    to the entire taxable amount (gross minus Freibetrag).  The bracket is
+    determined by which range the taxable amount falls into.
+    """
+
+    bis_75k: float
+    bis_300k: float
+    bis_600k: float
+    bis_6m: float
+    bis_13m: float
+    bis_26m: float
+    ueber_26m: float
+
+    def rate_for(self, taxable_amount: float) -> float:
+        """Return the flat tax rate that applies to *taxable_amount*.
+
+        Args:
+            taxable_amount: Amount after subtracting the Freibetrag.
+
+        Returns:
+            Applicable flat rate as a decimal fraction.
+        """
+        rates = [
+            self.bis_75k,
+            self.bis_300k,
+            self.bis_600k,
+            self.bis_6m,
+            self.bis_13m,
+            self.bis_26m,
+            self.ueber_26m,
+        ]
+        for threshold, rate in zip(_ERBSCHAFTSTEUER_THRESHOLDS, rates):
+            if taxable_amount <= threshold:
+                return rate
+        return rates[-1]
+
+
+@dataclass(frozen=True)
+class InheritanceTaxRelationship:
+    """Freibetrag and tax brackets for a specific heir relationship.
+
+    Attributes:
+        freibetrag_euro: Tax-free allowance in euros.
+        brackets: Applicable tax rates per bracket.
+    """
 
     freibetrag_euro: float
-    satz_i_bis_75k_euro: float
-    satz_i_bis_300k_euro: float
-    satz_i_bis_600k_euro: float
-    satz_i_bis_6m_euro: float
+    brackets: InheritanceTaxBrackets
+
+
+@dataclass(frozen=True)
+class InheritanceTaxConfig:
+    """Inheritance tax configuration for all heir relationship types.
+
+    Attributes:
+        ehegatte: Ehegatten / eingetragene Lebenspartner (Klasse I, 500 000 €).
+        kind: Kinder und Stiefkinder (Klasse I, 400 000 €).
+        enkel: Enkel (Klasse I, 200 000 €).
+        elternteil: Eltern (Klasse I, 100 000 €).
+        klasse_ii: Geschwister, Nichten, Neffen etc. (Klasse II, 20 000 €).
+        klasse_iii: Alle übrigen Erben (Klasse III, 20 000 €).
+    """
+
+    ehegatte: InheritanceTaxRelationship
+    kind: InheritanceTaxRelationship
+    enkel: InheritanceTaxRelationship
+    elternteil: InheritanceTaxRelationship
+    klasse_ii: InheritanceTaxRelationship
+    klasse_iii: InheritanceTaxRelationship
+
+    def compute_tax(self, gross_amount: float, relationship: str) -> float:
+        """Return the Erbschaftsteuer for a given gross inheritance.
+
+        Args:
+            gross_amount: Total inherited amount before tax.
+            relationship: Relationship key matching one of the attributes
+                (``"ehegatte"``, ``"kind"``, ``"enkel"``, ``"elternteil"``,
+                ``"klasse_ii"``, ``"klasse_iii"``).
+
+        Returns:
+            Tax amount in the same currency as *gross_amount*.
+
+        Raises:
+            KeyError: If *relationship* is not a valid key.
+        """
+        rel_map: dict[str, InheritanceTaxRelationship] = {
+            "ehegatte": self.ehegatte,
+            "kind": self.kind,
+            "enkel": self.enkel,
+            "elternteil": self.elternteil,
+            "klasse_ii": self.klasse_ii,
+            "klasse_iii": self.klasse_iii,
+        }
+        if relationship not in rel_map:
+            raise KeyError(
+                f"Unknown inheritance relationship: {relationship!r}"
+            )
+        rel = rel_map[relationship]
+        taxable = max(gross_amount - rel.freibetrag_euro, 0.0)
+        if taxable == 0.0:
+            return 0.0
+        return taxable * rel.brackets.rate_for(taxable)
 
 
 @dataclass(frozen=True)
@@ -90,6 +197,42 @@ def get_config() -> FinevConfig:
     return load_config()
 
 
+def _parse_klasse_i_brackets(raw: dict[str, Any]) -> InheritanceTaxBrackets:
+    return InheritanceTaxBrackets(
+        bis_75k=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_I_BIS_75K"),
+        bis_300k=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_I_BIS_300K"),
+        bis_600k=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_I_BIS_600K"),
+        bis_6m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_I_BIS_6M"),
+        bis_13m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_I_BIS_13M"),
+        bis_26m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_I_BIS_26M"),
+        ueber_26m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_I_UEBER_26M"),
+    )
+
+
+def _parse_klasse_ii_brackets(raw: dict[str, Any]) -> InheritanceTaxBrackets:
+    return InheritanceTaxBrackets(
+        bis_75k=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_II_BIS_75K"),
+        bis_300k=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_II_BIS_300K"),
+        bis_600k=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_II_BIS_600K"),
+        bis_6m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_II_BIS_6M"),
+        bis_13m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_II_BIS_13M"),
+        bis_26m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_II_BIS_26M"),
+        ueber_26m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_II_UEBER_26M"),
+    )
+
+
+def _parse_klasse_iii_brackets(raw: dict[str, Any]) -> InheritanceTaxBrackets:
+    return InheritanceTaxBrackets(
+        bis_75k=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_III_BIS_75K"),
+        bis_300k=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_III_BIS_300K"),
+        bis_600k=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_III_BIS_600K"),
+        bis_6m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_III_BIS_6M"),
+        bis_13m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_III_BIS_13M"),
+        bis_26m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_III_BIS_26M"),
+        ueber_26m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_III_UEBER_26M"),
+    )
+
+
 def _parse_config(raw: dict[str, Any]) -> FinevConfig:
     drv = DrvConfig(
         rentenabschlag_pro_jahr=_require_float(
@@ -115,19 +258,45 @@ def _parse_config(raw: dict[str, Any]) -> FinevConfig:
         steuerfreibetrag_euro=_require_float(raw, "ETF_STEUERFREIBETRAG_EURO"),
         teilfreistellung=_require_float(raw, "ETF_TEILFREISTELLUNG"),
     )
+    klasse_i_brackets = _parse_klasse_i_brackets(raw)
+    klasse_ii_brackets = _parse_klasse_ii_brackets(raw)
+    klasse_iii_brackets = _parse_klasse_iii_brackets(raw)
     inheritance_tax = InheritanceTaxConfig(
-        freibetrag_euro=_require_float(raw, "ERBSCHAFTSTEUER_FREIBETRAG_EURO"),
-        satz_i_bis_75k_euro=_require_float(
-            raw, "ERBSCHAFTSTEUER_SATZ_I_BIS_75K_EURO"
+        ehegatte=InheritanceTaxRelationship(
+            freibetrag_euro=_require_float(
+                raw, "ERBSCHAFTSTEUER_EHEGATTE_FREIBETRAG_EURO"
+            ),
+            brackets=klasse_i_brackets,
         ),
-        satz_i_bis_300k_euro=_require_float(
-            raw, "ERBSCHAFTSTEUER_SATZ_I_BIS_300K_EURO"
+        kind=InheritanceTaxRelationship(
+            freibetrag_euro=_require_float(
+                raw, "ERBSCHAFTSTEUER_KIND_FREIBETRAG_EURO"
+            ),
+            brackets=klasse_i_brackets,
         ),
-        satz_i_bis_600k_euro=_require_float(
-            raw, "ERBSCHAFTSTEUER_SATZ_I_BIS_600K_EURO"
+        enkel=InheritanceTaxRelationship(
+            freibetrag_euro=_require_float(
+                raw, "ERBSCHAFTSTEUER_ENKEL_FREIBETRAG_EURO"
+            ),
+            brackets=klasse_i_brackets,
         ),
-        satz_i_bis_6m_euro=_require_float(
-            raw, "ERBSCHAFTSTEUER_SATZ_I_BIS_6M_EURO"
+        elternteil=InheritanceTaxRelationship(
+            freibetrag_euro=_require_float(
+                raw, "ERBSCHAFTSTEUER_ELTERNTEIL_FREIBETRAG_EURO"
+            ),
+            brackets=klasse_i_brackets,
+        ),
+        klasse_ii=InheritanceTaxRelationship(
+            freibetrag_euro=_require_float(
+                raw, "ERBSCHAFTSTEUER_KLASSE_II_FREIBETRAG_EURO"
+            ),
+            brackets=klasse_ii_brackets,
+        ),
+        klasse_iii=InheritanceTaxRelationship(
+            freibetrag_euro=_require_float(
+                raw, "ERBSCHAFTSTEUER_KLASSE_III_FREIBETRAG_EURO"
+            ),
+            brackets=klasse_iii_brackets,
         ),
     )
     return FinevConfig(drv=drv, etf=etf, inheritance_tax=inheritance_tax)
@@ -175,30 +344,33 @@ def _validate_config(config: FinevConfig) -> None:
         config.etf.steuerfreibetrag_euro, "ETF_STEUERFREIBETRAG_EURO"
     )
     _require_fraction(config.etf.teilfreistellung, "ETF_TEILFREISTELLUNG")
-
     _require_fraction(config.etf.effective_tax_rate, "ETF effective tax rate")
     _require_fraction(config.etf.taxable_share, "ETF taxable share")
 
-    _require_non_negative(
-        config.inheritance_tax.freibetrag_euro,
-        "ERBSCHAFTSTEUER_FREIBETRAG_EURO",
-    )
-    _require_fraction(
-        config.inheritance_tax.satz_i_bis_75k_euro,
-        "ERBSCHAFTSTEUER_SATZ_I_BIS_75K_EURO",
-    )
-    _require_fraction(
-        config.inheritance_tax.satz_i_bis_300k_euro,
-        "ERBSCHAFTSTEUER_SATZ_I_BIS_300K_EURO",
-    )
-    _require_fraction(
-        config.inheritance_tax.satz_i_bis_600k_euro,
-        "ERBSCHAFTSTEUER_SATZ_I_BIS_600K_EURO",
-    )
-    _require_fraction(
-        config.inheritance_tax.satz_i_bis_6m_euro,
-        "ERBSCHAFTSTEUER_SATZ_I_BIS_6M_EURO",
-    )
+    for name, rel in [
+        ("ehegatte", config.inheritance_tax.ehegatte),
+        ("kind", config.inheritance_tax.kind),
+        ("enkel", config.inheritance_tax.enkel),
+        ("elternteil", config.inheritance_tax.elternteil),
+        ("klasse_ii", config.inheritance_tax.klasse_ii),
+        ("klasse_iii", config.inheritance_tax.klasse_iii),
+    ]:
+        _require_non_negative(
+            rel.freibetrag_euro, f"ERBSCHAFTSTEUER {name} freibetrag"
+        )
+        for attr in (
+            "bis_75k",
+            "bis_300k",
+            "bis_600k",
+            "bis_6m",
+            "bis_13m",
+            "bis_26m",
+            "ueber_26m",
+        ):
+            _require_fraction(
+                getattr(rel.brackets, attr),
+                f"ERBSCHAFTSTEUER {name} bracket {attr}",
+            )
 
 
 def _require_fraction(value: float, name: str) -> None:

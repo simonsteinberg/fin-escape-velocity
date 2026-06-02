@@ -6,6 +6,7 @@ from finev.models import (
     Asset,
     AssetType,
     BAVStrategy,
+    InheritanceRelationship,
     StatePension,
     UserProfile,
     WithdrawalPlan,
@@ -534,3 +535,146 @@ def test_state_pension_inflation_adjusted_with_time() -> None:
     assert result.loc[start_month, "net_cashflow"] == pytest.approx(
         -expected_withdrawal
     )
+
+
+# ── Inheritance tests ─────────────────────────────────────────────────────────
+
+
+def test_inheritance_below_freibetrag_is_tax_free() -> None:
+    """Net inheritance equals gross when amount is within the Freibetrag."""
+    profile = UserProfile(
+        current_age_years=40,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
+    etf = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        current_value=0.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    # Kind Freibetrag is 400 000 €; 100 000 € is fully below it.
+    inheritance = Asset(
+        name="Inheritance",
+        asset_type=AssetType.INHERITANCE,
+        current_value=0.0,
+        inheritance_gross_amount=100_000.0,
+        inheritance_age=50,
+        inheritance_relationship=InheritanceRelationship.KIND,
+    )
+    result = forecast_wealth(profile=profile, assets=[etf, inheritance])
+
+    injection_month = (50 - 40) * 12
+    assert result.loc[injection_month, "ETF"] == pytest.approx(100_000.0)
+    assert result.loc[injection_month, "taxes"] == pytest.approx(0.0)
+    assert result.loc[injection_month, "net_cashflow"] == pytest.approx(
+        100_000.0
+    )
+    # INHERITANCE asset has no balance column in output
+    assert "Inheritance" not in result.columns
+
+
+def test_inheritance_above_freibetrag_applies_correct_rate() -> None:
+    """Tax is applied to the taxable portion above the Freibetrag."""
+    profile = UserProfile(
+        current_age_years=40,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
+    etf = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        current_value=0.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    # Kind Freibetrag = 400 000 €; gross = 500 000 €; taxable = 100 000 €.
+    # 100 000 € falls in the "bis 300 000" bracket -> 11% rate.
+    gross = 500_000.0
+    freibetrag = 400_000.0
+    taxable = gross - freibetrag
+    expected_tax = taxable * 0.11
+    inheritance = Asset(
+        name="Erbschaft",
+        asset_type=AssetType.INHERITANCE,
+        current_value=0.0,
+        inheritance_gross_amount=gross,
+        inheritance_age=55,
+        inheritance_relationship=InheritanceRelationship.KIND,
+    )
+    result = forecast_wealth(profile=profile, assets=[etf, inheritance])
+
+    injection_month = (55 - 40) * 12
+    assert result.loc[injection_month, "taxes"] == pytest.approx(expected_tax)
+    assert result.loc[injection_month, "ETF"] == pytest.approx(
+        gross - expected_tax
+    )
+
+
+def test_inheritance_klasse_iii_applies_higher_rate() -> None:
+    """Klasse III applies a higher rate than Klasse I for the same gross amount."""
+    profile = UserProfile(
+        current_age_years=40,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
+    etf = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        current_value=0.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    # Klasse III Freibetrag = 20 000 €; gross = 100 000 €; taxable = 80 000 €.
+    # 80 000 € is in "bis 300 000" bracket -> 30% for Klasse III.
+    gross = 100_000.0
+    freibetrag_iii = 20_000.0
+    taxable = gross - freibetrag_iii
+    expected_tax = taxable * 0.30
+    inheritance = Asset(
+        name="Erbschaft",
+        asset_type=AssetType.INHERITANCE,
+        current_value=0.0,
+        inheritance_gross_amount=gross,
+        inheritance_age=55,
+        inheritance_relationship=InheritanceRelationship.KLASSE_III,
+    )
+    result = forecast_wealth(profile=profile, assets=[etf, inheritance])
+
+    injection_month = (55 - 40) * 12
+    assert result.loc[injection_month, "taxes"] == pytest.approx(expected_tax)
+
+
+def test_inactive_inheritance_is_not_injected() -> None:
+    """An inactive inheritance asset contributes nothing to the portfolio."""
+    profile = UserProfile(
+        current_age_years=40,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
+    etf = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        current_value=1_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    inheritance = Asset(
+        name="Erbschaft",
+        asset_type=AssetType.INHERITANCE,
+        current_value=0.0,
+        active=False,
+        inheritance_gross_amount=500_000.0,
+        inheritance_age=50,
+        inheritance_relationship=InheritanceRelationship.KIND,
+    )
+    result = forecast_wealth(profile=profile, assets=[etf, inheritance])
+
+    injection_month = (50 - 40) * 12
+    assert result.loc[injection_month, "ETF"] == pytest.approx(1_000.0)
+    assert result.loc[injection_month, "taxes"] == pytest.approx(0.0)

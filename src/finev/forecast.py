@@ -12,6 +12,7 @@ from finev.models import (
     Asset,
     AssetType,
     BAVStrategy,
+    InheritanceRelationship,
     StatePension,
     UserProfile,
     WithdrawalPlan,
@@ -149,6 +150,25 @@ def _validate_assets(assets: Iterable[Asset]) -> list[Asset]:
         if normalized in seen_names:
             raise ValueError(f"Duplicate asset name: {asset.name}")
         seen_names.add(normalized)
+
+        if asset.asset_type == AssetType.INHERITANCE:
+            if asset.inheritance_gross_amount < 0:
+                raise ValueError(
+                    f"Asset '{asset.name}' inheritance amount must be non-negative"
+                )
+            if asset.inheritance_age < 0:
+                raise ValueError(
+                    f"Asset '{asset.name}' inheritance age must be non-negative"
+                )
+            try:
+                InheritanceRelationship(asset.inheritance_relationship)
+            except ValueError as exc:
+                valid = ", ".join(r.value for r in InheritanceRelationship)
+                raise ValueError(
+                    f"Asset '{asset.name}' inheritance relationship must be one of: "
+                    f"{valid}"
+                ) from exc
+            continue
 
         if asset.current_value < 0:
             raise ValueError(
@@ -320,6 +340,18 @@ def forecast_wealth(
         and getattr(asset, "active", True)
         and BAVStrategy(asset.bav_strategy) == BAVStrategy.TRANSFER
     ]
+    # Pre-compute inheritance events: (age_months, gross_amount, relationship)
+    inheritance_events: list[tuple[int, float, str]] = [
+        (
+            asset.inheritance_age * 12,
+            asset.inheritance_gross_amount,
+            str(asset.inheritance_relationship),
+        )
+        for asset in assets_list
+        if asset.asset_type == AssetType.INHERITANCE
+        and getattr(asset, "active", True)
+        and asset.inheritance_gross_amount > 0
+    ]
     if transfer_assets:
         if (
             any(asset.bav_transfer_etf_ratio > 0 for asset in transfer_assets)
@@ -337,14 +369,19 @@ def forecast_wealth(
         _annual_to_monthly_rate(asset.effective_annual_gain_rate())
         for asset in assets_list
     ]
-    # Treat inactive assets as zeroed for forecasting calculations
+    # INHERITANCE assets hold no running balance; ETF/Cash/bAV start at current_value.
+    # Treat inactive assets as zeroed for forecasting calculations.
     balances = [
-        float(asset.current_value) if getattr(asset, "active", True) else 0.0
+        float(asset.current_value)
+        if getattr(asset, "active", True)
+        and asset.asset_type != AssetType.INHERITANCE
+        else 0.0
         for asset in assets_list
     ]
     cost_bases = [
         float(asset.effective_cost_basis())
         if getattr(asset, "active", True)
+        and asset.asset_type != AssetType.INHERITANCE
         else 0.0
         for asset in assets_list
     ]
@@ -361,10 +398,32 @@ def forecast_wealth(
         net_cashflow = 0.0
         taxes = 0.0
         if month_index > 0:
+            # ── Inheritance events ────────────────────────────────────────────
+            for (
+                inh_age_months,
+                gross_amount,
+                relationship,
+            ) in inheritance_events:
+                if age_months == inh_age_months:
+                    inh_tax = config.inheritance_tax.compute_tax(
+                        gross_amount, relationship
+                    )
+                    net_amount = gross_amount - inh_tax
+                    taxes += inh_tax
+                    net_cashflow += net_amount
+                    # Distribute net proceeds to ETF assets first, Cash as fallback.
+                    targets = etf_indices if etf_indices else cash_indices
+                    for target_idx, allocation in _allocate_amount(
+                        net_amount, targets, balances
+                    ):
+                        balances[target_idx] += allocation
+                        cost_bases[target_idx] += allocation
+
             if age_months < metadata.retirement_age_months:
                 contributions = [
                     float(asset.monthly_contribution)
                     if getattr(asset, "active", True)
+                    and asset.asset_type != AssetType.INHERITANCE
                     else 0.0
                     for asset in assets_list
                 ]
@@ -378,7 +437,7 @@ def forecast_wealth(
                         cost_bases, contributions
                     )
                 ]
-                net_cashflow = float(sum(contributions))
+                net_cashflow += float(sum(contributions))
             else:
                 months_since_start = age_months - metadata.start_age_months
                 inflation_multiplier = _inflation_multiplier(
@@ -515,7 +574,7 @@ def forecast_wealth(
                     withdrawal_taxes = taxable_after_allowance * etf_tax_rate
                     remaining_etf_allowance -= allowance_used
                     taxes += withdrawal_taxes
-                    net_cashflow = -actual_withdrawn + withdrawal_taxes
+                    net_cashflow += -actual_withdrawn + withdrawal_taxes
 
             effective_rates = list(monthly_rates)
             for index, asset in enumerate(assets_list):
@@ -590,9 +649,17 @@ def forecast_wealth(
             "net_cashflow": float(net_cashflow),
             "taxes": float(taxes),
         }
+        # INHERITANCE assets always hold a zero balance — exclude from columns.
         for asset, balance in zip(assets_list, balances):
-            row[asset.name] = float(balance)
-        row["total"] = float(sum(balances))
+            if asset.asset_type != AssetType.INHERITANCE:
+                row[asset.name] = float(balance)
+        row["total"] = float(
+            sum(
+                balance
+                for asset, balance in zip(assets_list, balances)
+                if asset.asset_type != AssetType.INHERITANCE
+            )
+        )
         rows.append(row)
 
     return pd.DataFrame(rows)
