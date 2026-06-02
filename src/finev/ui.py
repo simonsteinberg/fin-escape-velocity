@@ -523,7 +523,7 @@ def build_wealth_page() -> None:
                 unrealized_gains, float(value or 0)
             )
         current_row[field] = value
-        if field in {"type", "bav_strategy"}:
+        if field in {"type", "bav_strategy", "active"}:
             render_asset_rows()
             run_immediate()
             return
