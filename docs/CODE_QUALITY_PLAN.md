@@ -67,7 +67,7 @@ Proposed shape:
 Each step is extracted one at a time, with the existing forecast tests as the
 regression net; behavior must stay identical (verify with a golden-output test).
 
-## Stage 4 — Decompose `build_wealth_page` (PARTIALLY DONE)
+## Stage 4 — Decompose `build_wealth_page` (DONE)
 
 Goal: separate UI concerns currently fused in one ~885-line closure.
 
@@ -97,11 +97,25 @@ Closure slimming (second pass, DONE):
 Verified live (default + cached-state + inheritance render branches return HTTP
 200 with no server errors), plus unit tests for all extracted logic.
 
-Remaining (still PLANNED): the residual closure is widget construction plus the
-scheduling/reset/forecast wiring — inherently UI glue. Converting it to a
-`_WealthPage` controller class would make the remaining event handlers unit-
-testable; deferred because curl cannot exercise the interactive handlers, so it
-needs per-step interactive verification.
+Controller refactor (third pass, DONE):
+- `build_wealth_page` is now a thin entry point (`_WealthPage().build()`).
+- The closure became the `_WealthPage` controller class: editable state and
+  widget references are attributes; the event handlers (`update_asset_row`,
+  `remove_asset_row`, `add_asset_row`, `reset_state`, `build_assets`,
+  scheduling) are methods; `build`/`render_asset_rows`/`run_forecast` construct
+  and update the widget tree.
+- This makes the interactive handlers unit-testable without a browser:
+  `test_ui_page.py` constructs the controller, stubs the widget-bound refresh
+  methods, and drives the handlers directly (9 tests, incl. `reset_state` via
+  fake widgets).
+- Verified live: `GET /` returns 200, renders the full form, and writes the
+  state cache (proving `run_forecast` ran end-to-end through the controller)
+  with no server errors.
+- Total coverage rose to ~75%; ui.py handler coverage ~45% (was 7-11%).
+
+No remaining Stage 4 work; the residual UI code in `ui.py` is widget
+construction (`build`) and the two render/forecast methods, which are exercised
+by the live smoke test.
 
 ## Stage 5 — Finish type-safety pass (DONE)
 

@@ -321,54 +321,81 @@ def _render_asset_row(
                         ).classes("w-32")
 
 
-def build_wealth_page() -> None:
-    """Construct UI and bind update logic."""
-    state_error: str | None = None
-    cached_state: dict[str, Any] | None = None
-    try:
-        cached_state = _load_cached_state()
-    except (OSError, json.JSONDecodeError, ValueError) as exc:
-        state_error = f"Failed to load cached state: {exc}"
-        cached_state = None
+class _WealthPage:
+    """Stateful controller for the wealth forecast page.
 
-    asset_rows = _load_asset_rows(cached_state)
-    profile_state = _load_profile_state(cached_state)
-    withdrawal_state = _load_withdrawal_state(cached_state)
-    default_profile_state = _default_profile_state()
-    default_withdrawal_state = _default_withdrawal_state()
-    suppress_cache_save = False
-    debounce_seconds = 0.5
-    pending_handle: asyncio.Handle | None = None
-    pending_rebuild = False
+    Holds the editable state and the NiceGUI widget references and binds the
+    event handlers as methods. The handlers can be unit-tested by constructing
+    the controller and calling them directly; the widget tree is only needed by
+    :meth:`build`, :meth:`render_asset_rows` and :meth:`run_forecast`.
+    """
 
-    def _run_scheduled() -> None:
-        nonlocal pending_handle, pending_rebuild
-        pending_handle = None
-        if pending_rebuild:
-            pending_rebuild = False
-            render_asset_rows()
-        run_forecast()
+    # Widget references, assigned in build().
+    current_age_years: ui.number
+    current_age_months: ui.number
+    retirement_age: ui.number
+    end_age: ui.number
+    currency: ui.input
+    average_inflation_rate: ui.number
+    withdrawal_input: ui.number
+    annual_income: ui.number
+    state_pension_current_monthly_amount: ui.number
+    state_pension_growth_display: ui.label
+    state_pension_penalty_display: ui.label
+    state_pension_achieved_display: ui.label
+    state_pension_start_age: ui.number
+    assets_container: ui.column
+    summary_label: ui.label
+    chart: ui.echart
+    table: ui.table
 
-    def schedule_forecast(rebuild_assets: bool = False) -> None:
-        nonlocal pending_handle, pending_rebuild
-        pending_rebuild = pending_rebuild or rebuild_assets
-        if pending_handle is not None:
-            pending_handle.cancel()
-        pending_handle = asyncio.get_running_loop().call_later(
-            debounce_seconds, _run_scheduled
+    def __init__(self) -> None:
+        self.state_error: str | None = None
+        cached_state: dict[str, Any] | None = None
+        try:
+            cached_state = _load_cached_state()
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            self.state_error = f"Failed to load cached state: {exc}"
+            cached_state = None
+        self.asset_rows = _load_asset_rows(cached_state)
+        self.profile_state = _load_profile_state(cached_state)
+        self.withdrawal_state = _load_withdrawal_state(cached_state)
+        self.default_profile_state = _default_profile_state()
+        self.default_withdrawal_state = _default_withdrawal_state()
+        self.suppress_cache_save = False
+        self.debounce_seconds = 0.5
+        self.pending_handle: asyncio.Handle | None = None
+        self.pending_rebuild = False
+
+    # ── Scheduling ──────────────────────────
+    def _run_scheduled(self) -> None:
+        self.pending_handle = None
+        if self.pending_rebuild:
+            self.pending_rebuild = False
+            self.render_asset_rows()
+        self.run_forecast()
+
+    def schedule_forecast(self, rebuild_assets: bool = False) -> None:
+        """Debounce a forecast run, optionally rebuilding the asset rows."""
+        self.pending_rebuild = self.pending_rebuild or rebuild_assets
+        if self.pending_handle is not None:
+            self.pending_handle.cancel()
+        self.pending_handle = asyncio.get_running_loop().call_later(
+            self.debounce_seconds, self._run_scheduled
         )
 
-    def run_immediate(rebuild_assets: bool = False) -> None:
-        nonlocal pending_handle, pending_rebuild
-        if pending_handle is not None:
-            pending_handle.cancel()
-            pending_handle = None
+    def run_immediate(self, rebuild_assets: bool = False) -> None:
+        """Cancel any pending run and forecast now."""
+        if self.pending_handle is not None:
+            self.pending_handle.cancel()
+            self.pending_handle = None
         if rebuild_assets:
-            pending_rebuild = False
-            render_asset_rows()
-        run_forecast()
+            self.pending_rebuild = False
+            self.render_asset_rows()
+        self.run_forecast()
 
-    def update_asset_row(index: int, field: str, value: Any) -> None:
+    # ── Asset-row handlers ────────────────────
+    def update_asset_row(self, index: int, field: str, value: Any) -> None:
         """Update a field on a specific asset row.
 
         Args:
@@ -376,7 +403,7 @@ def build_wealth_page() -> None:
             field: Field name to update.
             value: New field value.
         """
-        current_row = asset_rows[index]
+        current_row = self.asset_rows[index]
         if field == "type":
             _apply_type_change_defaults(current_row, AssetType(str(value)))
         value = _coerce_asset_field(current_row, field, value)
@@ -392,83 +419,73 @@ def build_wealth_page() -> None:
             "active",
             "inheritance_relationship",
         }:
-            render_asset_rows()
-            run_immediate()
+            self.render_asset_rows()
+            self.run_immediate()
             return
         if field == "current_value":
-            schedule_forecast(rebuild_assets=True)
+            self.schedule_forecast(rebuild_assets=True)
             return
-        schedule_forecast()
+        self.schedule_forecast()
 
-    def remove_asset_row(index: int) -> None:
-        """Remove an asset row from the list.
+    def remove_asset_row(self, index: int) -> None:
+        """Remove an asset row from the list."""
+        self.asset_rows.pop(index)
+        self.render_asset_rows()
+        self.run_immediate()
 
-        Args:
-            index: Row index to remove.
-        """
-        asset_rows.pop(index)
-        render_asset_rows()
-        run_immediate()
-
-    def add_asset_row() -> None:
+    def add_asset_row(self) -> None:
         """Append a new blank asset row."""
-        asset_rows.append(_new_asset_row())
-        render_asset_rows()
-        run_immediate()
+        self.asset_rows.append(_new_asset_row())
+        self.render_asset_rows()
+        self.run_immediate()
 
-    def reset_state() -> None:
+    def reset_state(self) -> None:
         """Reset UI values to defaults and clear cached state."""
-        nonlocal suppress_cache_save
-        suppress_cache_save = True
-        asset_rows[:] = _default_asset_rows()
-        current_age_years.value = default_profile_state["current_age_years"]
-        current_age_years.update()
-        current_age_months.value = default_profile_state["current_age_months"]
-        current_age_months.update()
-        retirement_age.value = default_profile_state["retirement_age"]
-        retirement_age.update()
-        end_age.value = default_profile_state["end_age"]
-        end_age.update()
-        currency.value = default_profile_state["currency"]
-        currency.update()
-        average_inflation_rate.value = default_profile_state[
+        self.suppress_cache_save = True
+        self.asset_rows[:] = _default_asset_rows()
+        profile = self.default_profile_state
+        withdrawal = self.default_withdrawal_state
+        self.current_age_years.value = profile["current_age_years"]
+        self.current_age_years.update()
+        self.current_age_months.value = profile["current_age_months"]
+        self.current_age_months.update()
+        self.retirement_age.value = profile["retirement_age"]
+        self.retirement_age.update()
+        self.end_age.value = profile["end_age"]
+        self.end_age.update()
+        self.currency.value = profile["currency"]
+        self.currency.update()
+        self.average_inflation_rate.value = profile[
             "average_inflation_rate_pct"
         ]
-        average_inflation_rate.update()
-        annual_income.value = default_profile_state["annual_income"]
-        annual_income.update()
-        withdrawal_input.value = default_withdrawal_state["monthly_withdrawal"]
-        withdrawal_input.update()
-        state_pension_current_monthly_amount.value = default_withdrawal_state[
+        self.average_inflation_rate.update()
+        self.annual_income.value = profile["annual_income"]
+        self.annual_income.update()
+        self.withdrawal_input.value = withdrawal["monthly_withdrawal"]
+        self.withdrawal_input.update()
+        self.state_pension_current_monthly_amount.value = withdrawal[
             "state_pension_current_monthly_amount"
         ]
-        state_pension_current_monthly_amount.update()
-        state_pension_growth_display.text = (
+        self.state_pension_current_monthly_amount.update()
+        self.state_pension_growth_display.text = (
             _format_currency(
-                default_withdrawal_state[
-                    "state_pension_growth_per_working_year"
-                ],
-                default_profile_state["currency"],
+                withdrawal["state_pension_growth_per_working_year"],
+                profile["currency"],
             )
             + " p.m."
         )
-        state_pension_growth_display.update()
-        # Reset penalty display to empty (no penalty by default at retirement age 67)
-        try:
-            state_pension_penalty_display.text = ""
-            state_pension_penalty_display.update()
-            state_pension_achieved_display.text = ""
-            state_pension_achieved_display.update()
-        except NameError:
-            # UI not fully constructed yet; ignore
-            pass
-        state_pension_start_age.value = default_withdrawal_state[
+        self.state_pension_growth_display.update()
+        self.state_pension_penalty_display.text = ""
+        self.state_pension_penalty_display.update()
+        self.state_pension_achieved_display.text = ""
+        self.state_pension_achieved_display.update()
+        self.state_pension_start_age.value = withdrawal[
             "state_pension_start_age"
         ]
-        state_pension_start_age.update()
-        render_asset_rows()
-        run_immediate()
-        suppress_cache_save = False
+        self.state_pension_start_age.update()
+        self.render_asset_rows()
+        self.run_immediate()
+        self.suppress_cache_save = False
         try:
             _clear_cached_state()
         except OSError as error:
@@ -476,318 +493,340 @@ def build_wealth_page() -> None:
                 f"Failed to clear cached state: {error}", type="negative"
             )
 
-    def build_assets() -> list[Asset]:
+    def build_assets(self) -> list[Asset]:
         """Build asset objects from the current UI rows.
 
         Returns:
             List of assets for the forecast.
         """
-        return [_asset_from_row(row) for row in asset_rows]
+        return [_asset_from_row(row) for row in self.asset_rows]
 
-    with ui.column().classes("w-full p-4 gap-4"):
-        ui.label("Wealth Forecast").classes("text-2xl font-bold")
-        with ui.row().classes("w-full gap-4 items-start"):
-            # ── Left sidebar ──────────────────────────────────────────────
-            with ui.column().classes("w-[420px] shrink-0 gap-4"):
-                with ui.card().classes("w-full p-3"):
-                    ui.label("Profile").classes("text-lg font-semibold")
-                    with ui.grid(columns=2).classes("w-full gap-3"):
-                        current_age_years = ui.number(
-                            label="Current age (years)",
-                            value=profile_state["current_age_years"],
-                            format="%.0f",
-                            on_change=lambda _: schedule_forecast(),
-                        )
-                        current_age_months = ui.number(
-                            label="Current age (months)",
-                            value=profile_state["current_age_months"],
-                            format="%.0f",
-                            min=0,
-                            max=11,
-                            on_change=lambda _: schedule_forecast(),
-                        )
-                        retirement_age = ui.number(
-                            label="Retirement age",
-                            value=profile_state["retirement_age"],
-                            format="%.0f",
-                            on_change=lambda _: schedule_forecast(),
-                        )
-                        end_age = ui.number(
-                            label="End age",
-                            value=profile_state["end_age"],
-                            format="%.0f",
-                            on_change=lambda _: schedule_forecast(),
-                        )
-                        currency = ui.input(
-                            label="Currency",
-                            value=profile_state["currency"],
-                            on_change=lambda _: schedule_forecast(),
-                        )
-                        average_inflation_rate = ui.number(
-                            label="Average inflation rate (%)",
-                            value=profile_state["average_inflation_rate_pct"],
-                            format="%.2f",
-                            min=-99.9,
-                            step=0.1,
-                            on_change=lambda _: schedule_forecast(),
-                        )
-                        withdrawal_input = ui.number(
-                            label="Monthly withdrawal",
-                            value=withdrawal_state["monthly_withdrawal"],
-                            format="%.0f",
-                            min=0,
-                            step=50,
-                            on_change=lambda _: schedule_forecast(),
-                        )
-
-                with ui.card().classes("w-full p-3"):
-                    ui.label("State pension").classes("text-lg font-semibold")
-                    with ui.grid(columns=2).classes("w-full gap-3"):
-                        annual_income = ui.number(
-                            label="Annual income",
-                            value=profile_state.get("annual_income", 50000.0),
-                            format="%.0f",
-                            min=0,
-                            step=1000,
-                            on_change=lambda _: schedule_forecast(),
-                        )
-                        state_pension_current_monthly_amount = ui.number(
-                            label="State pension now (monthly)",
-                            value=withdrawal_state[
-                                "state_pension_current_monthly_amount"
-                            ],
-                            format="%.0f",
-                            min=0,
-                            step=50,
-                            on_change=lambda _: schedule_forecast(),
-                        )
-                        state_pension_growth_display = ui.label(
-                            _format_currency(
-                                withdrawal_state[
-                                    "state_pension_growth_per_working_year"
-                                ],
-                                profile_state["currency"],
-                            )
-                            + " p.m."
-                        )
-                        # Read-only display for estimated early-retirement penalty at pension start
-                        state_pension_penalty_display = ui.label("")
-                        # Read-only display for total achieved monthly pension at start age
-                        state_pension_achieved_display = ui.label("")
-                        state_pension_start_age = ui.number(
-                            label="State pension start age",
-                            value=withdrawal_state["state_pension_start_age"],
-                            format="%.0f",
-                            min=63,
-                            max=67,
-                            step=1,
-                            on_change=lambda _: schedule_forecast(),
-                        )
-
-                with ui.card().classes("w-full p-3"):
-                    ui.label("Assets").classes("text-lg font-semibold")
-                    ui.label(
-                        "Defaults: ETF 5.0% | bAV 2.0% | Cash 0.5% (annual)"
-                    ).classes("text-xs text-gray-500")
-
-                    assets_container = ui.column().classes("w-full gap-2")
-
-                    def render_asset_rows() -> None:
-                        """Render the asset input rows."""
-                        assets_container.clear()
-                        for index, row in enumerate(asset_rows):
-                            with assets_container:
-                                _render_asset_row(
-                                    index,
-                                    row,
-                                    update_asset_row,
-                                    remove_asset_row,
-                                )
-
-                    render_asset_rows()
-
-                    with ui.row().classes("gap-2"):
-                        ui.button("Add asset", on_click=add_asset_row).props(
-                            "outline color=green-4"
-                        )
-                        ui.button("Reset", on_click=reset_state).props(
-                            "outline color=red"
-                        )
-
-            # ── Right panel (chart + table) ───────────────────────────────
-            with ui.column().classes("flex-1 min-w-0 gap-4"):
-                summary_label = ui.label("No forecast yet.").classes("text-sm")
-                chart = ui.echart(_build_chart_options()).classes(
-                    "w-full h-[500px]"
-                )
-                table = (
-                    ui.table(columns=[], rows=[], row_key="month_index")
-                    .props("dense flat bordered separator=horizontal")
-                    .classes("w-full text-xs")
+    def render_asset_rows(self) -> None:
+        """Render the asset input rows."""
+        self.assets_container.clear()
+        for index, row in enumerate(self.asset_rows):
+            with self.assets_container:
+                _render_asset_row(
+                    index, row, self.update_asset_row, self.remove_asset_row
                 )
 
-        def run_forecast() -> None:
-            """Run the forecast and update the UI outputs."""
-            try:
-                profile = UserProfile(
-                    current_age_years=int(current_age_years.value or 0),
-                    current_age_months=int(current_age_months.value or 0),
-                    retirement_age=int(retirement_age.value or 0),
-                    end_age=int(end_age.value or 0),
-                    currency=str(currency.value or "EUR"),
-                    average_inflation_rate=float(
-                        average_inflation_rate.value or 0.0
-                    )
-                    / 100,
+    def run_forecast(self) -> None:
+        """Run the forecast and update the UI outputs."""
+        try:
+            profile = UserProfile(
+                current_age_years=int(self.current_age_years.value or 0),
+                current_age_months=int(self.current_age_months.value or 0),
+                retirement_age=int(self.retirement_age.value or 0),
+                end_age=int(self.end_age.value or 0),
+                currency=str(self.currency.value or "EUR"),
+                average_inflation_rate=float(
+                    self.average_inflation_rate.value or 0.0
                 )
-                assets = build_assets()
-                # State-pension estimates (display-only). The business math lives
-                # in finev.pension; the UI only renders the results.
-                config = get_config()
-                annual_income_value = float(annual_income.value or 0)
-                pension_start_age = int(state_pension_start_age.value or 67)
-                monthly_growth_per_working_year_computed = (
-                    estimate_monthly_growth_per_working_year(
-                        annual_income_value, config.drv
-                    )
+                / 100,
+            )
+            assets = self.build_assets()
+            # State-pension estimates (display-only). The business math lives
+            # in finev.pension; the UI only renders the results.
+            config = get_config()
+            annual_income_value = float(self.annual_income.value or 0)
+            pension_start_age = int(self.state_pension_start_age.value or 67)
+            monthly_growth_per_working_year_computed = (
+                estimate_monthly_growth_per_working_year(
+                    annual_income_value, config.drv
                 )
-                penalty_fraction = early_retirement_penalty_fraction(
-                    pension_start_age, config.drv
+            )
+            penalty_fraction = early_retirement_penalty_fraction(
+                pension_start_age, config.drv
+            )
+            years_remaining = max(
+                0, profile.retirement_age - profile.current_age_years
+            )
+            net_pension = estimate_pension_at_start(
+                current_monthly_amount=float(
+                    self.state_pension_current_monthly_amount.value or 0
+                ),
+                monthly_growth_per_working_year=(
+                    monthly_growth_per_working_year_computed
+                ),
+                years_until_retirement=years_remaining,
+                penalty_fraction=penalty_fraction,
+            )
+
+            self.state_pension_growth_display.text = (
+                _format_currency(
+                    monthly_growth_per_working_year_computed,
+                    profile.currency,
                 )
-                years_remaining = max(
-                    0, profile.retirement_age - profile.current_age_years
+                + " p.m."
+            )
+            self.state_pension_growth_display.update()
+            if penalty_fraction > 0:
+                penalty_monthly = (
+                    monthly_growth_per_working_year_computed * penalty_fraction
                 )
-                net_pension = estimate_pension_at_start(
+                self.state_pension_penalty_display.text = (
+                    "Estimated early-retirement penalty: -"
+                    + _format_currency(penalty_monthly, profile.currency)
+                    + f" p.m. ({penalty_fraction * 100:.1f}% reduction)"
+                )
+            else:
+                self.state_pension_penalty_display.text = (
+                    "No early-retirement penalty"
+                )
+            self.state_pension_penalty_display.update()
+            self.state_pension_achieved_display.text = (
+                f"Pension at age {pension_start_age}: "
+                + _format_currency(net_pension, profile.currency)
+                + " p.m. gross"
+                f" ({years_remaining} working year(s) remaining,"
+                f" retiring at {profile.retirement_age})"
+            )
+            self.state_pension_achieved_display.update()
+
+            withdrawal = WithdrawalPlan(
+                monthly_withdrawal=float(self.withdrawal_input.value or 0),
+                state_pension=StatePension(
                     current_monthly_amount=float(
-                        state_pension_current_monthly_amount.value or 0
+                        self.state_pension_current_monthly_amount.value or 0
                     ),
-                    monthly_growth_per_working_year=(
+                    monthly_growth_per_working_year=float(
                         monthly_growth_per_working_year_computed
                     ),
-                    years_until_retirement=years_remaining,
-                    penalty_fraction=penalty_fraction,
-                )
+                    start_age=pension_start_age,
+                ),
+            )
+            df = forecast_wealth(
+                profile=profile,
+                assets=assets,
+                withdrawal=withdrawal,
+            )
+        except (ValueError, KeyError) as error:
+            ui.notify(str(error), type="negative")
+            return
 
-                state_pension_growth_display.text = (
-                    _format_currency(
-                        monthly_growth_per_working_year_computed,
-                        profile.currency,
-                    )
-                    + " p.m."
-                )
-                state_pension_growth_display.update()
-                if penalty_fraction > 0:
-                    penalty_monthly = (
-                        monthly_growth_per_working_year_computed
-                        * penalty_fraction
-                    )
-                    state_pension_penalty_display.text = (
-                        "Estimated early-retirement penalty: -"
-                        + _format_currency(penalty_monthly, profile.currency)
-                        + f" p.m. ({penalty_fraction * 100:.1f}% reduction)"
-                    )
-                else:
-                    state_pension_penalty_display.text = (
-                        "No early-retirement penalty"
-                    )
-                state_pension_penalty_display.update()
-                state_pension_achieved_display.text = (
-                    f"Pension at age {pension_start_age}: "
-                    + _format_currency(net_pension, profile.currency)
-                    + " p.m. gross"
-                    f" ({years_remaining} working year(s) remaining,"
-                    f" retiring at {profile.retirement_age})"
-                )
-                state_pension_achieved_display.update()
+        display_df = _yearly_display_frame(df)
+        age_labels = [
+            f"{int(age)}" for age in display_df["age_years"].tolist()
+        ]
+        rounded = display_df.copy()
+        rounded["age"] = age_labels
+        numeric_columns = rounded.select_dtypes(include="number").columns
+        rounded[numeric_columns] = (
+            rounded[numeric_columns].round(0).astype(int)
+        )
 
-                withdrawal = WithdrawalPlan(
-                    monthly_withdrawal=float(withdrawal_input.value or 0),
-                    state_pension=StatePension(
-                        current_monthly_amount=float(
-                            state_pension_current_monthly_amount.value or 0
-                        ),
-                        monthly_growth_per_working_year=float(
-                            monthly_growth_per_working_year_computed
-                        ),
-                        start_age=pension_start_age,
+        asset_columns = _asset_value_columns(assets)
+        self.table.columns = _forecast_table_columns(asset_columns)
+        self.table.rows = rounded.to_dict(orient="records")
+        self.table.update()
+
+        self.chart.options["xAxis"]["data"] = age_labels
+        self.chart.options["series"] = _chart_series(rounded, asset_columns)
+        self.chart.update()
+
+        final_total = float(df["total"].iloc[-1])
+        self.summary_label.text = (
+            f"Total at age {profile.end_age}: "
+            f"{_format_currency(final_total, profile.currency)}"
+        )
+        if self.suppress_cache_save:
+            return
+        try:
+            state_snapshot = {
+                "assets": [
+                    _normalize_asset_row(row) for row in self.asset_rows
+                ],
+                "profile": {
+                    "current_age_years": int(
+                        self.current_age_years.value or 0
                     ),
-                )
-                df = forecast_wealth(
-                    profile=profile,
-                    assets=assets,
-                    withdrawal=withdrawal,
-                )
-            except (ValueError, KeyError) as error:
-                ui.notify(str(error), type="negative")
-                return
-
-            display_df = _yearly_display_frame(df)
-            age_labels = [
-                f"{int(age)}" for age in display_df["age_years"].tolist()
-            ]
-            rounded = display_df.copy()
-            rounded["age"] = age_labels
-            numeric_columns = rounded.select_dtypes(include="number").columns
-            rounded[numeric_columns] = (
-                rounded[numeric_columns].round(0).astype(int)
+                    "current_age_months": int(
+                        self.current_age_months.value or 0
+                    ),
+                    "retirement_age": int(self.retirement_age.value or 0),
+                    "end_age": int(self.end_age.value or 0),
+                    "currency": str(self.currency.value or "EUR"),
+                    "average_inflation_rate_pct": float(
+                        self.average_inflation_rate.value or 0.0
+                    ),
+                    "annual_income": float(self.annual_income.value or 0),
+                },
+                "withdrawal": {
+                    "monthly_withdrawal": float(
+                        self.withdrawal_input.value or 0
+                    ),
+                    "state_pension_current_monthly_amount": float(
+                        self.state_pension_current_monthly_amount.value or 0
+                    ),
+                    "state_pension_growth_per_working_year": float(
+                        monthly_growth_per_working_year_computed
+                    ),
+                    "state_pension_start_age": int(
+                        self.state_pension_start_age.value or 67
+                    ),
+                },
+            }
+            _save_cached_state(state_snapshot)
+        except (OSError, ValueError) as error:
+            ui.notify(
+                f"Failed to save cached state: {error}",
+                type="negative",
             )
 
-            asset_columns = _asset_value_columns(assets)
-            table.columns = _forecast_table_columns(asset_columns)
-            table.rows = rounded.to_dict(orient="records")
-            table.update()
+    def build(self) -> None:
+        """Construct the page widgets and render the initial forecast."""
+        profile_state = self.profile_state
+        withdrawal_state = self.withdrawal_state
+        with ui.column().classes("w-full p-4 gap-4"):
+            ui.label("Wealth Forecast").classes("text-2xl font-bold")
+            with ui.row().classes("w-full gap-4 items-start"):
+                # ── Left sidebar ──────────────────────────
+                with ui.column().classes("w-[420px] shrink-0 gap-4"):
+                    with ui.card().classes("w-full p-3"):
+                        ui.label("Profile").classes("text-lg font-semibold")
+                        with ui.grid(columns=2).classes("w-full gap-3"):
+                            self.current_age_years = ui.number(
+                                label="Current age (years)",
+                                value=profile_state["current_age_years"],
+                                format="%.0f",
+                                on_change=lambda _: self.schedule_forecast(),
+                            )
+                            self.current_age_months = ui.number(
+                                label="Current age (months)",
+                                value=profile_state["current_age_months"],
+                                format="%.0f",
+                                min=0,
+                                max=11,
+                                on_change=lambda _: self.schedule_forecast(),
+                            )
+                            self.retirement_age = ui.number(
+                                label="Retirement age",
+                                value=profile_state["retirement_age"],
+                                format="%.0f",
+                                on_change=lambda _: self.schedule_forecast(),
+                            )
+                            self.end_age = ui.number(
+                                label="End age",
+                                value=profile_state["end_age"],
+                                format="%.0f",
+                                on_change=lambda _: self.schedule_forecast(),
+                            )
+                            self.currency = ui.input(
+                                label="Currency",
+                                value=profile_state["currency"],
+                                on_change=lambda _: self.schedule_forecast(),
+                            )
+                            self.average_inflation_rate = ui.number(
+                                label="Average inflation rate (%)",
+                                value=profile_state[
+                                    "average_inflation_rate_pct"
+                                ],
+                                format="%.2f",
+                                min=-99.9,
+                                step=0.1,
+                                on_change=lambda _: self.schedule_forecast(),
+                            )
+                            self.withdrawal_input = ui.number(
+                                label="Monthly withdrawal",
+                                value=withdrawal_state["monthly_withdrawal"],
+                                format="%.0f",
+                                min=0,
+                                step=50,
+                                on_change=lambda _: self.schedule_forecast(),
+                            )
 
-            chart.options["xAxis"]["data"] = age_labels
-            chart.options["series"] = _chart_series(rounded, asset_columns)
-            chart.update()
+                    with ui.card().classes("w-full p-3"):
+                        ui.label("State pension").classes(
+                            "text-lg font-semibold"
+                        )
+                        with ui.grid(columns=2).classes("w-full gap-3"):
+                            self.annual_income = ui.number(
+                                label="Annual income",
+                                value=profile_state.get(
+                                    "annual_income", 50000.0
+                                ),
+                                format="%.0f",
+                                min=0,
+                                step=1000,
+                                on_change=lambda _: self.schedule_forecast(),
+                            )
+                            self.state_pension_current_monthly_amount = (
+                                ui.number(
+                                    label="State pension now (monthly)",
+                                    value=withdrawal_state[
+                                        "state_pension_current_monthly_amount"
+                                    ],
+                                    format="%.0f",
+                                    min=0,
+                                    step=50,
+                                    on_change=lambda _: (
+                                        self.schedule_forecast()
+                                    ),
+                                )
+                            )
+                            self.state_pension_growth_display = ui.label(
+                                _format_currency(
+                                    withdrawal_state[
+                                        "state_pension_growth_per_working_year"
+                                    ],
+                                    profile_state["currency"],
+                                )
+                                + " p.m."
+                            )
+                            # Read-only: estimated early-retirement penalty.
+                            self.state_pension_penalty_display = ui.label("")
+                            # Read-only: total achieved monthly pension.
+                            self.state_pension_achieved_display = ui.label("")
+                            self.state_pension_start_age = ui.number(
+                                label="State pension start age",
+                                value=withdrawal_state[
+                                    "state_pension_start_age"
+                                ],
+                                format="%.0f",
+                                min=63,
+                                max=67,
+                                step=1,
+                                on_change=lambda _: self.schedule_forecast(),
+                            )
 
-            final_total = float(df["total"].iloc[-1])
-            summary_label.text = (
-                f"Total at age {profile.end_age}: "
-                f"{_format_currency(final_total, profile.currency)}"
-            )
-            if suppress_cache_save:
-                return
-            try:
-                state_snapshot = {
-                    "assets": [
-                        _normalize_asset_row(row) for row in asset_rows
-                    ],
-                    "profile": {
-                        "current_age_years": int(current_age_years.value or 0),
-                        "current_age_months": int(
-                            current_age_months.value or 0
-                        ),
-                        "retirement_age": int(retirement_age.value or 0),
-                        "end_age": int(end_age.value or 0),
-                        "currency": str(currency.value or "EUR"),
-                        "average_inflation_rate_pct": float(
-                            average_inflation_rate.value or 0.0
-                        ),
-                        "annual_income": float(annual_income.value or 0),
-                    },
-                    "withdrawal": {
-                        "monthly_withdrawal": float(
-                            withdrawal_input.value or 0
-                        ),
-                        "state_pension_current_monthly_amount": float(
-                            state_pension_current_monthly_amount.value or 0
-                        ),
-                        "state_pension_growth_per_working_year": float(
-                            monthly_growth_per_working_year_computed
-                        ),
-                        "state_pension_start_age": int(
-                            state_pension_start_age.value or 67
-                        ),
-                    },
-                }
-                _save_cached_state(state_snapshot)
-            except (OSError, ValueError) as error:
-                ui.notify(
-                    f"Failed to save cached state: {error}",
-                    type="negative",
-                )
+                    with ui.card().classes("w-full p-3"):
+                        ui.label("Assets").classes("text-lg font-semibold")
+                        ui.label(
+                            "Defaults: ETF 5.0% | bAV 2.0% | Cash 0.5% (annual)"
+                        ).classes("text-xs text-gray-500")
 
-        run_forecast()
-        if state_error:
-            ui.notify(state_error, type="negative")
+                        self.assets_container = ui.column().classes(
+                            "w-full gap-2"
+                        )
+                        self.render_asset_rows()
+
+                        with ui.row().classes("gap-2"):
+                            ui.button(
+                                "Add asset", on_click=self.add_asset_row
+                            ).props("outline color=green-4")
+                            ui.button(
+                                "Reset", on_click=self.reset_state
+                            ).props("outline color=red")
+
+                # ── Right panel (chart + table) ─────────────
+                with ui.column().classes("flex-1 min-w-0 gap-4"):
+                    self.summary_label = ui.label("No forecast yet.").classes(
+                        "text-sm"
+                    )
+                    self.chart = ui.echart(_build_chart_options()).classes(
+                        "w-full h-[500px]"
+                    )
+                    self.table = (
+                        ui.table(columns=[], rows=[], row_key="month_index")
+                        .props("dense flat bordered separator=horizontal")
+                        .classes("w-full text-xs")
+                    )
+
+            self.run_forecast()
+            if self.state_error:
+                ui.notify(self.state_error, type="negative")
+
+
+def build_wealth_page() -> None:
+    """Construct the wealth forecast page and bind its update logic."""
+    _WealthPage().build()
