@@ -31,7 +31,7 @@ presentation only and must not contain domain math.
 | `pension.py` | Pure DRV state-pension estimate helpers (display-only figures); no I/O, no UI |
 | `ui_state.py` | Pure UI state: defaults, JSON persistence, coercion, row normalization, and row→`Asset` conversion; no NiceGUI dependency |
 | `ui_view.py` | Pure UI presentation helpers: currency formatting, chart options, yearly display frame; no NiceGUI dependency |
-| `ui.py` | NiceGUI page composition (`build_wealth_page`): builds widgets and binds event handlers; delegates all logic to the engine and `ui_state`/`ui_view` |
+| `ui.py` | NiceGUI page: the `_WealthPage` controller class holds widget refs + state and binds event handlers as methods (unit-testable); `build_wealth_page()` is the thin entry point. Delegates all logic to the engine and `ui_state`/`ui_view` |
 | `app.py` | NiceGUI server launcher; auto-selects a free port in 8081–8130; respects `WEALTH_APP_PORT` env var |
 | `cli.py` | Console entry point: builds a default scenario and prints yearly totals |
 
