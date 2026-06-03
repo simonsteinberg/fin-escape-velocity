@@ -22,6 +22,23 @@ run = "mkdir -p reports && uv run pytest --junitxml=reports/junit.xml --cov=fine
 description = "Run lint checks"
 run = "uv run ruff check ."
 
+[tasks.format-check]
+description = "Check formatting without modifying files"
+run = "uv run ruff format --check ."
+
+[tasks.typecheck]
+description = "Run static type checks"
+run = "uv run mypy"
+
+[tasks.check]
+description = "Run all static checks: format-check, lint, typecheck, tests"
+run = [
+  "mise run format-check",
+  "mise run lint",
+  "mise run typecheck",
+  "mise run test",
+]
+
 [tasks.run]
 description = "Run wealth forecast and print yearly totals"
 run = "uv run python -m finev.cli"

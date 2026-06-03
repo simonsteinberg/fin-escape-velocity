@@ -1,9 +1,19 @@
 repos:
   - repo: local
     hooks:
+      - id: format-check
+        name: format-check
+        entry: mise run format-check
+        language: system
+        pass_filenames: false
       - id: lint
         name: lint
         entry: mise run lint
+        language: system
+        pass_filenames: false
+      - id: typecheck
+        name: typecheck
+        entry: mise run typecheck
         language: system
         pass_filenames: false
       - id: test

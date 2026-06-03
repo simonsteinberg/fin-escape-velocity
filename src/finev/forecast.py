@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
 from finev.config import get_config
 from finev.models import (
+    AllocationStrategy,
     Asset,
     AssetType,
     BAVStrategy,
@@ -235,7 +237,7 @@ def _validate_withdrawal(withdrawal: WithdrawalPlan) -> None:
     """
     if withdrawal.monthly_withdrawal < 0:
         raise ValueError("Monthly withdrawal must be non-negative")
-    if withdrawal.allocation_strategy != "proportional":
+    if withdrawal.allocation_strategy != AllocationStrategy.PROPORTIONAL:
         raise ValueError(
             "Only proportional withdrawal allocation is supported"
         )
@@ -325,19 +327,18 @@ def forecast_wealth(
     etf_indices = [
         index
         for index, asset in enumerate(assets_list)
-        if asset.asset_type == AssetType.ETF and getattr(asset, "active", True)
+        if asset.asset_type == AssetType.ETF and asset.active
     ]
     cash_indices = [
         index
         for index, asset in enumerate(assets_list)
-        if asset.asset_type == AssetType.CASH
-        and getattr(asset, "active", True)
+        if asset.asset_type == AssetType.CASH and asset.active
     ]
     transfer_assets = [
         asset
         for asset in assets_list
         if asset.asset_type == AssetType.BAV
-        and getattr(asset, "active", True)
+        and asset.active
         and BAVStrategy(asset.bav_strategy) == BAVStrategy.TRANSFER
     ]
     # Pre-compute inheritance events: (age_months, gross_amount, relationship)
@@ -349,7 +350,7 @@ def forecast_wealth(
         )
         for asset in assets_list
         if asset.asset_type == AssetType.INHERITANCE
-        and getattr(asset, "active", True)
+        and asset.active
         and asset.inheritance_gross_amount > 0
     ]
     if transfer_assets:
@@ -373,15 +374,13 @@ def forecast_wealth(
     # Treat inactive assets as zeroed for forecasting calculations.
     balances = [
         float(asset.current_value)
-        if getattr(asset, "active", True)
-        and asset.asset_type != AssetType.INHERITANCE
+        if asset.active and asset.asset_type != AssetType.INHERITANCE
         else 0.0
         for asset in assets_list
     ]
     cost_bases = [
         float(asset.effective_cost_basis())
-        if getattr(asset, "active", True)
-        and asset.asset_type != AssetType.INHERITANCE
+        if asset.active and asset.asset_type != AssetType.INHERITANCE
         else 0.0
         for asset in assets_list
     ]
@@ -422,19 +421,21 @@ def forecast_wealth(
             if age_months < metadata.retirement_age_months:
                 contributions = [
                     float(asset.monthly_contribution)
-                    if getattr(asset, "active", True)
+                    if asset.active
                     and asset.asset_type != AssetType.INHERITANCE
                     else 0.0
                     for asset in assets_list
                 ]
                 balances = [
                     balance + contribution
-                    for balance, contribution in zip(balances, contributions)
+                    for balance, contribution in zip(
+                        balances, contributions, strict=True
+                    )
                 ]
                 cost_bases = [
                     cost_basis + contribution
                     for cost_basis, contribution in zip(
-                        cost_bases, contributions
+                        cost_bases, contributions, strict=True
                     )
                 ]
                 net_cashflow += float(sum(contributions))
@@ -464,7 +465,7 @@ def forecast_wealth(
                 withdrawable_indices = [
                     i
                     for i, asset in enumerate(assets_list)
-                    if getattr(asset, "active", True)
+                    if asset.active
                     and (
                         asset.asset_type in (AssetType.ETF, AssetType.CASH)
                         or (
@@ -530,7 +531,7 @@ def forecast_wealth(
                     etf_taxable_gains = 0.0
                     # Allocate withdrawals proportionally across withdrawable assets only
                     for i, (asset, balance, cost_basis) in enumerate(
-                        zip(assets_list, balances, cost_bases)
+                        zip(assets_list, balances, cost_bases, strict=True)
                     ):
                         if i not in withdrawable_indices or balance <= 0:
                             # Asset is not withdrawable now; keep as is
@@ -578,7 +579,7 @@ def forecast_wealth(
 
             effective_rates = list(monthly_rates)
             for index, asset in enumerate(assets_list):
-                if not getattr(asset, "active", True):
+                if not asset.active:
                     continue
                 if (
                     asset.asset_type == AssetType.BAV
@@ -620,26 +621,26 @@ def forecast_wealth(
 
             if age_months >= metadata.retirement_age_months:
                 for index, asset in enumerate(assets_list):
-                    if not getattr(asset, "active", True):
+                    if not asset.active:
                         continue
                     if (
                         asset.asset_type == AssetType.BAV
                         and BAVStrategy(asset.bav_strategy)
                         == BAVStrategy.INCOME
+                        and age_months >= asset.bav_transfer_start_age * 12
                     ):
-                        if age_months >= asset.bav_transfer_start_age * 12:
-                            monthly_gain = (
-                                balances[index] * monthly_rates[index]
-                            )
-                            if monthly_gain > 0:
-                                tax = monthly_gain * bav_tax_rate
-                                taxes += tax
-                                net_cashflow += monthly_gain - tax
-                            effective_rates[index] = 0.0
+                        monthly_gain = balances[index] * monthly_rates[index]
+                        if monthly_gain > 0:
+                            tax = monthly_gain * bav_tax_rate
+                            taxes += tax
+                            net_cashflow += monthly_gain - tax
+                        effective_rates[index] = 0.0
 
             balances = [
                 balance * (1 + rate)
-                for balance, rate in zip(balances, effective_rates)
+                for balance, rate in zip(
+                    balances, effective_rates, strict=True
+                )
             ]
 
         row: dict[str, float | int] = {
@@ -650,13 +651,13 @@ def forecast_wealth(
             "taxes": float(taxes),
         }
         # INHERITANCE assets always hold a zero balance — exclude from columns.
-        for asset, balance in zip(assets_list, balances):
+        for asset, balance in zip(assets_list, balances, strict=True):
             if asset.asset_type != AssetType.INHERITANCE:
                 row[asset.name] = float(balance)
         row["total"] = float(
             sum(
                 balance
-                for asset, balance in zip(assets_list, balances)
+                for asset, balance in zip(assets_list, balances, strict=True)
                 if asset.asset_type != AssetType.INHERITANCE
             )
         )

@@ -74,7 +74,10 @@ mise run setup-repo -- workflow_engine
 | `mise run run` | Run the console forecast and print yearly totals. |
 | `mise run app` | Launch the NiceGUI app on the first available port (default 8081). |
 | `mise run format` | Format code with Ruff. |
+| `mise run format-check` | Check formatting without writing changes. |
 | `mise run lint` | Run Ruff lint checks. |
+| `mise run typecheck` | Run mypy static type checks. |
+| `mise run check` | Run format-check, lint, typecheck, and tests together. |
 | `mise run test` | Run the test suite. |
 | `mise run coverage` | Run tests with terminal coverage summary. |
 | `mise run coverage-ci` | Run tests and write CI coverage artifacts to `reports/`. |
@@ -83,12 +86,19 @@ mise run setup-repo -- workflow_engine
 ## Code layout
 - `cli.py`: Console entrypoint and default scenario.
 - `forecast.py`: Forecast engine and validation logic.
+- `pension.py`: Pure DRV state-pension estimate helpers (display-only).
 - `models.py`: Domain models and defaults.
+- `config.py`: Loads and validates `config.json` tax parameters.
 - `ui.py`: NiceGUI page composition.
 - `app.py`: NiceGUI server entrypoint.
 
+Engineering conventions are documented in
+[SOFTWARE_ENGINEERING.md](SOFTWARE_ENGINEERING.md) and
+[CLAUDE.md](CLAUDE.md); the staged refactor plan is in
+[docs/CODE_QUALITY_PLAN.md](docs/CODE_QUALITY_PLAN.md).
+
 ## Quality checks
 
-- Pre-commit runs lint and test before each commit.
-- CI runs lint and test on pull requests and on pushes to `main`.
+- Pre-commit runs format-check, lint, typecheck, and tests before each commit.
+- CI runs the same gates on pull requests and on pushes to `main`.
 - Coverage percentage badge is published via Codecov (requires repository secret `CODECOV_TOKEN`).

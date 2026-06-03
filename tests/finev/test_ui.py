@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from finev.models import AssetType, BAVStrategy, DEFAULT_ANNUAL_GAIN_RATES
+from finev.models import DEFAULT_ANNUAL_GAIN_RATES, AssetType, BAVStrategy
 from finev.ui import (
     _asset_from_row,
     _build_chart_options,

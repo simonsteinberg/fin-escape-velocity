@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from functools import lru_cache
-import json
 from pathlib import Path
 from typing import Any
-
 
 CONFIG_PATH = Path(__file__).with_name("config.json")
 MAX_EARLY_RETIREMENT_YEARS = 4
@@ -92,7 +91,11 @@ class InheritanceTaxBrackets:
             self.bis_26m,
             self.ueber_26m,
         ]
-        for threshold, rate in zip(_ERBSCHAFTSTEUER_THRESHOLDS, rates):
+        # There are 7 rates but only 6 thresholds: the final rate applies to any
+        # amount above the last threshold, so the lengths differ by design.
+        for threshold, rate in zip(
+            _ERBSCHAFTSTEUER_THRESHOLDS, rates, strict=False
+        ):
             if taxable_amount <= threshold:
                 return rate
         return rates[-1]
@@ -197,39 +200,28 @@ def get_config() -> FinevConfig:
     return load_config()
 
 
-def _parse_klasse_i_brackets(raw: dict[str, Any]) -> InheritanceTaxBrackets:
+def _parse_brackets(
+    raw: dict[str, Any], klasse: str
+) -> InheritanceTaxBrackets:
+    """Parse one Erbschaftsteuer bracket set for a given tax class.
+
+    Args:
+        raw: Decoded config JSON object.
+        klasse: Tax-class token used in the config keys (``"I"``, ``"II"`` or
+            ``"III"``), e.g. ``ERBSCHAFTSTEUER_KLASSE_<klasse>_BIS_75K``.
+
+    Returns:
+        Parsed bracket rates for the class.
+    """
+    prefix = f"ERBSCHAFTSTEUER_KLASSE_{klasse}"
     return InheritanceTaxBrackets(
-        bis_75k=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_I_BIS_75K"),
-        bis_300k=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_I_BIS_300K"),
-        bis_600k=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_I_BIS_600K"),
-        bis_6m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_I_BIS_6M"),
-        bis_13m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_I_BIS_13M"),
-        bis_26m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_I_BIS_26M"),
-        ueber_26m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_I_UEBER_26M"),
-    )
-
-
-def _parse_klasse_ii_brackets(raw: dict[str, Any]) -> InheritanceTaxBrackets:
-    return InheritanceTaxBrackets(
-        bis_75k=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_II_BIS_75K"),
-        bis_300k=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_II_BIS_300K"),
-        bis_600k=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_II_BIS_600K"),
-        bis_6m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_II_BIS_6M"),
-        bis_13m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_II_BIS_13M"),
-        bis_26m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_II_BIS_26M"),
-        ueber_26m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_II_UEBER_26M"),
-    )
-
-
-def _parse_klasse_iii_brackets(raw: dict[str, Any]) -> InheritanceTaxBrackets:
-    return InheritanceTaxBrackets(
-        bis_75k=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_III_BIS_75K"),
-        bis_300k=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_III_BIS_300K"),
-        bis_600k=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_III_BIS_600K"),
-        bis_6m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_III_BIS_6M"),
-        bis_13m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_III_BIS_13M"),
-        bis_26m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_III_BIS_26M"),
-        ueber_26m=_require_float(raw, "ERBSCHAFTSTEUER_KLASSE_III_UEBER_26M"),
+        bis_75k=_require_float(raw, f"{prefix}_BIS_75K"),
+        bis_300k=_require_float(raw, f"{prefix}_BIS_300K"),
+        bis_600k=_require_float(raw, f"{prefix}_BIS_600K"),
+        bis_6m=_require_float(raw, f"{prefix}_BIS_6M"),
+        bis_13m=_require_float(raw, f"{prefix}_BIS_13M"),
+        bis_26m=_require_float(raw, f"{prefix}_BIS_26M"),
+        ueber_26m=_require_float(raw, f"{prefix}_UEBER_26M"),
     )
 
 
@@ -258,9 +250,9 @@ def _parse_config(raw: dict[str, Any]) -> FinevConfig:
         steuerfreibetrag_euro=_require_float(raw, "ETF_STEUERFREIBETRAG_EURO"),
         teilfreistellung=_require_float(raw, "ETF_TEILFREISTELLUNG"),
     )
-    klasse_i_brackets = _parse_klasse_i_brackets(raw)
-    klasse_ii_brackets = _parse_klasse_ii_brackets(raw)
-    klasse_iii_brackets = _parse_klasse_iii_brackets(raw)
+    klasse_i_brackets = _parse_brackets(raw, "I")
+    klasse_ii_brackets = _parse_brackets(raw, "II")
+    klasse_iii_brackets = _parse_brackets(raw, "III")
     inheritance_tax = InheritanceTaxConfig(
         ehegatte=InheritanceTaxRelationship(
             freibetrag_euro=_require_float(

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 import pandas as pd
 
@@ -108,9 +108,10 @@ def print_yearly_summary(
         currency: Currency string to display.
     """
     asset_names = [asset.name for asset in assets]
-    columns = ["Age"] + asset_names + ["total", "taxes", "net_cashflow"]
+    summary_columns = ["total", "taxes", "net_cashflow"]
+    columns = ["Age", *asset_names, *summary_columns]
     widths = {"Age": 6}
-    for name in asset_names + ["total", "taxes", "net_cashflow"]:
+    for name in [*asset_names, *summary_columns]:
         widths[name] = max(len(name), 14)
 
     header = " ".join(f"{name:>{widths[name]}}" for name in columns)
@@ -127,7 +128,7 @@ def print_yearly_summary(
         values.append(f"{row['net_cashflow']:+,.0f} {currency}")
         line_parts = [f"{values[0]:>{widths['Age']}}"]
         for name, value in zip(
-            asset_names + ["total", "taxes", "net_cashflow"],
+            [*asset_names, *summary_columns],
             values[1:],
             strict=True,
         ):

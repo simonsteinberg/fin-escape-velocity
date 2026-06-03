@@ -11,8 +11,8 @@ from typing import Any
 import pandas as pd
 from nicegui import ui
 
-from finev.forecast import forecast_wealth
 from finev.config import get_config
+from finev.forecast import forecast_wealth
 from finev.models import (
     DEFAULT_ANNUAL_GAIN_RATES,
     Asset,
@@ -22,6 +22,11 @@ from finev.models import (
     StatePension,
     UserProfile,
     WithdrawalPlan,
+)
+from finev.pension import (
+    early_retirement_penalty_fraction,
+    estimate_monthly_growth_per_working_year,
+    estimate_pension_at_start,
 )
 
 
@@ -428,7 +433,11 @@ def _asset_from_row(row: dict[str, Any]) -> Asset:
         )
 
     rate_pct = row.get("annual_gain_rate_pct")
-    annual_rate = None if rate_pct in (None, "") else float(rate_pct) / 100
+    annual_rate: float | None
+    if rate_pct is None or rate_pct == "":
+        annual_rate = None
+    else:
+        annual_rate = float(rate_pct) / 100
     current_value = float(row.get("current_value") or 0)
     unrealized_gains = float(row.get("unrealized_gains") or 0)
     unrealized_gains = min(unrealized_gains, current_value)
@@ -1158,73 +1167,64 @@ def build_wealth_page() -> None:
                     / 100,
                 )
                 assets = build_assets()
-                # Compute state pension growth per working year from configured DRV values
+                # State-pension estimates (display-only). The business math lives
+                # in finev.pension; the UI only renders the results.
                 config = get_config()
                 annual_income_value = float(annual_income.value or 0)
-                points_per_year = min(
-                    annual_income_value
-                    / config.drv.durchschnitts_jahresentgelt_euro,
-                    config.drv.maximale_rentenpunkte_pro_jahr,
-                )
+                pension_start_age = int(state_pension_start_age.value or 67)
                 monthly_growth_per_working_year_computed = (
-                    points_per_year * config.drv.rente_pro_rentenpunkt_euro
+                    estimate_monthly_growth_per_working_year(
+                        annual_income_value, config.drv
+                    )
                 )
-                # Update read-only display
-                try:
-                    state_pension_growth_display.text = (
-                        _format_currency(
-                            monthly_growth_per_working_year_computed,
-                            profile.currency,
-                        )
-                        + " p.m."
+                penalty_fraction = early_retirement_penalty_fraction(
+                    pension_start_age, config.drv
+                )
+                years_remaining = max(
+                    0, profile.retirement_age - profile.current_age_years
+                )
+                net_pension = estimate_pension_at_start(
+                    current_monthly_amount=float(
+                        state_pension_current_monthly_amount.value or 0
+                    ),
+                    monthly_growth_per_working_year=(
+                        monthly_growth_per_working_year_computed
+                    ),
+                    years_until_retirement=years_remaining,
+                    penalty_fraction=penalty_fraction,
+                )
+
+                state_pension_growth_display.text = (
+                    _format_currency(
+                        monthly_growth_per_working_year_computed,
+                        profile.currency,
                     )
-                    state_pension_growth_display.update()
-                    # Compute estimated early-retirement penalty at pension start (display-only)
-                    pension_start_age = int(
-                        state_pension_start_age.value or 67
-                    )
-                    years_early = max(0, 67 - pension_start_age)
-                    penalty_fraction = (
-                        config.drv.rentenabschlag_pro_jahr * years_early
-                    )
+                    + " p.m."
+                )
+                state_pension_growth_display.update()
+                if penalty_fraction > 0:
                     penalty_monthly = (
                         monthly_growth_per_working_year_computed
-                        * (penalty_fraction)
+                        * penalty_fraction
                     )
-                    if years_early > 0:
-                        state_pension_penalty_display.text = (
-                            "Estimated early-retirement penalty: -"
-                            + _format_currency(
-                                penalty_monthly, profile.currency
-                            )
-                            + f" p.m. ({penalty_fraction * 100:.1f}% reduction)"
-                        )
-                    else:
-                        state_pension_penalty_display.text = (
-                            "No early-retirement penalty"
-                        )
-                    state_pension_penalty_display.update()
-                    # Compute total achieved monthly pension at pension start age
-                    years_remaining = max(
-                        0, profile.retirement_age - profile.current_age_years
+                    state_pension_penalty_display.text = (
+                        "Estimated early-retirement penalty: -"
+                        + _format_currency(penalty_monthly, profile.currency)
+                        + f" p.m. ({penalty_fraction * 100:.1f}% reduction)"
                     )
-                    base_pension = (
-                        float(state_pension_current_monthly_amount.value or 0)
-                        + monthly_growth_per_working_year_computed
-                        * years_remaining
+                else:
+                    state_pension_penalty_display.text = (
+                        "No early-retirement penalty"
                     )
-                    net_pension = base_pension * (1 - penalty_fraction)
-                    state_pension_achieved_display.text = (
-                        f"Pension at age {pension_start_age}: "
-                        + _format_currency(net_pension, profile.currency)
-                        + f" p.m. gross"
-                        f" ({years_remaining} working year(s) remaining,"
-                        f" retiring at {profile.retirement_age})"
-                    )
-                    state_pension_achieved_display.update()
-                except Exception:
-                    # UI not yet initialized; ignore
-                    pass
+                state_pension_penalty_display.update()
+                state_pension_achieved_display.text = (
+                    f"Pension at age {pension_start_age}: "
+                    + _format_currency(net_pension, profile.currency)
+                    + " p.m. gross"
+                    f" ({years_remaining} working year(s) remaining,"
+                    f" retiring at {profile.retirement_age})"
+                )
+                state_pension_achieved_display.update()
 
                 withdrawal = WithdrawalPlan(
                     monthly_withdrawal=float(withdrawal_input.value or 0),
@@ -1235,7 +1235,7 @@ def build_wealth_page() -> None:
                         monthly_growth_per_working_year=float(
                             monthly_growth_per_working_year_computed
                         ),
-                        start_age=int(state_pension_start_age.value or 67),
+                        start_age=pension_start_age,
                     ),
                 )
                 df = forecast_wealth(
@@ -1249,7 +1249,7 @@ def build_wealth_page() -> None:
 
             display_df = _yearly_display_frame(df)
             age_labels = [
-                f"{int(row.age_years)}" for row in display_df.itertuples()
+                f"{int(age)}" for age in display_df["age_years"].tolist()
             ]
             rounded = display_df.copy()
             rounded["age"] = age_labels
