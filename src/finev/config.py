@@ -8,6 +8,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from finev.models import InheritanceRelationship
+
 CONFIG_PATH = Path(__file__).with_name("config.json")
 MAX_EARLY_RETIREMENT_YEARS = 4
 
@@ -134,28 +136,30 @@ class InheritanceTaxConfig:
     klasse_ii: InheritanceTaxRelationship
     klasse_iii: InheritanceTaxRelationship
 
-    def compute_tax(self, gross_amount: float, relationship: str) -> float:
+    def compute_tax(
+        self,
+        gross_amount: float,
+        relationship: InheritanceRelationship,
+    ) -> float:
         """Return the Erbschaftsteuer for a given gross inheritance.
 
         Args:
             gross_amount: Total inherited amount before tax.
-            relationship: Relationship key matching one of the attributes
-                (``"ehegatte"``, ``"kind"``, ``"enkel"``, ``"elternteil"``,
-                ``"klasse_ii"``, ``"klasse_iii"``).
+            relationship: Heir relationship determining Freibetrag and brackets.
 
         Returns:
             Tax amount in the same currency as *gross_amount*.
 
         Raises:
-            KeyError: If *relationship* is not a valid key.
+            KeyError: If *relationship* is not a recognised relationship.
         """
-        rel_map: dict[str, InheritanceTaxRelationship] = {
-            "ehegatte": self.ehegatte,
-            "kind": self.kind,
-            "enkel": self.enkel,
-            "elternteil": self.elternteil,
-            "klasse_ii": self.klasse_ii,
-            "klasse_iii": self.klasse_iii,
+        rel_map: dict[InheritanceRelationship, InheritanceTaxRelationship] = {
+            InheritanceRelationship.EHEGATTE: self.ehegatte,
+            InheritanceRelationship.KIND: self.kind,
+            InheritanceRelationship.ENKEL: self.enkel,
+            InheritanceRelationship.ELTERNTEIL: self.elternteil,
+            InheritanceRelationship.KLASSE_II: self.klasse_ii,
+            InheritanceRelationship.KLASSE_III: self.klasse_iii,
         }
         if relationship not in rel_map:
             raise KeyError(

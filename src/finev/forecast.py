@@ -311,8 +311,8 @@ class _EngineParams:
     monthly_rates: list[float]
     etf_indices: list[int]
     cash_indices: list[int]
-    # Inheritance events as (age_in_months, gross_amount, relationship_key).
-    inheritance_events: list[tuple[int, float, str]]
+    # Inheritance events as (age_in_months, gross_amount, relationship).
+    inheritance_events: list[tuple[int, float, InheritanceRelationship]]
     etf_tax_rate: float
     etf_taxable_share: float
     etf_annual_allowance: float
@@ -365,11 +365,11 @@ def _build_engine_params(
         and asset.active
         and BAVStrategy(asset.bav_strategy) == BAVStrategy.TRANSFER
     ]
-    inheritance_events: list[tuple[int, float, str]] = [
+    inheritance_events: list[tuple[int, float, InheritanceRelationship]] = [
         (
             asset.inheritance_age * 12,
             asset.inheritance_gross_amount,
-            str(asset.inheritance_relationship),
+            asset.inheritance_relationship,
         )
         for asset in assets_list
         if asset.asset_type == AssetType.INHERITANCE
