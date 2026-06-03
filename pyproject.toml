@@ -20,6 +20,7 @@ finev-app = "finev.app:main"
 
 [dependency-groups]
 dev = [
+  "mypy>=1.11",
   "pre-commit>=4.6.0",
   "pytest>=9.0.3",
   "pytest-cov>=5.0",
@@ -36,7 +37,7 @@ branch = true
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
-fail_under = 40
+fail_under = 58
 
 [tool.coverage.html]
 skip_covered = false
@@ -44,6 +45,28 @@ skip_covered = false
 [tool.ruff]
 line-length = 79
 target-version = "py312"
+
+[tool.ruff.lint]
+# E/F: pycodestyle + pyflakes defaults. I: import sorting. B: bugbear.
+# UP: pyupgrade. SIM: simplifications. RUF: ruff-specific.
+# E501 (line-too-long) is intentionally left to the formatter to avoid noise on
+# long strings and comments it cannot wrap.
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# NiceGUI builds layout with intentionally nested `with` context managers
+# (container -> column -> row). Flattening them (SIM117) hurts readability of
+# the UI tree, so it is allowed in the UI module only.
+"src/finev/ui.py" = ["SIM117"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src"]
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unused_configs = true
+no_implicit_optional = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/finev"]

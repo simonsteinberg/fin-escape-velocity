@@ -25,8 +25,14 @@ jobs:
       - name: Sync dependencies
         run: mise run sync
 
+      - name: Format check
+        run: mise run format-check
+
       - name: Lint
         run: mise run lint
+
+      - name: Type check
+        run: mise run typecheck
 
       - name: Unit tests
         run: mise run test

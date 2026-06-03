@@ -22,6 +22,12 @@ class BAVStrategy(StrEnum):
     INCOME = "income"
 
 
+class AllocationStrategy(StrEnum):
+    """Strategy for allocating post-retirement withdrawals across assets."""
+
+    PROPORTIONAL = "proportional"
+
+
 class InheritanceRelationship(StrEnum):
     """Heir relationship determining Erbschaftsteuer class and Freibetrag.
 
@@ -163,5 +169,5 @@ class WithdrawalPlan:
     """
 
     monthly_withdrawal: float = 0.0
-    allocation_strategy: str = "proportional"
+    allocation_strategy: AllocationStrategy = AllocationStrategy.PROPORTIONAL
     state_pension: StatePension | None = None
