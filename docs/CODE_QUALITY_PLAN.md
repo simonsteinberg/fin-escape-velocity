@@ -49,7 +49,7 @@ Each stage must leave `main` green (format, lint, typecheck, tests) and releasab
 - Move tests to `tests/finev/` mirroring the source; add `cli.py` and `pension.py`
   tests (fixes #7, raises coverage).
 
-## Stage 3 — Decompose `forecast_wealth` (PLANNED)
+## Stage 3 — Decompose `forecast_wealth` (DONE)
 
 Goal: turn the monolithic monthly loop into a small set of cohesive, individually
 testable steps so new asset types and per-month adjustments slot in without editing
@@ -67,28 +67,33 @@ Proposed shape:
 Each step is extracted one at a time, with the existing forecast tests as the
 regression net; behavior must stay identical (verify with a golden-output test).
 
-## Stage 4 — Decompose `build_wealth_page` (PLANNED)
+## Stage 4 — Decompose `build_wealth_page` (PARTIALLY DONE)
 
-Goal: separate UI concerns currently fused in one 885-line closure.
+Goal: separate UI concerns currently fused in one ~885-line closure.
 
-Proposed split:
-- `ui_state.py` — load/save/normalise/coerce the persisted state (pure).
-- `ui_forms.py` — build the input widgets (profile, assets, withdrawal, pension).
-- `ui_controller.py` — event handlers wiring widgets to the engine.
-- `ui.py` — thin composition root calling the above.
+Done:
+- `ui_state.py` — defaults, JSON persistence, coercion, row normalization, and
+  row→`Asset` conversion (pure, no NiceGUI; covered by `test_ui.py`).
+- `ui_view.py` — currency formatting, chart options, yearly display frame (pure).
+- `ui.py` now imports those helpers; the pure logic no longer lives alongside the
+  rendering closure. ui.py dropped from 1371 to ~930 lines (the remainder is the
+  `build_wealth_page` closure, not yet split).
 
-Because NiceGUI rendering is hard to unit-test, push all logic out of the rendering
-closures into the pure modules above (which are tested), leaving the closures as
-thin glue. Verify interactively (`mise run app`) after each extraction.
+Verified with a live smoke test: `mise run app` (here, a backgrounded launch +
+`curl /`) returns HTTP 200 and renders the full form server-side for both the
+default and cached-state paths.
 
-## Stage 5 — Finish type-safety pass (PLANNED)
+Remaining (still PLANNED): split the closure itself into form-builder and
+controller layers so the event handlers become independently testable. This needs
+interactive verification per extraction and is deferred to keep each step safe.
 
-- Replace `compute_tax(relationship: str)` with `compute_tax(relationship:
-  InheritanceRelationship)` end-to-end, removing the runtime string map and the
-  re-validation in `forecast.py`.
-- Decide the fate of template scaffolding (`greet.py` / `finev-version`): either
-  remove, or replace the fragile `parents[2]` version lookup with
-  `importlib.metadata.version("finev")`.
+## Stage 5 — Finish type-safety pass (DONE)
+
+- `compute_tax` now takes `InheritanceRelationship` (enum-keyed map); `forecast.py`
+  carries the enum through `inheritance_events`. StrEnum keeps the string-keyed
+  config tests valid.
+- `greet.py` uses `importlib.metadata.version("finev")` with a fallback, replacing
+  the fragile `parents[2]` lookup.
 
 ## Exit criteria
 

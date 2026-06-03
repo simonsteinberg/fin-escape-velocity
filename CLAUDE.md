@@ -29,7 +29,9 @@ presentation only and must not contain domain math.
 | `config.py` | Loads and validates `config.json` — static German tax parameters (Abgeltungssteuer, Soli, Erbschaftsteuer brackets by heir class, DRV constants) |
 | `forecast.py` | Core calculation engine — deterministic monthly projection using the above models; returns a pandas DataFrame |
 | `pension.py` | Pure DRV state-pension estimate helpers (display-only figures); no I/O, no UI |
-| `ui.py` | NiceGUI page: form inputs for profile/assets/withdrawal/pension and forecast chart display; calls the engine modules |
+| `ui_state.py` | Pure UI state: defaults, JSON persistence, coercion, row normalization, and row→`Asset` conversion; no NiceGUI dependency |
+| `ui_view.py` | Pure UI presentation helpers: currency formatting, chart options, yearly display frame; no NiceGUI dependency |
+| `ui.py` | NiceGUI page composition (`build_wealth_page`): builds widgets and binds event handlers; delegates all logic to the engine and `ui_state`/`ui_view` |
 | `app.py` | NiceGUI server launcher; auto-selects a free port in 8081–8130; respects `WEALTH_APP_PORT` env var |
 | `cli.py` | Console entry point: builds a default scenario and prints yearly totals |
 

@@ -89,6 +89,8 @@ mise run setup-repo -- workflow_engine
 - `pension.py`: Pure DRV state-pension estimate helpers (display-only).
 - `models.py`: Domain models and defaults.
 - `config.py`: Loads and validates `config.json` tax parameters.
+- `ui_state.py`: Pure UI state — defaults, persistence, coercion, row→Asset.
+- `ui_view.py`: Pure UI presentation helpers (formatting, chart, display frame).
 - `ui.py`: NiceGUI page composition.
 - `app.py`: NiceGUI server entrypoint.
 

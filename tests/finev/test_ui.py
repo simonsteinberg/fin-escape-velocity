@@ -2,16 +2,32 @@ import pandas as pd
 import pytest
 
 from finev.models import DEFAULT_ANNUAL_GAIN_RATES, AssetType, BAVStrategy
-from finev.ui import (
-    _asset_from_row,
-    _build_chart_options,
-    _default_asset_rows,
-    _default_withdrawal_state,
-    _format_currency,
-    _load_cached_state,
-    _normalize_asset_row,
-    _save_cached_state,
-    _yearly_display_frame,
+from finev.ui_state import (
+    asset_from_row as _asset_from_row,
+)
+from finev.ui_state import (
+    default_asset_rows as _default_asset_rows,
+)
+from finev.ui_state import (
+    default_withdrawal_state as _default_withdrawal_state,
+)
+from finev.ui_state import (
+    load_cached_state as _load_cached_state,
+)
+from finev.ui_state import (
+    normalize_asset_row as _normalize_asset_row,
+)
+from finev.ui_state import (
+    save_cached_state as _save_cached_state,
+)
+from finev.ui_view import (
+    build_chart_options as _build_chart_options,
+)
+from finev.ui_view import (
+    format_currency as _format_currency,
+)
+from finev.ui_view import (
+    yearly_display_frame as _yearly_display_frame,
 )
 
 
