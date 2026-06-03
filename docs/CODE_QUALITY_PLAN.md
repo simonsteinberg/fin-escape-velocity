@@ -83,9 +83,25 @@ Verified with a live smoke test: `mise run app` (here, a backgrounded launch +
 `curl /`) returns HTTP 200 and renders the full form server-side for both the
 default and cached-state paths.
 
-Remaining (still PLANNED): split the closure itself into form-builder and
-controller layers so the event handlers become independently testable. This needs
-interactive verification per extraction and is deferred to keep each step safe.
+Closure slimming (second pass, DONE):
+- Pure forecast-output transforms moved to `ui_view`: `asset_value_columns`,
+  `forecast_table_columns`, `chart_series` (tested in `test_ui_view.py`).
+- Asset-row field logic moved to `ui_state`: `apply_type_change_defaults`,
+  `coerce_asset_field`, `new_asset_row` (tested in `test_ui_state.py`); the
+  `update_asset_row`/`add_asset_row` handlers now delegate to them.
+- The ~290-line per-row renderer is extracted to a module-level
+  `_render_asset_row(index, row, on_field_change, on_remove)`; the in-closure
+  `render_asset_rows` is now a 6-line loop.
+- ui.py is down from 1371 to ~870 lines; total coverage rose to ~68%.
+
+Verified live (default + cached-state + inheritance render branches return HTTP
+200 with no server errors), plus unit tests for all extracted logic.
+
+Remaining (still PLANNED): the residual closure is widget construction plus the
+scheduling/reset/forecast wiring — inherently UI glue. Converting it to a
+`_WealthPage` controller class would make the remaining event handlers unit-
+testable; deferred because curl cannot exercise the interactive handlers, so it
+needs per-step interactive verification.
 
 ## Stage 5 — Finish type-safety pass (DONE)
 

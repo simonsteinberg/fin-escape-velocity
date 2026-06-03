@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Callable
 from typing import Any
 
 from nicegui import ui
@@ -25,16 +26,19 @@ from finev.pension import (
     estimate_pension_at_start,
 )
 from finev.ui_state import (
+    apply_type_change_defaults as _apply_type_change_defaults,
+)
+from finev.ui_state import (
     asset_from_row as _asset_from_row,
 )
 from finev.ui_state import (
     clear_cached_state as _clear_cached_state,
 )
 from finev.ui_state import (
-    default_asset_rows as _default_asset_rows,
+    coerce_asset_field as _coerce_asset_field,
 )
 from finev.ui_state import (
-    default_gain_pct as _default_gain_pct,
+    default_asset_rows as _default_asset_rows,
 )
 from finev.ui_state import (
     default_profile_state as _default_profile_state,
@@ -55,13 +59,25 @@ from finev.ui_state import (
     load_withdrawal_state as _load_withdrawal_state,
 )
 from finev.ui_state import (
+    new_asset_row as _new_asset_row,
+)
+from finev.ui_state import (
     normalize_asset_row as _normalize_asset_row,
 )
 from finev.ui_state import (
     save_cached_state as _save_cached_state,
 )
 from finev.ui_view import (
+    asset_value_columns as _asset_value_columns,
+)
+from finev.ui_view import (
     build_chart_options as _build_chart_options,
+)
+from finev.ui_view import (
+    chart_series as _chart_series,
+)
+from finev.ui_view import (
+    forecast_table_columns as _forecast_table_columns,
 )
 from finev.ui_view import (
     format_currency as _format_currency,
@@ -69,6 +85,240 @@ from finev.ui_view import (
 from finev.ui_view import (
     yearly_display_frame as _yearly_display_frame,
 )
+
+
+def _render_asset_row(
+    index: int,
+    row: dict[str, Any],
+    on_field_change: Callable[[int, str, Any], None],
+    on_remove: Callable[[int], None],
+) -> None:
+    """Render the widgets for one asset row into the current container.
+
+    Args:
+        index: Position of the row (passed back to the callbacks).
+        row: The asset row data to render.
+        on_field_change: Called as ``(index, field, value)`` when an input
+            changes.
+        on_remove: Called as ``(index,)`` when the delete button is pressed.
+    """
+    with ui.column().classes("w-full gap-1 p-2 border rounded"):
+        with ui.row().classes("w-full gap-2 items-center"):
+            asset_type = AssetType(str(row.get("type")))
+            current_value = float(row.get("current_value") or 0)
+            # Active toggle (hide/show) for what-if scenarios
+            ui.button(
+                icon=(
+                    "visibility"
+                    if row.get("active", True)
+                    else "visibility_off"
+                ),
+                on_click=lambda e, i=index: on_field_change(
+                    i,
+                    "active",
+                    not row.get("active", True),
+                ),
+            ).props("dense flat")
+            ui.input(
+                label="Name",
+                value=row["name"],
+                on_change=lambda e, i=index: on_field_change(
+                    i, "name", e.value
+                ),
+            ).classes("flex-1")
+            ui.select(
+                options=[item.value for item in AssetType],
+                value=row["type"],
+                label="Type",
+                on_change=lambda e, i=index: on_field_change(
+                    i, "type", e.value
+                ),
+            ).classes("w-28")
+            ui.button(
+                icon="delete",
+                on_click=lambda i=index: on_remove(i),
+            ).props("dense flat color=red")
+        if asset_type == AssetType.INHERITANCE:
+            _inheritance_relationship_labels = {
+                InheritanceRelationship.EHEGATTE.value: "Ehegatte / Lebenspartner (I, 500 K€)",
+                InheritanceRelationship.KIND.value: "Kind / Stiefkind (I, 400 K€)",
+                InheritanceRelationship.ENKEL.value: "Enkel (I, 200 K€)",
+                InheritanceRelationship.ELTERNTEIL.value: "Elternteil (I, 100 K€)",
+                InheritanceRelationship.KLASSE_II.value: "Geschwister / Nichte / Neffe (II, 20 K€)",
+                InheritanceRelationship.KLASSE_III.value: "Sonstige (III, 20 K€)",
+            }
+            with ui.grid(columns=2).classes("w-full gap-2"):
+                ui.number(
+                    label="Gross amount",
+                    value=row.get("inheritance_gross_amount") or 0,
+                    format="%.0f",
+                    min=0,
+                    step=10000,
+                    on_change=lambda e, i=index: on_field_change(
+                        i,
+                        "inheritance_gross_amount",
+                        e.value,
+                    ),
+                ).classes("w-full")
+                ui.number(
+                    label="Age at receipt",
+                    value=row.get("inheritance_age") or 67,
+                    format="%.0f",
+                    min=0,
+                    step=1,
+                    on_change=lambda e, i=index: on_field_change(
+                        i,
+                        "inheritance_age",
+                        e.value,
+                    ),
+                ).classes("w-full")
+            ui.select(
+                options=_inheritance_relationship_labels,
+                value=row.get(
+                    "inheritance_relationship",
+                    InheritanceRelationship.KIND.value,
+                ),
+                label="Relationship",
+                on_change=lambda e, i=index: on_field_change(
+                    i,
+                    "inheritance_relationship",
+                    e.value,
+                ),
+            ).classes("w-full")
+        else:
+            with ui.grid(columns=2).classes("w-full gap-2"):
+                ui.number(
+                    label="Current value",
+                    value=row["current_value"],
+                    format="%.0f",
+                    min=0,
+                    step=10000,
+                    on_change=lambda e, i=index: on_field_change(
+                        i,
+                        "current_value",
+                        e.value,
+                    ),
+                ).classes("w-full")
+                ui.number(
+                    label="Unrealized gains",
+                    value=row.get("unrealized_gains") or 0,
+                    format="%.0f",
+                    min=0,
+                    max=current_value,
+                    step=10000,
+                    on_change=lambda e, i=index: on_field_change(
+                        i,
+                        "unrealized_gains",
+                        e.value,
+                    ),
+                ).classes("w-full")
+                ui.number(
+                    label="Annual gain (%)",
+                    value=row["annual_gain_rate_pct"],
+                    format="%.1f",
+                    step=0.1,
+                    on_change=lambda e, i=index: on_field_change(
+                        i,
+                        "annual_gain_rate_pct",
+                        e.value,
+                    ),
+                ).classes("w-full")
+                ui.number(
+                    label="Monthly contribution",
+                    value=row["monthly_contribution"],
+                    format="%.0f",
+                    min=0,
+                    step=50,
+                    on_change=lambda e, i=index: on_field_change(
+                        i,
+                        "monthly_contribution",
+                        e.value,
+                    ),
+                ).classes("w-full")
+            if asset_type == AssetType.BAV:
+                with ui.column().classes("w-full gap-2"):
+                    ui.select(
+                        options={
+                            BAVStrategy.TRANSFER.value: (
+                                "Transfer to ETF/Cash"
+                            ),
+                            BAVStrategy.INCOME.value: ("Monthly gains income"),
+                        },
+                        value=row.get(
+                            "bav_strategy",
+                            BAVStrategy.TRANSFER.value,
+                        ),
+                        label="bAV mode",
+                        on_change=lambda e, i=index: on_field_change(
+                            i,
+                            "bav_strategy",
+                            e.value,
+                        ),
+                    ).classes("w-full")
+                    if row.get("bav_strategy") == (BAVStrategy.TRANSFER.value):
+                        with ui.row().classes("w-full gap-2"):
+                            ui.number(
+                                label="Transfer start age",
+                                value=row.get(
+                                    "bav_transfer_start_age",
+                                    67,
+                                ),
+                                format="%.0f",
+                                min=0,
+                                step=1,
+                                on_change=lambda e, i=index: on_field_change(
+                                    i,
+                                    "bav_transfer_start_age",
+                                    e.value,
+                                ),
+                            ).classes("w-32")
+                            ui.number(
+                                label="Transfer end age",
+                                value=row.get(
+                                    "bav_transfer_end_age",
+                                    72,
+                                ),
+                                format="%.0f",
+                                min=0,
+                                step=1,
+                                on_change=lambda e, i=index: on_field_change(
+                                    i,
+                                    "bav_transfer_end_age",
+                                    e.value,
+                                ),
+                            ).classes("w-32")
+                            ui.number(
+                                label="ETF share (%)",
+                                value=row.get(
+                                    "bav_transfer_etf_ratio_pct",
+                                    50.0,
+                                ),
+                                format="%.0f",
+                                min=0,
+                                max=100,
+                                step=5,
+                                on_change=lambda e, i=index: on_field_change(
+                                    i,
+                                    "bav_transfer_etf_ratio_pct",
+                                    e.value,
+                                ),
+                            ).classes("w-28")
+                    elif row.get("bav_strategy") == (BAVStrategy.INCOME.value):
+                        ui.number(
+                            label="Withdraw start age",
+                            value=row.get(
+                                "bav_transfer_start_age",
+                                67,
+                            ),
+                            format="%.0f",
+                            min=0,
+                            step=1,
+                            on_change=lambda e, i=index: on_field_change(
+                                i,
+                                "bav_transfer_start_age",
+                                e.value,
+                            ),
+                        ).classes("w-32")
 
 
 def build_wealth_page() -> None:
@@ -128,61 +378,8 @@ def build_wealth_page() -> None:
         """
         current_row = asset_rows[index]
         if field == "type":
-            previous_type = AssetType(str(current_row.get("type")))
-            new_type = AssetType(str(value))
-            if new_type != AssetType.INHERITANCE:
-                current_default = (
-                    _default_gain_pct(previous_type)
-                    if previous_type != AssetType.INHERITANCE
-                    else _default_gain_pct(new_type)
-                )
-                if current_row.get("annual_gain_rate_pct") in (
-                    None,
-                    "",
-                    current_default,
-                ):
-                    current_row["annual_gain_rate_pct"] = _default_gain_pct(
-                        new_type
-                    )
-                if current_row.get("unrealized_gains") in (None, ""):
-                    current_row["unrealized_gains"] = 0.0
-                if current_row.get("bav_strategy") in (None, ""):
-                    current_row["bav_strategy"] = BAVStrategy.TRANSFER.value
-                if current_row.get("bav_transfer_start_age") in (None, ""):
-                    current_row["bav_transfer_start_age"] = 67
-                if current_row.get("bav_transfer_end_age") in (None, ""):
-                    current_row["bav_transfer_end_age"] = 72
-                if current_row.get("bav_transfer_etf_ratio_pct") in (None, ""):
-                    current_row["bav_transfer_etf_ratio_pct"] = 50.0
-            if current_row.get("inheritance_gross_amount") in (None, ""):
-                current_row["inheritance_gross_amount"] = 0.0
-            if current_row.get("inheritance_age") in (None, ""):
-                current_row["inheritance_age"] = 67
-            if current_row.get("inheritance_relationship") in (None, ""):
-                current_row["inheritance_relationship"] = (
-                    InheritanceRelationship.KIND.value
-                )
-        if field == "bav_strategy":
-            try:
-                value = BAVStrategy(str(value)).value
-            except ValueError:
-                value = BAVStrategy.TRANSFER.value
-        if field == "inheritance_relationship":
-            try:
-                value = InheritanceRelationship(str(value)).value
-            except ValueError:
-                value = InheritanceRelationship.KIND.value
-        if field == "inheritance_gross_amount":
-            value = max(float(value or 0), 0.0)
-        if field == "inheritance_age":
-            value = max(int(value or 0), 0)
-        if field == "unrealized_gains":
-            current_value = float(current_row.get("current_value") or 0)
-            value = max(min(float(value or 0), current_value), 0.0)
-        if field in {"bav_transfer_start_age", "bav_transfer_end_age"}:
-            value = max(int(value or 0), 0)
-        if field == "bav_transfer_etf_ratio_pct":
-            value = max(min(float(value or 0), 100.0), 0.0)
+            _apply_type_change_defaults(current_row, AssetType(str(value)))
+        value = _coerce_asset_field(current_row, field, value)
         if field == "current_value":
             unrealized_gains = float(current_row.get("unrealized_gains") or 0)
             current_row["unrealized_gains"] = min(
@@ -215,24 +412,7 @@ def build_wealth_page() -> None:
 
     def add_asset_row() -> None:
         """Append a new blank asset row."""
-        asset_rows.append(
-            {
-                "name": "New asset",
-                "type": AssetType.ETF.value,
-                "current_value": 0.0,
-                "unrealized_gains": 0.0,
-                "annual_gain_rate_pct": _default_gain_pct(AssetType.ETF),
-                "monthly_contribution": 0.0,
-                "active": True,
-                "bav_strategy": BAVStrategy.TRANSFER.value,
-                "bav_transfer_start_age": 67,
-                "bav_transfer_end_age": 72,
-                "bav_transfer_etf_ratio_pct": 50.0,
-                "inheritance_gross_amount": 0.0,
-                "inheritance_age": 67,
-                "inheritance_relationship": InheritanceRelationship.KIND.value,
-            }
-        )
+        asset_rows.append(_new_asset_row())
         render_asset_rows()
         run_immediate()
 
@@ -417,297 +597,12 @@ def build_wealth_page() -> None:
                         assets_container.clear()
                         for index, row in enumerate(asset_rows):
                             with assets_container:
-                                with ui.column().classes(
-                                    "w-full gap-1 p-2 border rounded"
-                                ):
-                                    with ui.row().classes(
-                                        "w-full gap-2 items-center"
-                                    ):
-                                        asset_type = AssetType(
-                                            str(row.get("type"))
-                                        )
-                                        current_value = float(
-                                            row.get("current_value") or 0
-                                        )
-                                        # Active toggle (hide/show) for what-if scenarios
-                                        ui.button(
-                                            icon=(
-                                                "visibility"
-                                                if row.get("active", True)
-                                                else "visibility_off"
-                                            ),
-                                            on_click=lambda e, i=index: (
-                                                update_asset_row(
-                                                    i,
-                                                    "active",
-                                                    not asset_rows[i].get(
-                                                        "active", True
-                                                    ),
-                                                )
-                                            ),
-                                        ).props("dense flat")
-                                        ui.input(
-                                            label="Name",
-                                            value=row["name"],
-                                            on_change=lambda e, i=index: (
-                                                update_asset_row(
-                                                    i, "name", e.value
-                                                )
-                                            ),
-                                        ).classes("flex-1")
-                                        ui.select(
-                                            options=[
-                                                item.value
-                                                for item in AssetType
-                                            ],
-                                            value=row["type"],
-                                            label="Type",
-                                            on_change=lambda e, i=index: (
-                                                update_asset_row(
-                                                    i, "type", e.value
-                                                )
-                                            ),
-                                        ).classes("w-28")
-                                        ui.button(
-                                            icon="delete",
-                                            on_click=lambda i=index: (
-                                                remove_asset_row(i)
-                                            ),
-                                        ).props("dense flat color=red")
-                                    if asset_type == AssetType.INHERITANCE:
-                                        _inheritance_relationship_labels = {
-                                            InheritanceRelationship.EHEGATTE.value: "Ehegatte / Lebenspartner (I, 500 K€)",
-                                            InheritanceRelationship.KIND.value: "Kind / Stiefkind (I, 400 K€)",
-                                            InheritanceRelationship.ENKEL.value: "Enkel (I, 200 K€)",
-                                            InheritanceRelationship.ELTERNTEIL.value: "Elternteil (I, 100 K€)",
-                                            InheritanceRelationship.KLASSE_II.value: "Geschwister / Nichte / Neffe (II, 20 K€)",
-                                            InheritanceRelationship.KLASSE_III.value: "Sonstige (III, 20 K€)",
-                                        }
-                                        with ui.grid(columns=2).classes(
-                                            "w-full gap-2"
-                                        ):
-                                            ui.number(
-                                                label="Gross amount",
-                                                value=row.get(
-                                                    "inheritance_gross_amount"
-                                                )
-                                                or 0,
-                                                format="%.0f",
-                                                min=0,
-                                                step=10000,
-                                                on_change=lambda e, i=index: (
-                                                    update_asset_row(
-                                                        i,
-                                                        "inheritance_gross_amount",
-                                                        e.value,
-                                                    )
-                                                ),
-                                            ).classes("w-full")
-                                            ui.number(
-                                                label="Age at receipt",
-                                                value=row.get(
-                                                    "inheritance_age"
-                                                )
-                                                or 67,
-                                                format="%.0f",
-                                                min=0,
-                                                step=1,
-                                                on_change=lambda e, i=index: (
-                                                    update_asset_row(
-                                                        i,
-                                                        "inheritance_age",
-                                                        e.value,
-                                                    )
-                                                ),
-                                            ).classes("w-full")
-                                        ui.select(
-                                            options=_inheritance_relationship_labels,
-                                            value=row.get(
-                                                "inheritance_relationship",
-                                                InheritanceRelationship.KIND.value,
-                                            ),
-                                            label="Relationship",
-                                            on_change=lambda e, i=index: (
-                                                update_asset_row(
-                                                    i,
-                                                    "inheritance_relationship",
-                                                    e.value,
-                                                )
-                                            ),
-                                        ).classes("w-full")
-                                    else:
-                                        with ui.grid(columns=2).classes(
-                                            "w-full gap-2"
-                                        ):
-                                            ui.number(
-                                                label="Current value",
-                                                value=row["current_value"],
-                                                format="%.0f",
-                                                min=0,
-                                                step=10000,
-                                                on_change=lambda e, i=index: (
-                                                    update_asset_row(
-                                                        i,
-                                                        "current_value",
-                                                        e.value,
-                                                    )
-                                                ),
-                                            ).classes("w-full")
-                                            ui.number(
-                                                label="Unrealized gains",
-                                                value=row.get(
-                                                    "unrealized_gains"
-                                                )
-                                                or 0,
-                                                format="%.0f",
-                                                min=0,
-                                                max=current_value,
-                                                step=10000,
-                                                on_change=lambda e, i=index: (
-                                                    update_asset_row(
-                                                        i,
-                                                        "unrealized_gains",
-                                                        e.value,
-                                                    )
-                                                ),
-                                            ).classes("w-full")
-                                            ui.number(
-                                                label="Annual gain (%)",
-                                                value=row[
-                                                    "annual_gain_rate_pct"
-                                                ],
-                                                format="%.1f",
-                                                step=0.1,
-                                                on_change=lambda e, i=index: (
-                                                    update_asset_row(
-                                                        i,
-                                                        "annual_gain_rate_pct",
-                                                        e.value,
-                                                    )
-                                                ),
-                                            ).classes("w-full")
-                                            ui.number(
-                                                label="Monthly contribution",
-                                                value=row[
-                                                    "monthly_contribution"
-                                                ],
-                                                format="%.0f",
-                                                min=0,
-                                                step=50,
-                                                on_change=lambda e, i=index: (
-                                                    update_asset_row(
-                                                        i,
-                                                        "monthly_contribution",
-                                                        e.value,
-                                                    )
-                                                ),
-                                            ).classes("w-full")
-                                        if asset_type == AssetType.BAV:
-                                            with ui.column().classes(
-                                                "w-full gap-2"
-                                            ):
-                                                ui.select(
-                                                    options={
-                                                        BAVStrategy.TRANSFER.value: (
-                                                            "Transfer to ETF/Cash"
-                                                        ),
-                                                        BAVStrategy.INCOME.value: (
-                                                            "Monthly gains income"
-                                                        ),
-                                                    },
-                                                    value=row.get(
-                                                        "bav_strategy",
-                                                        BAVStrategy.TRANSFER.value,
-                                                    ),
-                                                    label="bAV mode",
-                                                    on_change=lambda e, i=index: (
-                                                        update_asset_row(
-                                                            i,
-                                                            "bav_strategy",
-                                                            e.value,
-                                                        )
-                                                    ),
-                                                ).classes("w-full")
-                                                if row.get("bav_strategy") == (
-                                                    BAVStrategy.TRANSFER.value
-                                                ):
-                                                    with ui.row().classes(
-                                                        "w-full gap-2"
-                                                    ):
-                                                        ui.number(
-                                                            label="Transfer start age",
-                                                            value=row.get(
-                                                                "bav_transfer_start_age",
-                                                                67,
-                                                            ),
-                                                            format="%.0f",
-                                                            min=0,
-                                                            step=1,
-                                                            on_change=lambda e, i=index: (
-                                                                update_asset_row(
-                                                                    i,
-                                                                    "bav_transfer_start_age",
-                                                                    e.value,
-                                                                )
-                                                            ),
-                                                        ).classes("w-32")
-                                                        ui.number(
-                                                            label="Transfer end age",
-                                                            value=row.get(
-                                                                "bav_transfer_end_age",
-                                                                72,
-                                                            ),
-                                                            format="%.0f",
-                                                            min=0,
-                                                            step=1,
-                                                            on_change=lambda e, i=index: (
-                                                                update_asset_row(
-                                                                    i,
-                                                                    "bav_transfer_end_age",
-                                                                    e.value,
-                                                                )
-                                                            ),
-                                                        ).classes("w-32")
-                                                        ui.number(
-                                                            label="ETF share (%)",
-                                                            value=row.get(
-                                                                "bav_transfer_etf_ratio_pct",
-                                                                50.0,
-                                                            ),
-                                                            format="%.0f",
-                                                            min=0,
-                                                            max=100,
-                                                            step=5,
-                                                            on_change=lambda e, i=index: (
-                                                                update_asset_row(
-                                                                    i,
-                                                                    "bav_transfer_etf_ratio_pct",
-                                                                    e.value,
-                                                                )
-                                                            ),
-                                                        ).classes("w-28")
-                                                elif row.get(
-                                                    "bav_strategy"
-                                                ) == (
-                                                    BAVStrategy.INCOME.value
-                                                ):
-                                                    ui.number(
-                                                        label="Withdraw start age",
-                                                        value=row.get(
-                                                            "bav_transfer_start_age",
-                                                            67,
-                                                        ),
-                                                        format="%.0f",
-                                                        min=0,
-                                                        step=1,
-                                                        on_change=lambda e, i=index: (
-                                                            update_asset_row(
-                                                                i,
-                                                                "bav_transfer_start_age",
-                                                                e.value,
-                                                            )
-                                                        ),
-                                                    ).classes("w-32")
+                                _render_asset_row(
+                                    index,
+                                    row,
+                                    update_asset_row,
+                                    remove_asset_row,
+                                )
 
                     render_asset_rows()
 
@@ -837,65 +732,13 @@ def build_wealth_page() -> None:
                 rounded[numeric_columns].round(0).astype(int)
             )
 
-            columns = [
-                {
-                    "name": "year_index",
-                    "label": "Year",
-                    "field": "year_index",
-                    "sortable": True,
-                },
-                {
-                    "name": "age",
-                    "label": "Age",
-                    "field": "age",
-                    "sortable": False,
-                },
-                {
-                    "name": "net_cashflow",
-                    "label": "Net Cashflow p.m.",
-                    "field": "net_cashflow",
-                    "sortable": True,
-                },
-                {
-                    "name": "taxes",
-                    "label": "Taxes p.m.",
-                    "field": "taxes",
-                    "sortable": True,
-                },
-            ]
-            asset_columns = [
-                asset.name
-                for asset in assets
-                if asset.asset_type != AssetType.INHERITANCE
-            ] + ["total"]
-            for column in asset_columns:
-                columns.append(
-                    {
-                        "name": column,
-                        "label": column,
-                        "field": column,
-                        "sortable": True,
-                    }
-                )
-
-            table.columns = columns
+            asset_columns = _asset_value_columns(assets)
+            table.columns = _forecast_table_columns(asset_columns)
             table.rows = rounded.to_dict(orient="records")
             table.update()
 
-            series = []
-            for column in asset_columns:
-                series.append(
-                    {
-                        "name": column,
-                        "type": "line",
-                        "data": rounded[column].tolist(),
-                        "smooth": True,
-                        "showSymbol": False,
-                    }
-                )
-
             chart.options["xAxis"]["data"] = age_labels
-            chart.options["series"] = series
+            chart.options["series"] = _chart_series(rounded, asset_columns)
             chart.update()
 
             final_total = float(df["total"].iloc[-1])

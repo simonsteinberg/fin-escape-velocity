@@ -77,6 +77,26 @@ def default_asset_rows() -> list[dict[str, Any]]:
     ]
 
 
+def new_asset_row() -> dict[str, Any]:
+    """Return a blank asset row with sensible defaults (for 'Add asset')."""
+    return {
+        "name": "New asset",
+        "type": AssetType.ETF.value,
+        "current_value": 0.0,
+        "unrealized_gains": 0.0,
+        "annual_gain_rate_pct": default_gain_pct(AssetType.ETF),
+        "monthly_contribution": 0.0,
+        "active": True,
+        "bav_strategy": BAVStrategy.TRANSFER.value,
+        "bav_transfer_start_age": 67,
+        "bav_transfer_end_age": 72,
+        "bav_transfer_etf_ratio_pct": 50.0,
+        "inheritance_gross_amount": 0.0,
+        "inheritance_age": 67,
+        "inheritance_relationship": InheritanceRelationship.KIND.value,
+    }
+
+
 def state_path() -> Path:
     """Return the cache path for persisted UI state."""
     env_path = os.getenv("WEALTH_APP_STATE_PATH")
@@ -444,3 +464,80 @@ def asset_from_row(row: dict[str, Any]) -> Asset:
         bav_transfer_end_age=bav_transfer_end_age,
         bav_transfer_etf_ratio=bav_transfer_etf_ratio,
     )
+
+
+def apply_type_change_defaults(
+    row: dict[str, Any], new_type: AssetType
+) -> None:
+    """Fill in type-appropriate default fields when an asset's type changes.
+
+    Call this *before* writing the new type onto ``row`` (it reads the previous
+    type to decide whether the gain rate was left at its default and should
+    therefore track the new type's default).
+
+    Args:
+        row: The asset row being edited (mutated in place).
+        new_type: The asset type the row is changing to.
+    """
+    previous_type = AssetType(str(row.get("type")))
+    if new_type != AssetType.INHERITANCE:
+        current_default = (
+            default_gain_pct(previous_type)
+            if previous_type != AssetType.INHERITANCE
+            else default_gain_pct(new_type)
+        )
+        if row.get("annual_gain_rate_pct") in (None, "", current_default):
+            row["annual_gain_rate_pct"] = default_gain_pct(new_type)
+        if row.get("unrealized_gains") in (None, ""):
+            row["unrealized_gains"] = 0.0
+        if row.get("bav_strategy") in (None, ""):
+            row["bav_strategy"] = BAVStrategy.TRANSFER.value
+        if row.get("bav_transfer_start_age") in (None, ""):
+            row["bav_transfer_start_age"] = 67
+        if row.get("bav_transfer_end_age") in (None, ""):
+            row["bav_transfer_end_age"] = 72
+        if row.get("bav_transfer_etf_ratio_pct") in (None, ""):
+            row["bav_transfer_etf_ratio_pct"] = 50.0
+    if row.get("inheritance_gross_amount") in (None, ""):
+        row["inheritance_gross_amount"] = 0.0
+    if row.get("inheritance_age") in (None, ""):
+        row["inheritance_age"] = 67
+    if row.get("inheritance_relationship") in (None, ""):
+        row["inheritance_relationship"] = InheritanceRelationship.KIND.value
+
+
+def coerce_asset_field(row: dict[str, Any], field: str, value: Any) -> Any:
+    """Coerce and clamp a single edited asset-row field value.
+
+    Args:
+        row: The asset row being edited (read-only here; used to clamp
+            ``unrealized_gains`` against the row's current value).
+        field: The field being edited.
+        value: The raw incoming value.
+
+    Returns:
+        The coerced/clamped value to store for ``field`` (unchanged for fields
+        with no special handling).
+    """
+    if field == "bav_strategy":
+        try:
+            return BAVStrategy(str(value)).value
+        except ValueError:
+            return BAVStrategy.TRANSFER.value
+    if field == "inheritance_relationship":
+        try:
+            return InheritanceRelationship(str(value)).value
+        except ValueError:
+            return InheritanceRelationship.KIND.value
+    if field == "inheritance_gross_amount":
+        return max(float(value or 0), 0.0)
+    if field == "inheritance_age":
+        return max(int(value or 0), 0)
+    if field == "unrealized_gains":
+        current_value = float(row.get("current_value") or 0)
+        return max(min(float(value or 0), current_value), 0.0)
+    if field in {"bav_transfer_start_age", "bav_transfer_end_age"}:
+        return max(int(value or 0), 0)
+    if field == "bav_transfer_etf_ratio_pct":
+        return max(min(float(value or 0), 100.0), 0.0)
+    return value
