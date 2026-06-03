@@ -295,35 +295,59 @@ def _net_state_pension_for_month(
     return gross_monthly_pension * (1 - tax_rate)
 
 
-def forecast_wealth(
+@dataclass(frozen=True)
+class _EngineParams:
+    """Immutable per-run context shared by every monthly step.
+
+    Grouping the fixed inputs and derived lookups into one object keeps the step
+    functions to two arguments (params + mutable state) instead of a dozen.
+    """
+
+    profile: UserProfile
+    metadata: ForecastMetadata
+    withdrawal: WithdrawalPlan
+    config: FinevConfig
+    assets_list: list[Asset]
+    monthly_rates: list[float]
+    etf_indices: list[int]
+    cash_indices: list[int]
+    # Inheritance events as (age_in_months, gross_amount, relationship_key).
+    inheritance_events: list[tuple[int, float, str]]
+    etf_tax_rate: float
+    etf_taxable_share: float
+    etf_annual_allowance: float
+    bav_tax_rate: float
+
+
+@dataclass
+class _MonthlyState:
+    """Mutable state evolving across the monthly timeline.
+
+    ``balances``, ``cost_bases`` and ``remaining_etf_allowance`` carry over from
+    month to month. ``taxes`` and ``net_cashflow`` accumulate within a single
+    month and are reset by the caller at the start of each month.
+    """
+
+    balances: list[float]
+    cost_bases: list[float]
+    remaining_etf_allowance: float
+    taxes: float = 0.0
+    net_cashflow: float = 0.0
+
+
+def _build_engine_params(
     profile: UserProfile,
-    assets: Iterable[Asset],
-    withdrawal: WithdrawalPlan | None = None,
-) -> pd.DataFrame:
-    """Forecast monthly balances per asset and total.
-
-    Args:
-        profile: User profile values for the forecast.
-        assets: Asset definitions and cashflows.
-        withdrawal: Withdrawal configuration after retirement.
-
-    Returns:
-        DataFrame with monthly balances, net cashflow, taxes, and totals.
+    metadata: ForecastMetadata,
+    assets_list: list[Asset],
+    withdrawal: WithdrawalPlan,
+    config: FinevConfig,
+) -> _EngineParams:
+    """Build the immutable per-run context and validate cross-asset rules.
 
     Raises:
-        ValueError: If inputs are invalid.
+        ValueError: If a bAV transfer lacks a required ETF or Cash target.
     """
-    metadata = _validate_profile(profile)
-    assets_list = _validate_assets(assets)
-    withdrawal = withdrawal or WithdrawalPlan()
-    _validate_withdrawal(withdrawal)
-    config = get_config()
-    etf_tax_rate = config.capital_gains_tax_rate
-    etf_taxable_share = config.etf.taxable_share
-    etf_annual_allowance = config.etf.steuerfreibetrag_euro
-    bav_tax_rate = config.capital_gains_tax_rate
-
-    # Only consider active assets for allocation targets and transfer validations
+    # Only consider active assets for allocation targets and transfer checks.
     etf_indices = [
         index
         for index, asset in enumerate(assets_list)
@@ -341,7 +365,6 @@ def forecast_wealth(
         and asset.active
         and BAVStrategy(asset.bav_strategy) == BAVStrategy.TRANSFER
     ]
-    # Pre-compute inheritance events: (age_months, gross_amount, relationship)
     inheritance_events: list[tuple[int, float, str]] = [
         (
             asset.inheritance_age * 12,
@@ -365,302 +388,449 @@ def forecast_wealth(
         ):
             raise ValueError("bAV transfer requires at least one Cash asset")
 
-    months = metadata.end_age_months - metadata.start_age_months
     monthly_rates = [
         _annual_to_monthly_rate(asset.effective_annual_gain_rate())
         for asset in assets_list
     ]
-    # INHERITANCE assets hold no running balance; ETF/Cash/bAV start at current_value.
-    # Treat inactive assets as zeroed for forecasting calculations.
+    return _EngineParams(
+        profile=profile,
+        metadata=metadata,
+        withdrawal=withdrawal,
+        config=config,
+        assets_list=assets_list,
+        monthly_rates=monthly_rates,
+        etf_indices=etf_indices,
+        cash_indices=cash_indices,
+        inheritance_events=inheritance_events,
+        etf_tax_rate=config.capital_gains_tax_rate,
+        etf_taxable_share=config.etf.taxable_share,
+        etf_annual_allowance=config.etf.steuerfreibetrag_euro,
+        bav_tax_rate=config.capital_gains_tax_rate,
+    )
+
+
+def _initial_state(
+    params: _EngineParams,
+) -> _MonthlyState:
+    """Build the starting balances and cost bases for the forecast.
+
+    INHERITANCE assets hold no running balance; inactive assets are zeroed.
+    """
     balances = [
         float(asset.current_value)
         if asset.active and asset.asset_type != AssetType.INHERITANCE
         else 0.0
-        for asset in assets_list
+        for asset in params.assets_list
     ]
     cost_bases = [
         float(asset.effective_cost_basis())
         if asset.active and asset.asset_type != AssetType.INHERITANCE
         else 0.0
-        for asset in assets_list
+        for asset in params.assets_list
+    ]
+    return _MonthlyState(
+        balances=balances,
+        cost_bases=cost_bases,
+        remaining_etf_allowance=params.etf_annual_allowance,
+    )
+
+
+def _apply_inheritance(
+    params: _EngineParams,
+    state: _MonthlyState,
+    age_months: int,
+) -> None:
+    """Credit net inheritance proceeds due this month to ETF (then Cash)."""
+    for (
+        inh_age_months,
+        gross_amount,
+        relationship,
+    ) in params.inheritance_events:
+        if age_months != inh_age_months:
+            continue
+        inh_tax = params.config.inheritance_tax.compute_tax(
+            gross_amount, relationship
+        )
+        net_amount = gross_amount - inh_tax
+        state.taxes += inh_tax
+        state.net_cashflow += net_amount
+        # Distribute net proceeds to ETF assets first, Cash as fallback.
+        targets = params.etf_indices or params.cash_indices
+        for target_idx, allocation in _allocate_amount(
+            net_amount, targets, state.balances
+        ):
+            state.balances[target_idx] += allocation
+            state.cost_bases[target_idx] += allocation
+
+
+def _apply_contributions(
+    params: _EngineParams,
+    state: _MonthlyState,
+) -> None:
+    """Add monthly contributions to each active, non-inheritance asset."""
+    contributions = [
+        float(asset.monthly_contribution)
+        if asset.active and asset.asset_type != AssetType.INHERITANCE
+        else 0.0
+        for asset in params.assets_list
+    ]
+    state.balances = [
+        balance + contribution
+        for balance, contribution in zip(
+            state.balances, contributions, strict=True
+        )
+    ]
+    state.cost_bases = [
+        cost_basis + contribution
+        for cost_basis, contribution in zip(
+            state.cost_bases, contributions, strict=True
+        )
+    ]
+    state.net_cashflow += float(sum(contributions))
+
+
+def _withdrawable_indices(
+    params: _EngineParams,
+    age_months: int,
+) -> list[int]:
+    """Return indices of assets withdrawable at this age.
+
+    ETFs and Cash are always withdrawable; bAV becomes withdrawable once its
+    configured transfer/withdraw start age has been reached.
+    """
+    return [
+        i
+        for i, asset in enumerate(params.assets_list)
+        if asset.active
+        and (
+            asset.asset_type in (AssetType.ETF, AssetType.CASH)
+            or (
+                asset.asset_type == AssetType.BAV
+                and age_months >= asset.bav_transfer_start_age * 12
+            )
+        )
     ]
 
+
+def _gross_up_withdrawal(
+    params: _EngineParams,
+    state: _MonthlyState,
+    withdrawable_indices: list[int],
+    withdrawal_target: float,
+    total_balance: float,
+) -> float:
+    """Return the gross withdrawal that nets ``withdrawal_target`` after ETF tax.
+
+    The net target must be grossed up to cover ETF capital-gains tax on the
+    taxable gains portion of the withdrawal, accounting for any remaining annual
+    tax-free allowance.
+    """
+    taxable_gains_ratio = 0.0
+    # Only withdrawable ETFs with positive gains contribute taxable gains.
+    for i in withdrawable_indices:
+        asset = params.assets_list[i]
+        balance = state.balances[i]
+        cost_basis = state.cost_bases[i]
+        if asset.asset_type != AssetType.ETF or balance <= 0:
+            continue
+        gains = balance - cost_basis
+        if gains <= 0:
+            continue
+        gains_ratio = gains / balance
+        taxable_gains_ratio += (
+            (balance / total_balance) * gains_ratio * params.etf_taxable_share
+        )
+
+    gross_target = withdrawal_target
+    if taxable_gains_ratio > 0 and params.etf_tax_rate > 0:
+        if state.remaining_etf_allowance > 0:
+            allowance_threshold = (
+                state.remaining_etf_allowance / taxable_gains_ratio
+            )
+            if withdrawal_target > allowance_threshold:
+                numerator = withdrawal_target - (
+                    params.etf_tax_rate * state.remaining_etf_allowance
+                )
+                denominator = 1 - params.etf_tax_rate * taxable_gains_ratio
+                gross_target = (
+                    numerator / denominator
+                    if denominator > 0
+                    else total_balance
+                )
+        else:
+            denominator = 1 - params.etf_tax_rate * taxable_gains_ratio
+            gross_target = (
+                withdrawal_target / denominator
+                if denominator > 0
+                else total_balance
+            )
+    return gross_target
+
+
+def _apply_withdrawal(
+    params: _EngineParams,
+    state: _MonthlyState,
+    age_months: int,
+) -> None:
+    """Withdraw the inflated net target proportionally across assets, after tax.
+
+    The net monthly target is inflated to the current month and reduced by the
+    net state pension, grossed up for ETF tax, then allocated by balance weight
+    across the withdrawable assets.
+    """
+    months_since_start = age_months - params.metadata.start_age_months
+    inflation_multiplier = _inflation_multiplier(
+        params.profile.average_inflation_rate, months_since_start
+    )
+    withdrawal_target = (
+        float(params.withdrawal.monthly_withdrawal) * inflation_multiplier
+    )
+    withdrawal_target = max(
+        withdrawal_target
+        - _net_state_pension_for_month(
+            profile=params.profile,
+            metadata=params.metadata,
+            state_pension=params.withdrawal.state_pension,
+            age_months=age_months,
+            config=params.config,
+        ),
+        0.0,
+    )
+    withdrawable_indices = _withdrawable_indices(params, age_months)
+    total_balance = (
+        float(sum(state.balances[i] for i in withdrawable_indices))
+        if withdrawable_indices
+        else 0.0
+    )
+    if not (withdrawal_target > 0 and total_balance > 0):
+        return
+
+    gross_target = _gross_up_withdrawal(
+        params, state, withdrawable_indices, withdrawal_target, total_balance
+    )
+    actual_withdrawn = min(gross_target, total_balance)
+    new_balances: list[float] = []
+    new_cost_bases: list[float] = []
+    etf_taxable_gains = 0.0
+    # Allocate withdrawals proportionally across withdrawable assets only.
+    for i, (asset, balance, cost_basis) in enumerate(
+        zip(params.assets_list, state.balances, state.cost_bases, strict=True)
+    ):
+        if i not in withdrawable_indices or balance <= 0:
+            # Asset is not withdrawable now; keep as is.
+            new_balances.append(balance)
+            new_cost_bases.append(max(cost_basis, 0.0))
+            continue
+
+        asset_withdrawal = actual_withdrawn * (balance / total_balance)
+        withdrawal_ratio = asset_withdrawal / balance if balance > 0 else 0.0
+        new_balance = max(balance - asset_withdrawal, 0.0)
+        cost_basis_reduction = cost_basis * withdrawal_ratio
+        new_cost_basis = max(cost_basis - cost_basis_reduction, 0.0)
+
+        if asset.asset_type == AssetType.ETF:
+            gains = balance - cost_basis
+            if gains > 0:
+                gains_portion = asset_withdrawal * (gains / balance)
+                etf_taxable_gains += gains_portion * params.etf_taxable_share
+
+        new_balances.append(new_balance)
+        new_cost_bases.append(new_cost_basis)
+
+    state.balances = new_balances
+    state.cost_bases = new_cost_bases
+    allowance_used = min(state.remaining_etf_allowance, etf_taxable_gains)
+    taxable_after_allowance = etf_taxable_gains - allowance_used
+    withdrawal_taxes = taxable_after_allowance * params.etf_tax_rate
+    state.remaining_etf_allowance -= allowance_used
+    state.taxes += withdrawal_taxes
+    state.net_cashflow += -actual_withdrawn + withdrawal_taxes
+
+
+def _apply_bav_transfer(
+    params: _EngineParams,
+    state: _MonthlyState,
+    age_months: int,
+) -> None:
+    """Transfer a slice of each in-window bAV (TRANSFER) balance to ETF/Cash."""
+    for index, asset in enumerate(params.assets_list):
+        if not asset.active:
+            continue
+        if not (
+            asset.asset_type == AssetType.BAV
+            and BAVStrategy(asset.bav_strategy) == BAVStrategy.TRANSFER
+        ):
+            continue
+        start_months = asset.bav_transfer_start_age * 12
+        end_months = (asset.bav_transfer_end_age + 1) * 12 - 1
+        if not (start_months <= age_months <= end_months):
+            continue
+        remaining_months = end_months - age_months + 1
+        if remaining_months <= 0:
+            continue
+        transfer_fraction = 1 / remaining_months
+        gross_transfer = state.balances[index] * transfer_fraction
+        if gross_transfer <= 0:
+            continue
+        cost_basis_transfer = state.cost_bases[index] * transfer_fraction
+        gains = gross_transfer - cost_basis_transfer
+        tax = params.bav_tax_rate * max(gains, 0.0)
+        state.taxes += tax
+        state.net_cashflow -= tax
+        net_transfer = gross_transfer - tax
+        etf_amount = net_transfer * asset.bav_transfer_etf_ratio
+        cash_amount = net_transfer - etf_amount
+        for target_index, allocation in _allocate_amount(
+            etf_amount, params.etf_indices, state.balances
+        ):
+            state.balances[target_index] += allocation
+            state.cost_bases[target_index] += allocation
+        for target_index, allocation in _allocate_amount(
+            cash_amount, params.cash_indices, state.balances
+        ):
+            state.balances[target_index] += allocation
+            state.cost_bases[target_index] += allocation
+        state.balances[index] -= gross_transfer
+        state.cost_bases[index] = max(
+            state.cost_bases[index] - cost_basis_transfer, 0.0
+        )
+
+
+def _apply_bav_income(
+    params: _EngineParams,
+    state: _MonthlyState,
+    age_months: int,
+) -> set[int]:
+    """Pay out monthly gains from income-strategy bAV assets.
+
+    Returns:
+        Indices whose balance must not compound this month (income bAV freezes
+        its principal once payouts have begun).
+    """
+    frozen_indices: set[int] = set()
+    for index, asset in enumerate(params.assets_list):
+        if not asset.active:
+            continue
+        if (
+            asset.asset_type == AssetType.BAV
+            and BAVStrategy(asset.bav_strategy) == BAVStrategy.INCOME
+            and age_months >= asset.bav_transfer_start_age * 12
+        ):
+            monthly_gain = state.balances[index] * params.monthly_rates[index]
+            if monthly_gain > 0:
+                tax = monthly_gain * params.bav_tax_rate
+                state.taxes += tax
+                state.net_cashflow += monthly_gain - tax
+            frozen_indices.add(index)
+    return frozen_indices
+
+
+def _apply_growth(
+    params: _EngineParams,
+    state: _MonthlyState,
+    frozen_indices: set[int],
+) -> None:
+    """Compound each balance by its monthly rate, skipping frozen assets."""
+    state.balances = [
+        balance
+        * (1 + (0.0 if i in frozen_indices else params.monthly_rates[i]))
+        for i, balance in enumerate(state.balances)
+    ]
+
+
+def _build_row(
+    params: _EngineParams,
+    state: _MonthlyState,
+    month_index: int,
+    age_years: int,
+    age_month_in_year: int,
+) -> dict[str, float | int]:
+    """Assemble one output row from the current state (excludes inheritance)."""
+    row: dict[str, float | int] = {
+        "month_index": month_index,
+        "age_years": int(age_years),
+        "age_months": int(age_month_in_year),
+        "net_cashflow": float(state.net_cashflow),
+        "taxes": float(state.taxes),
+    }
+    # INHERITANCE assets always hold a zero balance — exclude from columns.
+    for asset, balance in zip(params.assets_list, state.balances, strict=True):
+        if asset.asset_type != AssetType.INHERITANCE:
+            row[asset.name] = float(balance)
+    row["total"] = float(
+        sum(
+            balance
+            for asset, balance in zip(
+                params.assets_list, state.balances, strict=True
+            )
+            if asset.asset_type != AssetType.INHERITANCE
+        )
+    )
+    return row
+
+
+def forecast_wealth(
+    profile: UserProfile,
+    assets: Iterable[Asset],
+    withdrawal: WithdrawalPlan | None = None,
+) -> pd.DataFrame:
+    """Forecast monthly balances per asset and total.
+
+    The monthly timeline is an ordered pipeline of per-month steps (inheritance,
+    contributions or withdrawal, bAV transfer, bAV income, growth); each step is
+    a small pure function operating on the shared :class:`_MonthlyState`.
+
+    Args:
+        profile: User profile values for the forecast.
+        assets: Asset definitions and cashflows.
+        withdrawal: Withdrawal configuration after retirement.
+
+    Returns:
+        DataFrame with monthly balances, net cashflow, taxes, and totals.
+
+    Raises:
+        ValueError: If inputs are invalid.
+    """
+    metadata = _validate_profile(profile)
+    assets_list = _validate_assets(assets)
+    withdrawal = withdrawal or WithdrawalPlan()
+    _validate_withdrawal(withdrawal)
+    config = get_config()
+
+    params = _build_engine_params(
+        profile, metadata, assets_list, withdrawal, config
+    )
+    state = _initial_state(params)
+
+    months = metadata.end_age_months - metadata.start_age_months
     rows: list[dict[str, float | int]] = []
-    remaining_etf_allowance = etf_annual_allowance
     for month_index in range(months + 1):
         age_months = metadata.start_age_months + month_index
         age_years = age_months // 12
         age_month_in_year = age_months % 12
         if month_index > 0 and age_month_in_year == 0:
-            remaining_etf_allowance = etf_annual_allowance
+            state.remaining_etf_allowance = params.etf_annual_allowance
 
-        net_cashflow = 0.0
-        taxes = 0.0
+        state.taxes = 0.0
+        state.net_cashflow = 0.0
         if month_index > 0:
-            # ── Inheritance events ────────────────────────────────────────────
-            for (
-                inh_age_months,
-                gross_amount,
-                relationship,
-            ) in inheritance_events:
-                if age_months == inh_age_months:
-                    inh_tax = config.inheritance_tax.compute_tax(
-                        gross_amount, relationship
-                    )
-                    net_amount = gross_amount - inh_tax
-                    taxes += inh_tax
-                    net_cashflow += net_amount
-                    # Distribute net proceeds to ETF assets first, Cash as fallback.
-                    targets = etf_indices if etf_indices else cash_indices
-                    for target_idx, allocation in _allocate_amount(
-                        net_amount, targets, balances
-                    ):
-                        balances[target_idx] += allocation
-                        cost_bases[target_idx] += allocation
-
+            _apply_inheritance(params, state, age_months)
             if age_months < metadata.retirement_age_months:
-                contributions = [
-                    float(asset.monthly_contribution)
-                    if asset.active
-                    and asset.asset_type != AssetType.INHERITANCE
-                    else 0.0
-                    for asset in assets_list
-                ]
-                balances = [
-                    balance + contribution
-                    for balance, contribution in zip(
-                        balances, contributions, strict=True
-                    )
-                ]
-                cost_bases = [
-                    cost_basis + contribution
-                    for cost_basis, contribution in zip(
-                        cost_bases, contributions, strict=True
-                    )
-                ]
-                net_cashflow += float(sum(contributions))
+                _apply_contributions(params, state)
             else:
-                months_since_start = age_months - metadata.start_age_months
-                inflation_multiplier = _inflation_multiplier(
-                    profile.average_inflation_rate,
-                    months_since_start,
-                )
-                withdrawal_target = (
-                    float(withdrawal.monthly_withdrawal) * inflation_multiplier
-                )
-                withdrawal_target = max(
-                    withdrawal_target
-                    - _net_state_pension_for_month(
-                        profile=profile,
-                        metadata=metadata,
-                        state_pension=withdrawal.state_pension,
-                        age_months=age_months,
-                        config=config,
-                    ),
-                    0.0,
-                )
-                # Only consider assets that are withdrawable at this age.
-                # ETFs and Cash are always withdrawable; bAV is only withdrawable
-                # once its configured transfer/withdraw start age has been reached.
-                withdrawable_indices = [
-                    i
-                    for i, asset in enumerate(assets_list)
-                    if asset.active
-                    and (
-                        asset.asset_type in (AssetType.ETF, AssetType.CASH)
-                        or (
-                            asset.asset_type == AssetType.BAV
-                            and age_months >= asset.bav_transfer_start_age * 12
-                        )
-                    )
-                ]
-                total_balance = (
-                    float(sum(balances[i] for i in withdrawable_indices))
-                    if withdrawable_indices
-                    else 0.0
-                )
-                if withdrawal_target > 0 and total_balance > 0:
-                    taxable_gains_ratio = 0.0
-                    # Only ETFs that are withdrawable contribute to taxable gains ratio
-                    for i in withdrawable_indices:
-                        asset = assets_list[i]
-                        balance = balances[i]
-                        cost_basis = cost_bases[i]
-                        if asset.asset_type != AssetType.ETF or balance <= 0:
-                            continue
-                        gains = balance - cost_basis
-                        if gains <= 0:
-                            continue
-                        gains_ratio = gains / balance
-                        taxable_gains_ratio += (
-                            (balance / total_balance)
-                            * gains_ratio
-                            * etf_taxable_share
-                        )
+                _apply_withdrawal(params, state, age_months)
+            _apply_bav_transfer(params, state, age_months)
+            frozen_indices = (
+                _apply_bav_income(params, state, age_months)
+                if age_months >= metadata.retirement_age_months
+                else set()
+            )
+            _apply_growth(params, state, frozen_indices)
 
-                    gross_target = withdrawal_target
-                    if taxable_gains_ratio > 0 and etf_tax_rate > 0:
-                        if remaining_etf_allowance > 0:
-                            allowance_threshold = (
-                                remaining_etf_allowance / taxable_gains_ratio
-                            )
-                            if withdrawal_target > allowance_threshold:
-                                numerator = withdrawal_target - (
-                                    etf_tax_rate * remaining_etf_allowance
-                                )
-                                denominator = (
-                                    1 - etf_tax_rate * taxable_gains_ratio
-                                )
-                                gross_target = (
-                                    numerator / denominator
-                                    if denominator > 0
-                                    else total_balance
-                                )
-                        else:
-                            denominator = (
-                                1 - etf_tax_rate * taxable_gains_ratio
-                            )
-                            gross_target = (
-                                withdrawal_target / denominator
-                                if denominator > 0
-                                else total_balance
-                            )
-                    actual_withdrawn = min(gross_target, total_balance)
-                    new_balances: list[float] = []
-                    new_cost_bases: list[float] = []
-                    etf_taxable_gains = 0.0
-                    # Allocate withdrawals proportionally across withdrawable assets only
-                    for i, (asset, balance, cost_basis) in enumerate(
-                        zip(assets_list, balances, cost_bases, strict=True)
-                    ):
-                        if i not in withdrawable_indices or balance <= 0:
-                            # Asset is not withdrawable now; keep as is
-                            new_balances.append(balance)
-                            new_cost_bases.append(max(cost_basis, 0.0))
-                            continue
-
-                        asset_withdrawal = actual_withdrawn * (
-                            balance / total_balance
-                        )
-                        withdrawal_ratio = (
-                            asset_withdrawal / balance if balance > 0 else 0.0
-                        )
-                        new_balance = max(balance - asset_withdrawal, 0.0)
-                        cost_basis_reduction = cost_basis * withdrawal_ratio
-                        new_cost_basis = max(
-                            cost_basis - cost_basis_reduction, 0.0
-                        )
-
-                        if asset.asset_type == AssetType.ETF:
-                            gains = balance - cost_basis
-                            if gains > 0:
-                                gains_portion = asset_withdrawal * (
-                                    gains / balance
-                                )
-                                etf_taxable_gains += (
-                                    gains_portion * etf_taxable_share
-                                )
-
-                        new_balances.append(new_balance)
-                        new_cost_bases.append(new_cost_basis)
-
-                    balances = new_balances
-                    cost_bases = new_cost_bases
-                    allowance_used = min(
-                        remaining_etf_allowance, etf_taxable_gains
-                    )
-                    taxable_after_allowance = (
-                        etf_taxable_gains - allowance_used
-                    )
-                    withdrawal_taxes = taxable_after_allowance * etf_tax_rate
-                    remaining_etf_allowance -= allowance_used
-                    taxes += withdrawal_taxes
-                    net_cashflow += -actual_withdrawn + withdrawal_taxes
-
-            effective_rates = list(monthly_rates)
-            for index, asset in enumerate(assets_list):
-                if not asset.active:
-                    continue
-                if (
-                    asset.asset_type == AssetType.BAV
-                    and BAVStrategy(asset.bav_strategy) == BAVStrategy.TRANSFER
-                ):
-                    start_months = asset.bav_transfer_start_age * 12
-                    end_months = (asset.bav_transfer_end_age + 1) * 12 - 1
-                    if not (start_months <= age_months <= end_months):
-                        continue
-                    remaining_months = end_months - age_months + 1
-                    if remaining_months <= 0:
-                        continue
-                    transfer_fraction = 1 / remaining_months
-                    gross_transfer = balances[index] * transfer_fraction
-                    if gross_transfer <= 0:
-                        continue
-                    cost_basis_transfer = cost_bases[index] * transfer_fraction
-                    gains = gross_transfer - cost_basis_transfer
-                    tax = bav_tax_rate * max(gains, 0.0)
-                    taxes += tax
-                    net_cashflow -= tax
-                    net_transfer = gross_transfer - tax
-                    etf_amount = net_transfer * asset.bav_transfer_etf_ratio
-                    cash_amount = net_transfer - etf_amount
-                    for target_index, allocation in _allocate_amount(
-                        etf_amount, etf_indices, balances
-                    ):
-                        balances[target_index] += allocation
-                        cost_bases[target_index] += allocation
-                    for target_index, allocation in _allocate_amount(
-                        cash_amount, cash_indices, balances
-                    ):
-                        balances[target_index] += allocation
-                        cost_bases[target_index] += allocation
-                    balances[index] -= gross_transfer
-                    cost_bases[index] = max(
-                        cost_bases[index] - cost_basis_transfer, 0.0
-                    )
-
-            if age_months >= metadata.retirement_age_months:
-                for index, asset in enumerate(assets_list):
-                    if not asset.active:
-                        continue
-                    if (
-                        asset.asset_type == AssetType.BAV
-                        and BAVStrategy(asset.bav_strategy)
-                        == BAVStrategy.INCOME
-                        and age_months >= asset.bav_transfer_start_age * 12
-                    ):
-                        monthly_gain = balances[index] * monthly_rates[index]
-                        if monthly_gain > 0:
-                            tax = monthly_gain * bav_tax_rate
-                            taxes += tax
-                            net_cashflow += monthly_gain - tax
-                        effective_rates[index] = 0.0
-
-            balances = [
-                balance * (1 + rate)
-                for balance, rate in zip(
-                    balances, effective_rates, strict=True
-                )
-            ]
-
-        row: dict[str, float | int] = {
-            "month_index": month_index,
-            "age_years": int(age_years),
-            "age_months": int(age_month_in_year),
-            "net_cashflow": float(net_cashflow),
-            "taxes": float(taxes),
-        }
-        # INHERITANCE assets always hold a zero balance — exclude from columns.
-        for asset, balance in zip(assets_list, balances, strict=True):
-            if asset.asset_type != AssetType.INHERITANCE:
-                row[asset.name] = float(balance)
-        row["total"] = float(
-            sum(
-                balance
-                for asset, balance in zip(assets_list, balances, strict=True)
-                if asset.asset_type != AssetType.INHERITANCE
+        rows.append(
+            _build_row(
+                params, state, month_index, age_years, age_month_in_year
             )
         )
-        rows.append(row)
 
     return pd.DataFrame(rows)
