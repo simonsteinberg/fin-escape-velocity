@@ -10,6 +10,8 @@ version is retired.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-06-06
+
 ### Changed
 
 - Sync `CLAUDE.md` with the current codebase: document the `i18n`,
@@ -28,5 +30,6 @@ version is retired.
   inheritance (Erbschaftsteuer), and German-specific taxation (Abgeltungssteuer
   and Soli).
 
-[Unreleased]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/simonsteinberg/fin-escape-velocity/releases/tag/v0.1.0
