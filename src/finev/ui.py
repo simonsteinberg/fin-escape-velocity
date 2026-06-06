@@ -92,6 +92,9 @@ from finev.ui_view import (
     format_currency as _format_currency,
 )
 from finev.ui_view import (
+    version_label_text as _version_label_text,
+)
+from finev.ui_view import (
     yearly_display_frame as _yearly_display_frame,
 )
 
@@ -773,7 +776,11 @@ class _WealthPage:
         profile_state = self.profile_state
         withdrawal_state = self.withdrawal_state
         with ui.column().classes("w-full p-4 gap-4"):
-            ui.label("Wealth Forecast").classes("text-2xl font-bold")
+            with ui.row().classes("w-full items-baseline gap-2"):
+                ui.label("Wealth Forecast").classes("text-2xl font-bold")
+                ui.label(_version_label_text()).classes(
+                    "text-sm text-gray-500"
+                )
             with ui.row().classes("w-full gap-4 items-start"):
                 # ── Left sidebar ──────────────────────────
                 with ui.column().classes("w-[420px] shrink-0 gap-4"):

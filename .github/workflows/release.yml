@@ -1,0 +1,66 @@
+name: Release
+
+# Publish a GitHub Release whenever a version tag (vX.Y.Z) is pushed.
+# Tagging is done by `mise run release`; this workflow verifies the tagged
+# commit and turns the tag into a Release with notes from CHANGELOG.md.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Install tools
+        run: mise install
+
+      - name: Sync dependencies
+        run: mise run sync
+
+      - name: Verify tag matches project version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          project="$(uv version --short)"
+          if [[ "$tag" != "$project" ]]; then
+            echo "Tag v${tag} does not match pyproject version ${project}." >&2
+            exit 1
+          fi
+          echo "Tag matches project version ${project}."
+
+      - name: Run checks
+        run: mise run check
+
+      - name: Build release notes from CHANGELOG
+        run: .tasks/changelog-extract.sh "${GITHUB_REF_NAME}" > RELEASE_NOTES.md
+
+      - name: Determine pre-release flag
+        id: prerelease
+        run: |
+          if [[ "${GITHUB_REF_NAME}" =~ -(rc|alpha|beta) ]]; then
+            echo "flag=--prerelease" >> "$GITHUB_OUTPUT"
+          else
+            echo "flag=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes-file RELEASE_NOTES.md \
+            ${{ steps.prerelease.outputs.flag }}

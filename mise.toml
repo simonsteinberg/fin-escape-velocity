@@ -51,6 +51,18 @@ run = "uv run python -m finev.app"
 description = "Install project dependencies"
 run = "uv sync"
 
+[tasks.version]
+description = "Print the current project version"
+run = "uv version --short"
+
+[tasks.changelog-check]
+description = "Fail if CHANGELOG.md has no entries under [Unreleased]"
+run = ".tasks/changelog-check.sh"
+
+[tasks.release]
+description = "Cut a release: bump version, roll changelog, commit, tag, push. Usage: mise run release -- {patch|minor|major}"
+run = ".tasks/release.sh"
+
 [tasks.setup-repo]
 description = "Rename project from 'finev' to a specified name"
 run = ".tasks/setup-repo.sh"
