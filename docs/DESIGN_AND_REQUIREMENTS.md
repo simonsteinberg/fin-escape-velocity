@@ -127,6 +127,7 @@ types slot in as additional steps/handlers rather than edits to a monolithic loo
 | End age | 100 | Must be ≥ retirement age and > current age. |
 | Currency | `EUR` | Display label only; no FX. |
 | Average inflation rate | 2% (UI) / 0.02 (model) | Annual; inflates withdrawal targets and state pension. Must be > −100%. |
+| Debt interest rate | 8% (UI) / 0.08 (model) | Annual rate charged on negative total wealth (debt); compounds monthly. Must be ≥ 0. |
 
 ### 5.2 State pension (`StatePension` + UI-derived display)
 
@@ -240,10 +241,13 @@ both balance and cost basis; the sum is recorded as positive net cashflow.
 4. **Gross up** the net target to cover ETF capital-gains tax on the taxable
    gains portion, accounting for any remaining annual allowance (`_gross_up_withdrawal`).
 5. Allocate the grossed-up amount **proportionally** by balance across
-   withdrawable assets; floor each balance at 0 (capped at total available).
+   withdrawable assets, capped at the total available (each balance floors at 0).
 6. Reduce each asset's cost basis proportionally to the fraction withdrawn.
 7. Tax the ETF taxable gains beyond the remaining allowance at the effective
    rate; record taxes and net cashflow.
+8. If the assets could not cover the full net target, the unmet remainder is
+   **borrowed**: it is added to the running debt and recorded as net cashflow, so
+   total wealth is allowed to go below zero (see §7.10).
 
 ### 7.5 ETF withdrawal tax
 
@@ -299,6 +303,17 @@ withdrawal allocation, transfers, and as a transfer/inheritance target — it is
 treated as a zero balance — while its row and configuration remain in the UI and
 persisted cache, so it can be re-activated to compare scenarios.
 
+### 7.10 Debt (negative total wealth)
+
+When a month's withdrawal exceeds the available assets, the unmet net need is
+booked as **debt** — a running, non-negative balance held in engine state. Total
+wealth is the asset sum **minus** this debt, so it may go negative once assets
+are exhausted. Each month any outstanding debt compounds by the monthly
+equivalent of the profile's `debt_interest_rate` (`_apply_debt_interest`). Net
+inheritance proceeds **repay** outstanding debt before the remainder is invested.
+Debt is not a separate output column; it is reflected only in a reduced (possibly
+negative) `total`.
+
 ---
 
 ## 8. Outputs
@@ -312,7 +327,7 @@ persisted cache, so it can be re-activated to compare scenarios.
 | `net_cashflow` | Net received (−)/contributed (+) that month, after taxes. |
 | `taxes` | Total tax deducted that month (ETF + bAV + inheritance). |
 | *per-asset* | Balance for each non-inheritance asset (column = asset name). |
-| `total` | Sum of all non-inheritance asset balances. |
+| `total` | Sum of all non-inheritance asset balances, minus any outstanding debt; may be negative. |
 
 Presentation layers derive a **yearly** view (`ui_view.yearly_display_frame`,
 every 12th month; `cli.summarize_yearly`, aggregated per age-year) for the chart,
@@ -347,7 +362,7 @@ total, taxes, and net cashflow.
 |---|---|
 | FR1 | Monthly forecast of each asset balance and the portfolio total from current age to end age, using type-default gain rates where no override is given. |
 | FR2 | Pre-retirement monthly contributions per asset, applied (contribution then growth) until the retirement month. |
-| FR3 | Post-retirement net withdrawal target deducted proportionally across withdrawable assets; no balance goes below zero. |
+| FR3 | Post-retirement net withdrawal target deducted proportionally across withdrawable assets; individual balances floor at zero, while any unmet need is borrowed so total wealth may go negative. |
 | FR4 | German ETF capital-gains tax (26.25% on 70% of gains) with the €1,000 annual allowance; net cashflow reflects tax; withdrawals are grossed up to the net target. |
 | FR5 | Configurable default gain rates with per-asset overrides. |
 | FR6 | Inflation-adjusted withdrawal targets from today's currency to each retirement month. |
@@ -356,6 +371,7 @@ total, taxes, and net cashflow.
 | FR9 | Inheritance events at a configured age, taxed by Erbschaftsteuer class/Freibetrag; net proceeds credited to ETF (then Cash). |
 | FR10 | Per-asset activation toggle for what-if scenarios; deactivated assets excluded from calculations but preserved and persisted. |
 | FR11 | Inputs validated at the boundary (`forecast.py` validators, `config.py` on load, `ui_state` coercion); invalid inputs fail loudly. |
+| FR12 | When withdrawals exhaust the assets, the unmet need is borrowed so total wealth can go negative; the debt compounds monthly at the configured annual debt interest rate and is repaid by net inheritance proceeds. |
 
 ---
 
@@ -365,7 +381,7 @@ total, taxes, and net cashflow.
 |---|---|
 | AC1 | Forecast covers every month from current to end age inclusive, with per-asset and total values per row. |
 | AC2 | Contributions applied in order (contribution then growth) for all pre-retirement months; stop at retirement. |
-| AC3 | Withdrawals begin at the retirement month; no asset balance goes below zero. |
+| AC3 | Withdrawals begin at the retirement month; individual asset balances floor at zero, and any unmet need accrues as debt that drives total wealth negative and compounds at the debt interest rate. |
 | AC4 | ETF withdrawal tax matches §7.5 (allowance before tax); net cashflow reflects the deduction. |
 | AC5 | Gross withdrawal is computed so net cashflow equals the user's net target (subject to available balance). |
 | AC6 | Cost basis updates correctly on contribution and proportionally on withdrawal. |

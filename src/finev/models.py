@@ -67,6 +67,9 @@ class UserProfile:
         end_age: Forecast end age in years.
         currency: Currency code used for display.
         average_inflation_rate: Average annual inflation rate as a decimal.
+        debt_interest_rate: Annual interest rate (as a decimal) charged on
+            negative total wealth — the cost of borrowing once assets are
+            depleted. Compounds monthly on any outstanding debt.
     """
 
     current_age_years: int
@@ -75,6 +78,7 @@ class UserProfile:
     end_age: int = 100
     currency: str = "EUR"
     average_inflation_rate: float = 0.02
+    debt_interest_rate: float = 0.08
 
 
 @dataclass(frozen=True)

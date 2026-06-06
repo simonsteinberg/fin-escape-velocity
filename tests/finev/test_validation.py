@@ -267,6 +267,9 @@ def test_forecast_handles_withdrawal_when_balances_are_zero() -> None:
         profile=profile, assets=assets, withdrawal=withdrawal
     )
 
+    # With no balances to draw on, the withdrawal is funded by borrowing: the
+    # asset stays at zero, no tax applies, and the need becomes negative wealth.
     assert result.loc[1, "Cash"] == pytest.approx(0.0)
     assert result.loc[1, "taxes"] == pytest.approx(0.0)
-    assert result.loc[1, "net_cashflow"] == pytest.approx(0.0)
+    assert result.loc[1, "net_cashflow"] == pytest.approx(-1_000.0)
+    assert result.loc[1, "total"] < 0.0

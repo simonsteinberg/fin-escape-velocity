@@ -337,6 +337,7 @@ class _WealthPage:
     end_age: ui.number
     currency: ui.input
     average_inflation_rate: ui.number
+    debt_interest_rate: ui.number
     withdrawal_input: ui.number
     annual_income: ui.number
     state_pension_current_monthly_amount: ui.number
@@ -459,6 +460,8 @@ class _WealthPage:
             "average_inflation_rate_pct"
         ]
         self.average_inflation_rate.update()
+        self.debt_interest_rate.value = profile["debt_interest_rate_pct"]
+        self.debt_interest_rate.update()
         self.annual_income.value = profile["annual_income"]
         self.annual_income.update()
         self.withdrawal_input.value = withdrawal["monthly_withdrawal"]
@@ -522,6 +525,8 @@ class _WealthPage:
                 average_inflation_rate=float(
                     self.average_inflation_rate.value or 0.0
                 )
+                / 100,
+                debt_interest_rate=float(self.debt_interest_rate.value or 0.0)
                 / 100,
             )
             assets = self.build_assets()
@@ -649,6 +654,9 @@ class _WealthPage:
                     "average_inflation_rate_pct": float(
                         self.average_inflation_rate.value or 0.0
                     ),
+                    "debt_interest_rate_pct": float(
+                        self.debt_interest_rate.value or 0.0
+                    ),
                     "annual_income": float(self.annual_income.value or 0),
                 },
                 "withdrawal": {
@@ -723,6 +731,14 @@ class _WealthPage:
                                 ],
                                 format="%.2f",
                                 min=-99.9,
+                                step=0.1,
+                                on_change=lambda _: self.schedule_forecast(),
+                            )
+                            self.debt_interest_rate = ui.number(
+                                label="Debt interest rate (%)",
+                                value=profile_state["debt_interest_rate_pct"],
+                                format="%.2f",
+                                min=0,
                                 step=0.1,
                                 on_change=lambda _: self.schedule_forecast(),
                             )

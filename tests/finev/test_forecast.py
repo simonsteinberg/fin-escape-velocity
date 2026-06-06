@@ -85,13 +85,14 @@ def test_withdrawal_proportional_after_retirement() -> None:
     assert result.loc[1, "net_cashflow"] == pytest.approx(-100.0)
 
 
-def test_withdrawal_exceeding_total_floors_balances() -> None:
-    """Floor balances to zero when withdrawals exceed total."""
+def test_withdrawal_exceeding_total_goes_into_debt() -> None:
+    """Drain balances to zero and book the unmet need as negative wealth."""
     profile = UserProfile(
         current_age_years=67,
         retirement_age=67,
         end_age=68,
         average_inflation_rate=0.0,
+        debt_interest_rate=0.0,
     )
     assets = [
         Asset(
@@ -115,9 +116,88 @@ def test_withdrawal_exceeding_total_floors_balances() -> None:
         profile=profile, assets=assets, withdrawal=withdrawal
     )
 
+    # Assets are exhausted, the 10 unmet need becomes debt, and the total goes
+    # negative; net cashflow reflects the full 40 funded need.
     assert result.loc[1, "Asset A"] == pytest.approx(0.0)
     assert result.loc[1, "Asset B"] == pytest.approx(0.0)
-    assert result.loc[1, "net_cashflow"] == pytest.approx(-30.0)
+    assert result.loc[1, "total"] == pytest.approx(-10.0)
+    assert result.loc[1, "net_cashflow"] == pytest.approx(-40.0)
+
+
+def test_debt_accrues_interest_each_month() -> None:
+    """Negative wealth compounds at the configured annual debt interest rate."""
+    profile = UserProfile(
+        current_age_years=67,
+        retirement_age=67,
+        end_age=69,
+        average_inflation_rate=0.0,
+        debt_interest_rate=0.12,
+    )
+    # No assets to draw on, so the whole withdrawal is borrowed every month.
+    assets = [
+        Asset(
+            name="Cash",
+            asset_type=AssetType.CASH,
+            current_value=0.0,
+            annual_gain_rate=0.0,
+            monthly_contribution=0.0,
+        )
+    ]
+    withdrawal = WithdrawalPlan(monthly_withdrawal=100.0)
+
+    result = forecast_wealth(
+        profile=profile, assets=assets, withdrawal=withdrawal
+    )
+
+    monthly_rate = (1 + 0.12) ** (1 / 12) - 1
+    # Month 1: borrow 100, then a month of interest.
+    debt_month_1 = 100.0 * (1 + monthly_rate)
+    # Month 2: prior debt plus another 100 borrowed, then interest again.
+    debt_month_2 = (debt_month_1 + 100.0) * (1 + monthly_rate)
+    assert result.loc[1, "total"] == pytest.approx(-debt_month_1)
+    assert result.loc[2, "total"] == pytest.approx(-debt_month_2)
+
+
+def test_inheritance_repays_outstanding_debt() -> None:
+    """Net inheritance proceeds pay down debt before being invested."""
+    profile = UserProfile(
+        current_age_years=67,
+        retirement_age=67,
+        end_age=69,
+        average_inflation_rate=0.0,
+        debt_interest_rate=0.0,
+    )
+    assets = [
+        Asset(
+            name="ETF",
+            asset_type=AssetType.ETF,
+            current_value=0.0,
+            annual_gain_rate=0.0,
+            monthly_contribution=0.0,
+        ),
+        # Kind Freibetrag is 400 000 €; 50 000 € is tax-free, received at 68.
+        Asset(
+            name="Estate",
+            asset_type=AssetType.INHERITANCE,
+            current_value=0.0,
+            inheritance_gross_amount=50_000.0,
+            inheritance_age=68,
+            inheritance_relationship=InheritanceRelationship.KIND,
+        ),
+    ]
+    withdrawal = WithdrawalPlan(monthly_withdrawal=1_000.0)
+
+    result = forecast_wealth(
+        profile=profile, assets=assets, withdrawal=withdrawal
+    )
+
+    inheritance_month = (68 - 67) * 12
+    # By the inheritance month, 11 prior months borrowed 1 000 each (11 000
+    # debt). That month: inheritance repays the 11 000 and invests the rest in
+    # ETF, then a further 1 000 is withdrawn from ETF — netting 38 000 in ETF
+    # and no remaining debt.
+    assert result.loc[inheritance_month, "ETF"] == pytest.approx(38_000.0)
+    assert result.loc[inheritance_month, "total"] == pytest.approx(38_000.0)
 
 
 def test_withdrawal_inflates_with_average_rate() -> None:
