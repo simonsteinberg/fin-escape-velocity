@@ -15,6 +15,11 @@ version is retired.
 - Versioning system: SemVer source of truth in `pyproject.toml`, a maintained
   changelog, the in-app version label, and the `mise run release` workflow.
 
+### Changed
+
+- Renamed the app title and page header from "Wealth Forecast" to "Financial
+  Escape Velocity - Wealth Forecast" (#22).
+
 ## [0.1.0] - 2026-06-06
 
 ### Added
