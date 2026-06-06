@@ -16,6 +16,9 @@ version is retired.
   changelog, the in-app version label, and the `mise run release` workflow.
 - App favicon: a modern, scalable SVG icon (a rising-trend arrow) bundled as a
   package asset and served as the browser tab icon.
+- Top navbar: an always-visible header carrying the logo and title, a **File**
+  action that opens the save/load/delete profile window, and an **About** action
+  that shows the current version (#26).
 
 ### Changed
 

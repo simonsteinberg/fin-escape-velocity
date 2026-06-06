@@ -301,3 +301,29 @@ def test_delete_profile_removes_and_refreshes(
     assert page.profile_store.list_profiles() == ["child"]
     assert page.profile_select.options == ["child"]
     assert notifications[-1] == ("Deleted profile 'wife'.", "positive")
+
+
+class _FakeDialog:
+    """Minimal stand-in for a NiceGUI dialog during tests."""
+
+    def __init__(self) -> None:
+        self.opened = 0
+
+    def open(self) -> None:
+        """Record that the dialog was opened."""
+        self.opened += 1
+
+
+def test_open_file_dialog_refreshes_options_and_opens(
+    page: _WealthPage,
+) -> None:
+    _wire_widgets(page)
+    page.profile_store.save_profile("wife", {})
+    dialog = _FakeDialog()
+    page.file_dialog = dialog  # type: ignore[assignment]
+
+    page.open_file_dialog()
+
+    # The saved-profiles list is refreshed from the store before opening.
+    assert page.profile_select.options == ["wife"]
+    assert dialog.opened == 1

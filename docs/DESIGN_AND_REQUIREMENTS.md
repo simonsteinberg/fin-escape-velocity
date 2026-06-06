@@ -357,29 +357,32 @@ table, and console output.
 ### 9.1 Web app (NiceGUI)
 
 `mise run app` launches `python -m finev.app`, which serves the page at `/` on the
-first free port from 8081 (override with `WEALTH_APP_PORT`). The page
-(`_WealthPage`) has a left sidebar (Settings profiles, Profile, State pension,
-Assets cards with an add/reset control and per-row editors) and a right panel
-(summary label, ECharts line chart, yearly table). Edits are debounced (~0.5s)
-before re-running the forecast; structural changes
+first free port from 8081 (override with `WEALTH_APP_PORT`). An always-visible top
+**navbar** (`ui.header`) carries the app logo, the title, and a **File** and an
+**About** action. Below it the page (`_WealthPage`) has a left sidebar (Profile,
+State pension, Assets cards with an add/reset control and per-row editors) and a
+right panel (summary label, ECharts line chart, yearly table). Edits are debounced
+(~0.5s) before re-running the forecast; structural changes
 (type/strategy/active/relationship, add/remove, reset) re-render immediately.
 
 The browser tab uses a bundled SVG favicon (`src/finev/static/favicon.svg`, a
-rising-trend arrow), loaded via `ui_view.favicon_svg()` and passed to `ui.run`.
+rising-trend arrow), loaded via `ui_view.favicon_svg()` and passed to `ui.run`;
+the same SVG is rendered inline as the navbar logo and inside the About window.
 
-The page title shows the application version (e.g. `v0.1.0`) next to "Financial
-Escape Velocity - Wealth Forecast", sourced from
-`ui_view.version_label_text()` → `greet.get_version()`.
+The navbar's **About** action opens a window showing the application version
+(e.g. `v0.1.0`), sourced from `ui_view.version_label_text()` →
+`greet.get_version()`.
 
 The current working state is autosaved to a local JSON cache
 (`.cache/finev/wealth_state.json`, or `WEALTH_APP_STATE_PATH`).
 
 ### 9.1.1 Settings profiles
 
-The **Settings profiles** card lets the user save the current settings under a
-name (e.g. one per family member), then reload or delete any saved profile. This
-supports planning for several people without separate accounts. Names are
-normalized to a safe slug (`[a-z0-9_-]`), which also prevents path traversal.
+The navbar's **File** action opens a window that lets the user save the current
+settings under a name (e.g. one per family member), then reload or delete any
+saved profile. This supports planning for several people without separate
+accounts. Names are normalized to a safe slug (`[a-z0-9_-]`), which also prevents
+path traversal.
 
 Storage goes through the `ProfileStore` abstraction so the backend is
 swappable. The default `LocalDiskProfileStore` writes one JSON file per profile
