@@ -17,6 +17,11 @@ version is retired.
 - App favicon: a modern, scalable SVG icon (a rising-trend arrow) bundled as a
   package asset and served as the browser tab icon.
 
+### Changed
+
+- Renamed the app title and page header from "Wealth Forecast" to "Financial
+  Escape Velocity - Wealth Forecast" (#22).
+
 ## [0.1.0] - 2026-06-06
 
 ### Added

@@ -777,7 +777,9 @@ class _WealthPage:
         withdrawal_state = self.withdrawal_state
         with ui.column().classes("w-full p-4 gap-4"):
             with ui.row().classes("w-full items-baseline gap-2"):
-                ui.label("Wealth Forecast").classes("text-2xl font-bold")
+                ui.label(
+                    "Financial Escape Velocity - Wealth Forecast"
+                ).classes("text-2xl font-bold")
                 ui.label(_version_label_text()).classes(
                     "text-sm text-gray-500"
                 )

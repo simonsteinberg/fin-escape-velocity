@@ -50,7 +50,7 @@ def main() -> None:
             ui.run(
                 host="0.0.0.0",
                 port=port,
-                title="Wealth Forecast",
+                title="Financial Escape Velocity - Wealth Forecast",
                 favicon=favicon_svg(),
                 reload=False,
                 show=False,
