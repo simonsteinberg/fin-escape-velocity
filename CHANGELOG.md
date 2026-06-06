@@ -10,6 +10,14 @@ version is retired.
 
 ## [Unreleased]
 
+### Changed
+
+- Sync `CLAUDE.md` with the current codebase: document the `i18n`,
+  `profile_store`, and `greet` modules in the architecture table, and add the
+  `coverage-ci`, `setup-repo`, and `branch-clean-up` mise tasks to the task table.
+- Ignore Claude Code local settings and runtime state (`.claude/settings.local.json`,
+  `.claude/scheduled_tasks.lock`).
+
 ## [0.1.0] - 2026-06-06
 
 ### Added

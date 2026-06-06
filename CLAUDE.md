@@ -25,7 +25,9 @@ A German personal-finance forecasting tool: a NiceGUI web app (and CLI) that pro
 
 The domain flows in one direction: **models → config/forecast/pension → UI/CLI**.
 Business logic stays in the pure engine modules; `ui.py`/`cli.py`/`app.py` are
-presentation only and must not contain domain math.
+presentation only and must not contain domain math. The pure helper modules
+(`ui_state`, `ui_view`, `i18n`, `profile_store`) carry no NiceGUI dependency so
+they stay unit-testable without rendering a page.
 
 | Module | Role |
 |--------|------|
@@ -35,9 +37,12 @@ presentation only and must not contain domain math.
 | `pension.py` | Pure DRV state-pension estimate helpers (display-only figures); no I/O, no UI |
 | `ui_state.py` | Pure UI state: defaults, JSON persistence, coercion, row normalization, and row→`Asset` conversion; no NiceGUI dependency |
 | `ui_view.py` | Pure UI presentation helpers: currency formatting, chart options, yearly display frame; no NiceGUI dependency |
+| `i18n.py` | Pure translation catalog and lookup helpers (English default, German); `make_translator` resolves the active language to a translator callable. Lookups fall back to English then the raw key; no NiceGUI dependency |
+| `profile_store.py` | Named settings-profile storage behind a pluggable `ProfileStore` ABC (`LocalDiskProfileStore` persists each profile as JSON); layered on top of the single autosaved working state in `ui_state` |
 | `ui.py` | NiceGUI page: the `_WealthPage` controller class holds widget refs + state and binds event handlers as methods (unit-testable); `build_wealth_page()` is the thin entry point. Delegates all logic to the engine and `ui_state`/`ui_view` |
 | `app.py` | NiceGUI server launcher; auto-selects a free port in 8081–8130; respects `WEALTH_APP_PORT` env var |
 | `cli.py` | Console entry point: builds a default scenario and prints yearly totals |
+| `greet.py` | Tiny version entry point (`finev-version` script); `get_version()` is the runtime version source read from installed package metadata |
 
 `config.json` is the authoritative source for all German tax constants. When tax rules change, update it — not the Python code.
 
@@ -79,12 +84,15 @@ When asked to work in a git worktree, create it under `.worktree/<worktree-name>
 | `mise run check` | Run format-check + lint + typecheck + tests together |
 | `mise run test` | Run full test suite |
 | `mise run coverage` | Run tests with coverage report |
+| `mise run coverage-ci` | Run tests producing JUnit XML + HTML/XML coverage artifacts (CI) |
 | `mise run app` | Start the NiceGUI web app |
 | `mise run run` | Run the CLI forecast |
 | `mise run kill` | Kill any running app instance |
 | `mise run version` | Print the current project version |
 | `mise run changelog-check` | Fail if `CHANGELOG.md` `[Unreleased]` is empty |
 | `mise run release -- {patch\|minor\|major}` | Bump version, roll changelog, commit, tag, push |
+| `mise run setup-repo` | Rename the project from `finev` to a chosen name |
+| `mise run branch-clean-up` | Delete all local/remote branches except `main`, `develop`, and the current one |
 
 Run a single test file or test:
 ```bash
