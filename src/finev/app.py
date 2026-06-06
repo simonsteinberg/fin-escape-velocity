@@ -49,7 +49,7 @@ def main() -> None:
             ui.run(
                 host="0.0.0.0",
                 port=port,
-                title="Wealth Forecast",
+                title="Financial Escape Velocity - Wealth Forecast",
                 reload=False,
                 show=False,
             )
