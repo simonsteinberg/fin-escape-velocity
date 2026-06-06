@@ -26,8 +26,9 @@ class _Recorder:
 @pytest.fixture
 def page(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> _WealthPage:
     # Point state at a nonexistent file so the controller loads defaults and
-    # never touches the repo's real cache.
+    # never touches the repo's real cache, and isolate the profiles directory.
     monkeypatch.setenv("WEALTH_APP_STATE_PATH", str(tmp_path / "missing.json"))
+    monkeypatch.setenv("WEALTH_APP_PROFILES_DIR", str(tmp_path / "profiles"))
     controller = _WealthPage()
     recorder = _Recorder()
     monkeypatch.setattr(
@@ -131,11 +132,12 @@ def test_build_assets_converts_every_row(page: _WealthPage) -> None:
 
 
 class _FakeWidget:
-    """Minimal stand-in for a NiceGUI input/label during reset tests."""
+    """Minimal stand-in for a NiceGUI input/label/select during tests."""
 
-    def __init__(self) -> None:
-        self.value: Any = None
+    def __init__(self, value: Any = None) -> None:
+        self.value: Any = value
         self.text: str = ""
+        self.options: Any = None
 
     def update(self) -> None:
         """No-op to match the NiceGUI widget API."""
@@ -179,3 +181,123 @@ def test_reset_state_restores_defaults_and_clears_cache(
     assert page.suppress_cache_save is False
     assert cleared == [True]
     assert page.current_age_years.value == 40
+
+
+_WIDGET_NAMES = (
+    "current_age_years",
+    "current_age_months",
+    "retirement_age",
+    "end_age",
+    "currency",
+    "average_inflation_rate",
+    "debt_interest_rate",
+    "withdrawal_input",
+    "annual_income",
+    "state_pension_current_monthly_amount",
+    "state_pension_growth_display",
+    "state_pension_penalty_display",
+    "state_pension_achieved_display",
+    "state_pension_start_age",
+)
+
+
+def _wire_widgets(page: _WealthPage) -> None:
+    """Give the controller fake widgets so handlers can read/write them."""
+    for name in _WIDGET_NAMES:
+        setattr(page, name, _FakeWidget())
+    page.profile_name_input = _FakeWidget()  # type: ignore[assignment]
+    page.profile_select = _FakeWidget()  # type: ignore[assignment]
+
+
+@pytest.fixture
+def notifications(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, Any]]:
+    """Capture ui.notify calls instead of requiring a live client."""
+    records: list[tuple[str, Any]] = []
+    monkeypatch.setattr(
+        "finev.ui.ui.notify",
+        lambda message, **kwargs: records.append(
+            (message, kwargs.get("type"))
+        ),
+    )
+    return records
+
+
+def test_save_profile_persists_snapshot_and_refreshes_select(
+    page: _WealthPage,
+    monkeypatch: pytest.MonkeyPatch,
+    notifications: list[tuple[str, Any]],
+) -> None:
+    _wire_widgets(page)
+    page.profile_name_input.value = "My Wife"
+    monkeypatch.setattr(page, "_state_snapshot", lambda: {"marker": 1})
+
+    page.save_profile()
+
+    assert page.profile_store.load_profile("my-wife") == {"marker": 1}
+    assert page.profile_select.options == ["my-wife"]
+    assert page.profile_select.value == "my-wife"
+    assert notifications[-1] == ("Saved profile 'my-wife'.", "positive")
+
+
+def test_save_profile_rejects_blank_name(
+    page: _WealthPage, notifications: list[tuple[str, Any]]
+) -> None:
+    _wire_widgets(page)
+    page.profile_name_input.value = "   "
+
+    page.save_profile()
+
+    assert page.profile_store.list_profiles() == []
+    assert notifications[-1][1] == "warning"
+
+
+def test_load_profile_applies_saved_state(
+    page: _WealthPage, notifications: list[tuple[str, Any]]
+) -> None:
+    _wire_widgets(page)
+    page.profile_store.save_profile(
+        "wife",
+        {"profile": {"current_age_years": 55, "currency": "USD"}},
+    )
+    page.profile_select.value = "wife"
+
+    page.load_profile()
+
+    assert page.current_age_years.value == 55
+    assert page.currency.value == "USD"
+    # No asset list in the profile falls back to the default rows; the page
+    # re-renders and re-runs immediately.
+    assert [row["name"] for row in page.asset_rows] == [
+        "ETF MSCI World",
+        "bAV",
+        "Daily account",
+    ]
+    assert "render" in _calls(page)
+    assert ("immediate", False) in _calls(page)
+    assert notifications[-1] == ("Loaded profile 'wife'.", "positive")
+
+
+def test_load_profile_without_selection_warns(
+    page: _WealthPage, notifications: list[tuple[str, Any]]
+) -> None:
+    _wire_widgets(page)
+    page.profile_select.value = None
+
+    page.load_profile()
+
+    assert notifications[-1][1] == "warning"
+
+
+def test_delete_profile_removes_and_refreshes(
+    page: _WealthPage, notifications: list[tuple[str, Any]]
+) -> None:
+    _wire_widgets(page)
+    page.profile_store.save_profile("wife", {})
+    page.profile_store.save_profile("child", {})
+    page.profile_select.value = "wife"
+
+    page.delete_profile()
+
+    assert page.profile_store.list_profiles() == ["child"]
+    assert page.profile_select.options == ["child"]
+    assert notifications[-1] == ("Deleted profile 'wife'.", "positive")
