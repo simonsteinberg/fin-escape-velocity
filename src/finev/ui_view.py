@@ -7,7 +7,7 @@ unit-tested without rendering a page.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import datetime
 from importlib import resources
 from typing import Any
@@ -130,32 +130,52 @@ def asset_value_columns(assets: Iterable[Asset]) -> list[str]:
     ] + ["total"]
 
 
-def forecast_table_columns(value_columns: list[str]) -> list[dict[str, Any]]:
+def forecast_table_columns(
+    value_columns: list[str],
+    translate: Callable[[str], str] | None = None,
+) -> list[dict[str, Any]]:
     """Build NiceGUI table column definitions for the yearly forecast.
 
     Args:
         value_columns: Per-asset and total balance column names.
+        translate: Optional translator mapping a catalog key to its localized
+            label (see :func:`finev.i18n.make_translator`). When ``None``, the
+            fixed columns keep their English labels. Value columns are per-asset
+            names and are never translated.
 
     Returns:
         Column definition dictionaries (fixed columns followed by value columns).
     """
+    labels = {
+        "table.year": "Year",
+        "table.age": "Age",
+        "table.net_cashflow": "Net Cashflow p.m.",
+        "table.taxes": "Taxes p.m.",
+    }
+    if translate is not None:
+        labels = {key: translate(key) for key in labels}
     columns: list[dict[str, Any]] = [
         {
             "name": "year_index",
-            "label": "Year",
+            "label": labels["table.year"],
             "field": "year_index",
             "sortable": True,
         },
-        {"name": "age", "label": "Age", "field": "age", "sortable": False},
+        {
+            "name": "age",
+            "label": labels["table.age"],
+            "field": "age",
+            "sortable": False,
+        },
         {
             "name": "net_cashflow",
-            "label": "Net Cashflow p.m.",
+            "label": labels["table.net_cashflow"],
             "field": "net_cashflow",
             "sortable": True,
         },
         {
             "name": "taxes",
-            "label": "Taxes p.m.",
+            "label": labels["table.taxes"],
             "field": "taxes",
             "sortable": True,
         },

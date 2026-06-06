@@ -68,6 +68,18 @@ def test_forecast_table_columns_has_fixed_then_value_columns() -> None:
     assert all(c["sortable"] is True for c in columns if c["name"] != "age")
 
 
+def test_forecast_table_columns_translates_fixed_labels() -> None:
+    from finev.i18n import make_translator
+
+    columns = forecast_table_columns(["ETF", "total"], make_translator("de"))
+    labels = {c["name"]: c["label"] for c in columns}
+    # Fixed columns are localized; per-asset value columns keep their names.
+    assert labels["year_index"] == "Jahr"
+    assert labels["net_cashflow"] == "Netto-Cashflow mtl."
+    assert labels["ETF"] == "ETF"
+    assert labels["total"] == "total"
+
+
 def test_forecast_csv_keeps_all_columns_and_rows_without_index() -> None:
     frame = pd.DataFrame(
         {

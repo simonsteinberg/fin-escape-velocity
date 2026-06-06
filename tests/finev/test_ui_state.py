@@ -7,8 +7,23 @@ from finev.ui_state import (
     apply_type_change_defaults,
     coerce_asset_field,
     default_gain_pct,
+    load_language,
     new_asset_row,
 )
+
+
+def test_load_language_defaults_to_english_without_cache() -> None:
+    assert load_language(None) == "en"
+    assert load_language({}) == "en"
+
+
+def test_load_language_reads_persisted_value() -> None:
+    assert load_language({"language": "de"}) == "de"
+
+
+def test_load_language_normalizes_unknown_value() -> None:
+    assert load_language({"language": "fr"}) == "en"
+    assert load_language({"language": ""}) == "en"
 
 
 def test_new_asset_row_defaults() -> None:
