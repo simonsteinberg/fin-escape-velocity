@@ -7,12 +7,29 @@ unit-tested without rendering a page.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from importlib import resources
 from typing import Any
 
 import pandas as pd
 
 from finev.greet import get_version
 from finev.models import Asset, AssetType
+
+
+def favicon_svg() -> str:
+    """Load the application favicon as an inline SVG string.
+
+    NiceGUI renders a raw SVG string (one starting with ``<svg``) as the page
+    favicon, so the bundled asset is returned verbatim.
+
+    Returns:
+        The contents of ``static/favicon.svg`` shipped with the package.
+    """
+    return (
+        resources.files("finev")
+        .joinpath("static/favicon.svg")
+        .read_text(encoding="utf-8")
+    )
 
 
 def version_label_text() -> str:

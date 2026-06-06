@@ -14,6 +14,8 @@ version is retired.
 
 - Versioning system: SemVer source of truth in `pyproject.toml`, a maintained
   changelog, the in-app version label, and the `mise run release` workflow.
+- App favicon: a modern, scalable SVG icon (a rising-trend arrow) bundled as a
+  package asset and served as the browser tab icon.
 
 ### Changed
 

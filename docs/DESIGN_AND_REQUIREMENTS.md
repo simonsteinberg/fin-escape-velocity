@@ -364,6 +364,9 @@ Assets cards with an add/reset control and per-row editors) and a right panel
 before re-running the forecast; structural changes
 (type/strategy/active/relationship, add/remove, reset) re-render immediately.
 
+The browser tab uses a bundled SVG favicon (`src/finev/static/favicon.svg`, a
+rising-trend arrow), loaded via `ui_view.favicon_svg()` and passed to `ui.run`.
+
 The page title shows the application version (e.g. `v0.1.0`) next to "Financial
 Escape Velocity - Wealth Forecast", sourced from
 `ui_view.version_label_text()` → `greet.get_version()`.

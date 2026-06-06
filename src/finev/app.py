@@ -8,6 +8,7 @@ import os
 from nicegui import ui
 
 from finev.ui import build_wealth_page
+from finev.ui_view import favicon_svg
 
 
 def register_routes() -> None:
@@ -50,6 +51,7 @@ def main() -> None:
                 host="0.0.0.0",
                 port=port,
                 title="Financial Escape Velocity - Wealth Forecast",
+                favicon=favicon_svg(),
                 reload=False,
                 show=False,
             )
