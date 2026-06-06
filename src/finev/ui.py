@@ -1231,8 +1231,12 @@ class _WealthPage:
                     self.summary_label = ui.label(
                         self.t("forecast.none")
                     ).classes("text-sm")
+                    # shrink-0 keeps the chart at its fixed height: as a flex
+                    # child of the scroll frame its content height is 0 (the
+                    # ECharts canvas is absolutely positioned), so without it
+                    # flex-shrink would collapse the chart and hide the plot.
                     self.chart = ui.echart(_build_chart_options()).classes(
-                        "w-full h-[500px]"
+                        "w-full h-[500px] shrink-0"
                     )
                     self.table = (
                         ui.table(columns=[], rows=[], row_key="month_index")

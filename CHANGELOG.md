@@ -10,6 +10,14 @@ version is retired.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Time-series chart hidden in the main panel:** after the independent scroll
+  frames change (#35), the right panel became a fixed-height flex column, and the
+  ECharts container (no intrinsic content height) was collapsed to ~0px by
+  `flex-shrink`, hiding the plot. The chart is now `shrink-0`, so its fixed
+  500px height is honored inside the scroll frame (#40).
+
 ### Added
 
 - **Independent scroll frames:** the left sidebar (Profile / State pension /
