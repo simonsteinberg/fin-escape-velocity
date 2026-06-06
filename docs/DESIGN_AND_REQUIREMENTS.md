@@ -211,6 +211,10 @@ falls into. Thresholds: 75k / 300k / 600k / 6M / 13M / 26M.
 | Klasse II (Geschwister, Nichten, Neffen…) | II | €20,000 |
 | Klasse III (übrige) | III | €20,000 |
 
+**Privatinsolvenz** — `PRIVATINSOLVENZ_SCHWELLE_EURO` (currently **€100,000**, a
+positive amount) is the most negative total wealth a forecast may reach. It is a
+config-only constant (no UI control). See §7.10.
+
 ---
 
 ## 7. Forecast rules
@@ -303,7 +307,7 @@ withdrawal allocation, transfers, and as a transfer/inheritance target — it is
 treated as a zero balance — while its row and configuration remain in the UI and
 persisted cache, so it can be re-activated to compare scenarios.
 
-### 7.10 Debt (negative total wealth)
+### 7.10 Debt and Privatinsolvenz (negative total wealth)
 
 When a month's withdrawal exceeds the available assets, the unmet net need is
 booked as **debt** — a running, non-negative balance held in engine state. Total
@@ -313,6 +317,16 @@ equivalent of the profile's `debt_interest_rate` (`_apply_debt_interest`). Net
 inheritance proceeds **repay** outstanding debt before the remainder is invested.
 Debt is not a separate output column; it is reflected only in a reduced (possibly
 negative) `total`.
+
+**Privatinsolvenz floor.** As the last step of each month, the debt is capped so
+that total wealth cannot fall below `-PRIVATINSOLVENZ_SCHWELLE_EURO` (§6):
+`_apply_insolvency_floor` sets `debt = min(debt, asset_total + floor)`. Because
+the cap is applied to the carried-over state (not just the output row), a capped
+debt **stops compounding** — so it stays pinned at the floor while insolvent, yet
+a later inheritance large enough to repay the capped debt can lift the forecast
+back into the green. A forecast may therefore enter Privatinsolvenz, escape via
+an inheritance, and re-enter it later; the total stays at the floor for any span
+where no rescue follows, including permanently once none can.
 
 ---
 
@@ -327,7 +341,7 @@ negative) `total`.
 | `net_cashflow` | Net received (−)/contributed (+) that month, after taxes. |
 | `taxes` | Total tax deducted that month (ETF + bAV + inheritance). |
 | *per-asset* | Balance for each non-inheritance asset (column = asset name). |
-| `total` | Sum of all non-inheritance asset balances, minus any outstanding debt; may be negative. |
+| `total` | Sum of all non-inheritance asset balances, minus any outstanding debt; may be negative but never below the Privatinsolvenz floor (§7.10). |
 
 Presentation layers derive a **yearly** view (`ui_view.yearly_display_frame`,
 every 12th month; `cli.summarize_yearly`, aggregated per age-year) for the chart,
@@ -372,6 +386,7 @@ total, taxes, and net cashflow.
 | FR10 | Per-asset activation toggle for what-if scenarios; deactivated assets excluded from calculations but preserved and persisted. |
 | FR11 | Inputs validated at the boundary (`forecast.py` validators, `config.py` on load, `ui_state` coercion); invalid inputs fail loudly. |
 | FR12 | When withdrawals exhaust the assets, the unmet need is borrowed so total wealth can go negative; the debt compounds monthly at the configured annual debt interest rate and is repaid by net inheritance proceeds. |
+| FR13 | Total wealth is floored at the configured Privatinsolvenz threshold (`-PRIVATINSOLVENZ_SCHWELLE_EURO`); the capped debt stops compounding, so a later inheritance can repay it and lift the forecast back out of insolvency, and the total stays at the floor for any span without such a rescue. |
 
 ---
 
@@ -381,7 +396,8 @@ total, taxes, and net cashflow.
 |---|---|
 | AC1 | Forecast covers every month from current to end age inclusive, with per-asset and total values per row. |
 | AC2 | Contributions applied in order (contribution then growth) for all pre-retirement months; stop at retirement. |
-| AC3 | Withdrawals begin at the retirement month; individual asset balances floor at zero, and any unmet need accrues as debt that drives total wealth negative and compounds at the debt interest rate. |
+| AC3 | Withdrawals begin at the retirement month; individual asset balances floor at zero, and any unmet need accrues as debt that drives total wealth negative and compounds at the debt interest rate, but never below the Privatinsolvenz floor. |
+| AC12 | Total wealth never drops below `-PRIVATINSOLVENZ_SCHWELLE_EURO`; a forecast can enter the floor, escape via a later inheritance that repays the capped debt, and re-enter it, staying pinned at the floor whenever no rescue follows. |
 | AC4 | ETF withdrawal tax matches §7.5 (allowance before tax); net cashflow reflects the deduction. |
 | AC5 | Gross withdrawal is computed so net cashflow equals the user's net target (subject to available balance). |
 | AC6 | Cost basis updates correctly on contribution and proportionally on withdrawal. |
