@@ -258,9 +258,9 @@ def _render_asset_row(
                     if row.get("bav_strategy") == (BAVStrategy.TRANSFER.value):
                         with ui.row().classes("w-full gap-2"):
                             ui.number(
-                                label="Transfer start age",
+                                label="bAV retirement age",
                                 value=row.get(
-                                    "bav_transfer_start_age",
+                                    "bav_retirement_age",
                                     67,
                                 ),
                                 format="%.0f",
@@ -268,22 +268,7 @@ def _render_asset_row(
                                 step=1,
                                 on_change=lambda e, i=index: on_field_change(
                                     i,
-                                    "bav_transfer_start_age",
-                                    e.value,
-                                ),
-                            ).classes("w-32")
-                            ui.number(
-                                label="Transfer end age",
-                                value=row.get(
-                                    "bav_transfer_end_age",
-                                    72,
-                                ),
-                                format="%.0f",
-                                min=0,
-                                step=1,
-                                on_change=lambda e, i=index: on_field_change(
-                                    i,
-                                    "bav_transfer_end_age",
+                                    "bav_retirement_age",
                                     e.value,
                                 ),
                             ).classes("w-32")
@@ -305,9 +290,9 @@ def _render_asset_row(
                             ).classes("w-28")
                     elif row.get("bav_strategy") == (BAVStrategy.INCOME.value):
                         ui.number(
-                            label="Withdraw start age",
+                            label="bAV retirement age",
                             value=row.get(
-                                "bav_transfer_start_age",
+                                "bav_retirement_age",
                                 67,
                             ),
                             format="%.0f",
@@ -315,7 +300,7 @@ def _render_asset_row(
                             step=1,
                             on_change=lambda e, i=index: on_field_change(
                                 i,
-                                "bav_transfer_start_age",
+                                "bav_retirement_age",
                                 e.value,
                             ),
                         ).classes("w-32")

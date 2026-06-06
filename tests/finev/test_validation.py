@@ -138,15 +138,14 @@ def test_validate_assets_rejects_negative_cost_basis() -> None:
         _validate_assets([asset])
 
 
-def test_validate_assets_rejects_invalid_bav_transfer_window() -> None:
+def test_validate_assets_rejects_negative_bav_retirement_age() -> None:
     asset = _valid_asset(
         asset_type=AssetType.BAV,
-        bav_transfer_start_age=70,
-        bav_transfer_end_age=65,
+        bav_retirement_age=-1,
     )
 
     with pytest.raises(
-        ValueError, match="bAV transfer end age must be at or after"
+        ValueError, match="bAV retirement age must be non-negative"
     ):
         _validate_assets([asset])
 

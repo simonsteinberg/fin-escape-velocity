@@ -423,8 +423,7 @@ def test_bav_transfer_moves_balance_to_targets_and_taxes_gains() -> None:
             annual_gain_rate=0.0,
             monthly_contribution=0.0,
             bav_strategy=BAVStrategy.TRANSFER,
-            bav_transfer_start_age=67,
-            bav_transfer_end_age=67,
+            bav_retirement_age=67,
             bav_transfer_etf_ratio=0.75,
         ),
         Asset(
@@ -471,7 +470,7 @@ def test_bav_transfer_moves_balance_to_targets_and_taxes_gains() -> None:
 
 
 def test_bav_income_grows_before_withdraw_start_age() -> None:
-    """bAV INCOME balance compounds at annual_gain_rate before bav_transfer_start_age."""
+    """bAV INCOME balance compounds at annual_gain_rate before bav_retirement_age."""
     profile = UserProfile(
         current_age_years=62,
         retirement_age=62,
@@ -485,7 +484,7 @@ def test_bav_income_grows_before_withdraw_start_age() -> None:
         annual_gain_rate=0.12,
         monthly_contribution=0.0,
         bav_strategy=BAVStrategy.INCOME,
-        bav_transfer_start_age=67,
+        bav_retirement_age=67,
     )
     withdrawal = WithdrawalPlan(monthly_withdrawal=0.0)
 
@@ -517,7 +516,7 @@ def test_bav_income_pays_from_withdraw_start_age() -> None:
         annual_gain_rate=0.12,
         monthly_contribution=0.0,
         bav_strategy=BAVStrategy.INCOME,
-        bav_transfer_start_age=67,
+        bav_retirement_age=67,
     )
     withdrawal = WithdrawalPlan(monthly_withdrawal=0.0)
 

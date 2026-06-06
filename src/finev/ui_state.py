@@ -44,8 +44,7 @@ def default_asset_rows() -> list[dict[str, Any]]:
             "monthly_contribution": 500.0,
             "active": True,
             "bav_strategy": BAVStrategy.TRANSFER.value,
-            "bav_transfer_start_age": 67,
-            "bav_transfer_end_age": 72,
+            "bav_retirement_age": 67,
             "bav_transfer_etf_ratio_pct": 50.0,
         },
         {
@@ -57,8 +56,7 @@ def default_asset_rows() -> list[dict[str, Any]]:
             "monthly_contribution": 100.0,
             "active": True,
             "bav_strategy": BAVStrategy.TRANSFER.value,
-            "bav_transfer_start_age": 67,
-            "bav_transfer_end_age": 72,
+            "bav_retirement_age": 67,
             "bav_transfer_etf_ratio_pct": 50.0,
         },
         {
@@ -70,8 +68,7 @@ def default_asset_rows() -> list[dict[str, Any]]:
             "monthly_contribution": 0.0,
             "active": True,
             "bav_strategy": BAVStrategy.TRANSFER.value,
-            "bav_transfer_start_age": 67,
-            "bav_transfer_end_age": 72,
+            "bav_retirement_age": 67,
             "bav_transfer_etf_ratio_pct": 50.0,
         },
     ]
@@ -88,8 +85,7 @@ def new_asset_row() -> dict[str, Any]:
         "monthly_contribution": 0.0,
         "active": True,
         "bav_strategy": BAVStrategy.TRANSFER.value,
-        "bav_transfer_start_age": 67,
-        "bav_transfer_end_age": 72,
+        "bav_retirement_age": 67,
         "bav_transfer_etf_ratio_pct": 50.0,
         "inheritance_gross_amount": 0.0,
         "inheritance_age": 67,
@@ -217,19 +213,12 @@ def normalize_asset_row(row: dict[str, Any]) -> dict[str, Any]:
         bav_strategy = BAVStrategy(str(strategy_value)).value
     except ValueError:
         bav_strategy = BAVStrategy.TRANSFER.value
-    start_age_raw = row.get("bav_transfer_start_age")
-    if start_age_raw in (None, ""):
-        bav_transfer_start_age = 67
+    retirement_age_raw = row.get("bav_retirement_age")
+    if retirement_age_raw in (None, ""):
+        bav_retirement_age = 67
     else:
-        bav_transfer_start_age = max(
-            coerce_int(start_age_raw, "assets.bav_transfer_start_age"), 0
-        )
-    end_age_raw = row.get("bav_transfer_end_age")
-    if end_age_raw in (None, ""):
-        bav_transfer_end_age = 72
-    else:
-        bav_transfer_end_age = max(
-            coerce_int(end_age_raw, "assets.bav_transfer_end_age"), 0
+        bav_retirement_age = max(
+            coerce_int(retirement_age_raw, "assets.bav_retirement_age"), 0
         )
     ratio_raw = row.get("bav_transfer_etf_ratio_pct")
     if ratio_raw in (None, ""):
@@ -286,8 +275,7 @@ def normalize_asset_row(row: dict[str, Any]) -> dict[str, Any]:
         "monthly_contribution": monthly_contribution,
         "active": active,
         "bav_strategy": bav_strategy,
-        "bav_transfer_start_age": bav_transfer_start_age,
-        "bav_transfer_end_age": bav_transfer_end_age,
+        "bav_retirement_age": bav_retirement_age,
         "bav_transfer_etf_ratio_pct": bav_transfer_etf_ratio_pct,
         "inheritance_gross_amount": inheritance_gross_amount,
         "inheritance_age": inheritance_age,
@@ -451,8 +439,7 @@ def asset_from_row(row: dict[str, Any]) -> Asset:
         bav_strategy = BAVStrategy(str(strategy_value))
     except ValueError:
         bav_strategy = BAVStrategy.TRANSFER
-    bav_transfer_start_age = int(row.get("bav_transfer_start_age") or 67)
-    bav_transfer_end_age = int(row.get("bav_transfer_end_age") or 72)
+    bav_retirement_age = int(row.get("bav_retirement_age") or 67)
     ratio_pct = float(row.get("bav_transfer_etf_ratio_pct") or 50.0)
     bav_transfer_etf_ratio = min(max(ratio_pct / 100, 0.0), 1.0)
     return Asset(
@@ -466,8 +453,7 @@ def asset_from_row(row: dict[str, Any]) -> Asset:
         else 0.0,
         active=active,
         bav_strategy=bav_strategy,
-        bav_transfer_start_age=bav_transfer_start_age,
-        bav_transfer_end_age=bav_transfer_end_age,
+        bav_retirement_age=bav_retirement_age,
         bav_transfer_etf_ratio=bav_transfer_etf_ratio,
     )
 
@@ -498,10 +484,8 @@ def apply_type_change_defaults(
             row["unrealized_gains"] = 0.0
         if row.get("bav_strategy") in (None, ""):
             row["bav_strategy"] = BAVStrategy.TRANSFER.value
-        if row.get("bav_transfer_start_age") in (None, ""):
-            row["bav_transfer_start_age"] = 67
-        if row.get("bav_transfer_end_age") in (None, ""):
-            row["bav_transfer_end_age"] = 72
+        if row.get("bav_retirement_age") in (None, ""):
+            row["bav_retirement_age"] = 67
         if row.get("bav_transfer_etf_ratio_pct") in (None, ""):
             row["bav_transfer_etf_ratio_pct"] = 50.0
     if row.get("inheritance_gross_amount") in (None, ""):
@@ -542,7 +526,7 @@ def coerce_asset_field(row: dict[str, Any], field: str, value: Any) -> Any:
     if field == "unrealized_gains":
         current_value = float(row.get("current_value") or 0)
         return max(min(float(value or 0), current_value), 0.0)
-    if field in {"bav_transfer_start_age", "bav_transfer_end_age"}:
+    if field == "bav_retirement_age":
         return max(int(value or 0), 0)
     if field == "bav_transfer_etf_ratio_pct":
         return max(min(float(value or 0), 100.0), 0.0)

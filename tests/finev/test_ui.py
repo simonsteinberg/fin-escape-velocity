@@ -85,8 +85,7 @@ def test_default_asset_rows_match_expected_defaults() -> None:
     assert rows[1]["unrealized_gains"] == pytest.approx(0.0)
     assert rows[2]["unrealized_gains"] == pytest.approx(0.0)
     assert rows[1]["bav_strategy"] == BAVStrategy.TRANSFER.value
-    assert rows[1]["bav_transfer_start_age"] == 67
-    assert rows[1]["bav_transfer_end_age"] == 72
+    assert rows[1]["bav_retirement_age"] == 67
     assert rows[1]["bav_transfer_etf_ratio_pct"] == pytest.approx(50.0)
 
 
@@ -151,8 +150,7 @@ def test_asset_from_row_maps_bav_ratio_pct() -> None:
             "annual_gain_rate_pct": 2.0,
             "monthly_contribution": 0.0,
             "bav_strategy": BAVStrategy.INCOME.value,
-            "bav_transfer_start_age": 68,
-            "bav_transfer_end_age": 70,
+            "bav_retirement_age": 68,
             "bav_transfer_etf_ratio_pct": 75.0,
         }
     )

@@ -51,8 +51,7 @@ def test_golden_default_scenario() -> None:
             20_000.0,
             monthly_contribution=100.0,
             bav_strategy=BAVStrategy.TRANSFER,
-            bav_transfer_start_age=67,
-            bav_transfer_end_age=72,
+            bav_retirement_age=67,
             bav_transfer_etf_ratio=0.5,
         ),
         Asset("Daily account", AssetType.CASH, 50_000.0),
@@ -60,7 +59,7 @@ def test_golden_default_scenario() -> None:
     result = forecast_wealth(
         profile, assets, WithdrawalPlan(monthly_withdrawal=3000.0)
     )
-    assert _signature(result) == ("7b8f8973a1576084", 721)
+    assert _signature(result) == ("834d745498418440", 721)
 
 
 def test_golden_bav_income_scenario() -> None:
@@ -72,7 +71,7 @@ def test_golden_bav_income_scenario() -> None:
             AssetType.BAV,
             50_000.0,
             bav_strategy=BAVStrategy.INCOME,
-            bav_transfer_start_age=67,
+            bav_retirement_age=67,
         ),
         Asset("Cash", AssetType.CASH, 20_000.0),
     ]
@@ -125,12 +124,11 @@ def test_golden_inactive_asset_and_fractional_start_age() -> None:
             15_000.0,
             monthly_contribution=50.0,
             bav_strategy=BAVStrategy.TRANSFER,
-            bav_transfer_start_age=63,
-            bav_transfer_end_age=68,
+            bav_retirement_age=63,
             bav_transfer_etf_ratio=0.5,
         ),
     ]
     result = forecast_wealth(
         profile, assets, WithdrawalPlan(monthly_withdrawal=1500.0)
     )
-    assert _signature(result) == ("61db202f92d47ba5", 657)
+    assert _signature(result) == ("8df1c9224a8352fa", 657)
