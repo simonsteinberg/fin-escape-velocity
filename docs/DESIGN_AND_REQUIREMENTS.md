@@ -366,8 +366,10 @@ right panel (summary label, ECharts line chart, yearly table). Edits are debounc
 (type/strategy/active/relationship, add/remove, reset) re-render immediately.
 
 The browser tab uses a bundled SVG favicon (`src/finev/static/favicon.svg`, a
-rising-trend arrow), loaded via `ui_view.favicon_svg()` and passed to `ui.run`;
-the same SVG is rendered inline as the navbar logo and inside the About window.
+rising-trend arrow), loaded via `ui_view.favicon_svg()` and passed to `ui.run`.
+The same artwork is rendered inline as the navbar logo and inside the About
+window via `ui_view.inline_logo_svg()`, which rescales the icon's fixed root
+dimensions to its container; the navbar background is a matching teal.
 
 The navbar's **About** action opens a window showing the application version
 (e.g. `v0.1.0`), sourced from `ui_view.version_label_text()` →

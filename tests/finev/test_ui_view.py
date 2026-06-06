@@ -10,6 +10,7 @@ from finev.ui_view import (
     chart_series,
     favicon_svg,
     forecast_table_columns,
+    inline_logo_svg,
 )
 
 
@@ -18,6 +19,18 @@ def test_favicon_svg_returns_inline_svg() -> None:
     # NiceGUI only treats a string starting with "<svg" as an inline favicon.
     assert svg.lstrip().startswith("<svg")
     assert "</svg>" in svg
+
+
+def test_inline_logo_svg_scales_root_dimensions_to_container() -> None:
+    svg = inline_logo_svg()
+    # The fixed 128px root dimensions are replaced so the icon fills its box.
+    assert 'width="128"' not in svg
+    assert 'height="128"' not in svg
+    assert 'width="100%"' in svg
+    assert 'height="100%"' in svg
+    # Inner drawing attributes (e.g. stroke-width) must be left untouched.
+    assert "stroke-width=" in svg
+    assert svg.lstrip().startswith("<svg")
 
 
 def test_asset_value_columns_excludes_inheritance_and_appends_total() -> None:

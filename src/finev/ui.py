@@ -86,13 +86,13 @@ from finev.ui_view import (
     chart_series as _chart_series,
 )
 from finev.ui_view import (
-    favicon_svg as _favicon_svg,
-)
-from finev.ui_view import (
     forecast_table_columns as _forecast_table_columns,
 )
 from finev.ui_view import (
     format_currency as _format_currency,
+)
+from finev.ui_view import (
+    inline_logo_svg as _inline_logo_svg,
 )
 from finev.ui_view import (
     version_label_text as _version_label_text,
@@ -594,20 +594,22 @@ class _WealthPage:
         self.file_dialog.open()
 
     def _build_navbar(self) -> None:
-        """Render the always-visible top navbar with the File/About actions."""
-        with ui.header().classes("items-center justify-between px-4 py-2"):
-            with ui.row().classes("items-center gap-3"):
-                ui.html(_favicon_svg()).classes("w-8 h-8")
-                ui.label(
-                    "Financial Escape Velocity - Wealth Forecast"
-                ).classes("text-lg font-bold")
-            with ui.row().classes("items-center gap-1"):
-                ui.button("File", on_click=self.open_file_dialog).props(
-                    "flat color=white"
-                )
-                ui.button("About", on_click=self.about_dialog.open).props(
-                    "flat color=white"
-                )
+        """Render the always-visible top navbar with the File/About actions.
+
+        The header background is a teal that matches the logo's gradient, and the
+        logo, title and actions are all left-aligned in a single row.
+        """
+        with ui.header().classes("items-center gap-4 px-4 py-2 bg-teal-700"):
+            ui.html(_inline_logo_svg()).classes("w-8 h-8 shrink-0")
+            ui.label("Financial Escape Velocity - Wealth Forecast").classes(
+                "text-lg font-bold"
+            )
+            ui.button("File", on_click=self.open_file_dialog).props(
+                "flat color=white"
+            )
+            ui.button("About", on_click=self.about_dialog.open).props(
+                "flat color=white"
+            )
 
     def _build_file_dialog(self) -> None:
         """Build the File window holding the save/load/delete profile controls.
@@ -652,7 +654,7 @@ class _WealthPage:
             ui.card().classes("p-4 gap-2 items-center"),
         ):
             self.about_dialog = dialog
-            ui.html(_favicon_svg()).classes("w-12 h-12")
+            ui.html(_inline_logo_svg()).classes("w-12 h-12")
             ui.label("Financial Escape Velocity").classes(
                 "text-lg font-semibold"
             )

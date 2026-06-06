@@ -24,6 +24,9 @@ version is retired.
 
 - Renamed the app title and page header from "Wealth Forecast" to "Financial
   Escape Velocity - Wealth Forecast" (#22).
+- Navbar polish: the logo is rescaled to fit the header height (it no longer
+  overflows), the File/About actions are left-aligned next to the title, and the
+  header background is a teal that matches the logo's colours.
 
 ## [0.1.0] - 2026-06-06
 

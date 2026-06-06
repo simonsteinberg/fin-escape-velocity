@@ -6,6 +6,7 @@ unit-tested without rendering a page.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from importlib import resources
 from typing import Any
@@ -30,6 +31,30 @@ def favicon_svg() -> str:
         .joinpath("static/favicon.svg")
         .read_text(encoding="utf-8")
     )
+
+
+# Matches a ``width``/``height`` attribute inside the opening ``<svg>`` tag only
+# (``[^>]*?`` cannot cross the tag's closing ``>``), so inner attributes such as
+# ``stroke-width`` are never touched.
+_SVG_ROOT_WIDTH_RE = re.compile(r'(<svg\b[^>]*?\s)width="[^"]*"')
+_SVG_ROOT_HEIGHT_RE = re.compile(r'(<svg\b[^>]*?\s)height="[^"]*"')
+
+
+def inline_logo_svg() -> str:
+    """Return the app logo SVG sized to fill its container.
+
+    The bundled favicon hard-codes a 128px ``width``/``height``, which is right
+    for a browser tab but oversizes the icon when it is embedded inline (e.g. as
+    the navbar logo). This replaces those fixed root dimensions with ``100%`` so
+    the SVG scales to whatever box the caller sizes it to via CSS classes.
+
+    Returns:
+        The favicon SVG with its root ``width``/``height`` set to ``100%``.
+    """
+    svg = favicon_svg()
+    svg = _SVG_ROOT_WIDTH_RE.sub(r'\1width="100%"', svg, count=1)
+    svg = _SVG_ROOT_HEIGHT_RE.sub(r'\1height="100%"', svg, count=1)
+    return svg
 
 
 def version_label_text() -> str:
