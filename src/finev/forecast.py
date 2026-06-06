@@ -110,6 +110,8 @@ def _validate_profile(profile: UserProfile) -> ForecastMetadata:
         raise ValueError("End age must be at or after retirement age")
     if profile.average_inflation_rate <= -1:
         raise ValueError("Average inflation rate must be greater than -100%")
+    if profile.debt_interest_rate < 0:
+        raise ValueError("Debt interest rate must be non-negative")
 
     start_age_months = (
         profile.current_age_years * 12 + profile.current_age_months
@@ -317,20 +319,26 @@ class _EngineParams:
     etf_taxable_share: float
     etf_annual_allowance: float
     bav_tax_rate: float
+    debt_monthly_rate: float
 
 
 @dataclass
 class _MonthlyState:
     """Mutable state evolving across the monthly timeline.
 
-    ``balances``, ``cost_bases`` and ``remaining_etf_allowance`` carry over from
-    month to month. ``taxes`` and ``net_cashflow`` accumulate within a single
-    month and are reset by the caller at the start of each month.
+    ``balances``, ``cost_bases``, ``remaining_etf_allowance`` and ``debt`` carry
+    over from month to month. ``taxes`` and ``net_cashflow`` accumulate within a
+    single month and are reset by the caller at the start of each month.
+
+    ``debt`` is the outstanding borrowed amount (a non-negative number) that
+    accrues once withdrawals exhaust the assets; total wealth is the asset sum
+    minus this debt, so it may be negative.
     """
 
     balances: list[float]
     cost_bases: list[float]
     remaining_etf_allowance: float
+    debt: float = 0.0
     taxes: float = 0.0
     net_cashflow: float = 0.0
 
@@ -406,6 +414,7 @@ def _build_engine_params(
         etf_taxable_share=config.etf.taxable_share,
         etf_annual_allowance=config.etf.steuerfreibetrag_euro,
         bav_tax_rate=config.capital_gains_tax_rate,
+        debt_monthly_rate=_annual_to_monthly_rate(profile.debt_interest_rate),
     )
 
 
@@ -454,6 +463,11 @@ def _apply_inheritance(
         net_amount = gross_amount - inh_tax
         state.taxes += inh_tax
         state.net_cashflow += net_amount
+        # Pay down any outstanding debt before investing the remainder.
+        if state.debt > 0:
+            repayment = min(state.debt, net_amount)
+            state.debt -= repayment
+            net_amount -= repayment
         # Distribute net proceeds to ETF assets first, Cash as fallback.
         targets = params.etf_indices or params.cash_indices
         for target_idx, allocation in _allocate_amount(
@@ -596,55 +610,80 @@ def _apply_withdrawal(
         ),
         0.0,
     )
+    if withdrawal_target <= 0:
+        return
+
     withdrawable_indices = _withdrawable_indices(params, age_months)
     total_balance = (
         float(sum(state.balances[i] for i in withdrawable_indices))
         if withdrawable_indices
         else 0.0
     )
-    if not (withdrawal_target > 0 and total_balance > 0):
-        return
 
-    gross_target = _gross_up_withdrawal(
-        params, state, withdrawable_indices, withdrawal_target, total_balance
-    )
-    actual_withdrawn = min(gross_target, total_balance)
-    new_balances: list[float] = []
-    new_cost_bases: list[float] = []
-    etf_taxable_gains = 0.0
-    # Allocate withdrawals proportionally across withdrawable assets only.
-    for i, (asset, balance, cost_basis) in enumerate(
-        zip(params.assets_list, state.balances, state.cost_bases, strict=True)
-    ):
-        if i not in withdrawable_indices or balance <= 0:
-            # Asset is not withdrawable now; keep as is.
-            new_balances.append(balance)
-            new_cost_bases.append(max(cost_basis, 0.0))
-            continue
+    net_from_assets = 0.0
+    if total_balance > 0:
+        gross_target = _gross_up_withdrawal(
+            params,
+            state,
+            withdrawable_indices,
+            withdrawal_target,
+            total_balance,
+        )
+        actual_withdrawn = min(gross_target, total_balance)
+        new_balances: list[float] = []
+        new_cost_bases: list[float] = []
+        etf_taxable_gains = 0.0
+        # Allocate withdrawals proportionally across withdrawable assets only.
+        for i, (asset, balance, cost_basis) in enumerate(
+            zip(
+                params.assets_list,
+                state.balances,
+                state.cost_bases,
+                strict=True,
+            )
+        ):
+            if i not in withdrawable_indices or balance <= 0:
+                # Asset is not withdrawable now; keep as is.
+                new_balances.append(balance)
+                new_cost_bases.append(max(cost_basis, 0.0))
+                continue
 
-        asset_withdrawal = actual_withdrawn * (balance / total_balance)
-        withdrawal_ratio = asset_withdrawal / balance if balance > 0 else 0.0
-        new_balance = max(balance - asset_withdrawal, 0.0)
-        cost_basis_reduction = cost_basis * withdrawal_ratio
-        new_cost_basis = max(cost_basis - cost_basis_reduction, 0.0)
+            asset_withdrawal = actual_withdrawn * (balance / total_balance)
+            withdrawal_ratio = (
+                asset_withdrawal / balance if balance > 0 else 0.0
+            )
+            new_balance = max(balance - asset_withdrawal, 0.0)
+            cost_basis_reduction = cost_basis * withdrawal_ratio
+            new_cost_basis = max(cost_basis - cost_basis_reduction, 0.0)
 
-        if asset.asset_type == AssetType.ETF:
-            gains = balance - cost_basis
-            if gains > 0:
-                gains_portion = asset_withdrawal * (gains / balance)
-                etf_taxable_gains += gains_portion * params.etf_taxable_share
+            if asset.asset_type == AssetType.ETF:
+                gains = balance - cost_basis
+                if gains > 0:
+                    gains_portion = asset_withdrawal * (gains / balance)
+                    etf_taxable_gains += (
+                        gains_portion * params.etf_taxable_share
+                    )
 
-        new_balances.append(new_balance)
-        new_cost_bases.append(new_cost_basis)
+            new_balances.append(new_balance)
+            new_cost_bases.append(new_cost_basis)
 
-    state.balances = new_balances
-    state.cost_bases = new_cost_bases
-    allowance_used = min(state.remaining_etf_allowance, etf_taxable_gains)
-    taxable_after_allowance = etf_taxable_gains - allowance_used
-    withdrawal_taxes = taxable_after_allowance * params.etf_tax_rate
-    state.remaining_etf_allowance -= allowance_used
-    state.taxes += withdrawal_taxes
-    state.net_cashflow += -actual_withdrawn + withdrawal_taxes
+        state.balances = new_balances
+        state.cost_bases = new_cost_bases
+        allowance_used = min(state.remaining_etf_allowance, etf_taxable_gains)
+        taxable_after_allowance = etf_taxable_gains - allowance_used
+        withdrawal_taxes = taxable_after_allowance * params.etf_tax_rate
+        state.remaining_etf_allowance -= allowance_used
+        state.taxes += withdrawal_taxes
+        net_from_assets = actual_withdrawn - withdrawal_taxes
+        state.net_cashflow += -actual_withdrawn + withdrawal_taxes
+
+    # Fund any net target the assets could not cover by borrowing. The shortfall
+    # becomes debt (total wealth is allowed to go negative); a tiny epsilon
+    # avoids booking floating-point noise as debt when assets fully cover it.
+    shortfall = withdrawal_target - net_from_assets
+    if shortfall > 1e-9:
+        state.debt += shortfall
+        state.net_cashflow -= shortfall
 
 
 def _apply_bav_transfer(
@@ -738,6 +777,15 @@ def _apply_growth(
     ]
 
 
+def _apply_debt_interest(
+    params: _EngineParams,
+    state: _MonthlyState,
+) -> None:
+    """Compound any outstanding debt by the monthly debt interest rate."""
+    if state.debt > 0:
+        state.debt *= 1 + params.debt_monthly_rate
+
+
 def _build_row(
     params: _EngineParams,
     state: _MonthlyState,
@@ -757,6 +805,8 @@ def _build_row(
     for asset, balance in zip(params.assets_list, state.balances, strict=True):
         if asset.asset_type != AssetType.INHERITANCE:
             row[asset.name] = float(balance)
+    # Total wealth nets outstanding debt against the asset balances, so it may
+    # be negative once withdrawals have exhausted the assets.
     row["total"] = float(
         sum(
             balance
@@ -765,6 +815,7 @@ def _build_row(
             )
             if asset.asset_type != AssetType.INHERITANCE
         )
+        - state.debt
     )
     return row
 
@@ -826,6 +877,7 @@ def forecast_wealth(
                 else set()
             )
             _apply_growth(params, state, frozen_indices)
+            _apply_debt_interest(params, state)
 
         rows.append(
             _build_row(

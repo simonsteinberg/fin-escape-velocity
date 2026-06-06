@@ -142,6 +142,7 @@ def default_profile_state() -> dict[str, Any]:
         "end_age": 100,
         "currency": "EUR",
         "average_inflation_rate_pct": 2.0,
+        "debt_interest_rate_pct": 8.0,
         "annual_income": 50000.0,
     }
 
@@ -347,6 +348,11 @@ def load_profile_state(cached_state: dict[str, Any] | None) -> dict[str, Any]:
         profile_state["average_inflation_rate_pct"] = coerce_float(
             raw_profile.get("average_inflation_rate_pct"),
             "profile.average_inflation_rate_pct",
+        )
+    if raw_profile.get("debt_interest_rate_pct") not in (None, ""):
+        profile_state["debt_interest_rate_pct"] = coerce_float(
+            raw_profile.get("debt_interest_rate_pct"),
+            "profile.debt_interest_rate_pct",
         )
     if raw_profile.get("annual_income") not in (None, ""):
         profile_state["annual_income"] = coerce_float(

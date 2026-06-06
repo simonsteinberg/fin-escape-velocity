@@ -152,6 +152,7 @@ def test_reset_state_restores_defaults_and_clears_cache(
         "end_age",
         "currency",
         "average_inflation_rate",
+        "debt_interest_rate",
         "withdrawal_input",
         "annual_income",
         "state_pension_current_monthly_amount",

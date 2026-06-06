@@ -60,7 +60,7 @@ def test_golden_default_scenario() -> None:
     result = forecast_wealth(
         profile, assets, WithdrawalPlan(monthly_withdrawal=3000.0)
     )
-    assert _signature(result) == ("4b754c4e39caf8f4", 721)
+    assert _signature(result) == ("07ba573708bb41bd", 721)
 
 
 def test_golden_bav_income_scenario() -> None:
@@ -79,7 +79,7 @@ def test_golden_bav_income_scenario() -> None:
     result = forecast_wealth(
         profile, assets, WithdrawalPlan(monthly_withdrawal=2000.0)
     )
-    assert _signature(result) == ("3626e6850cb45480", 721)
+    assert _signature(result) == ("464dcad4c8c4b594", 721)
 
 
 def test_golden_inheritance_and_pension_scenario() -> None:
@@ -133,4 +133,4 @@ def test_golden_inactive_asset_and_fractional_start_age() -> None:
     result = forecast_wealth(
         profile, assets, WithdrawalPlan(monthly_withdrawal=1500.0)
     )
-    assert _signature(result) == ("b8e0b69909cf2a9d", 657)
+    assert _signature(result) == ("61db202f92d47ba5", 657)
