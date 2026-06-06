@@ -5,6 +5,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > **Engineering principles:** see [SOFTWARE_ENGINEERING.md](SOFTWARE_ENGINEERING.md) for the
 > reasoning ("why") behind the rules below. This file is the operational checklist; that file
 > is the rationale.
+>
+> **Design and requirements:** see [docs/DESIGN_AND_REQUIREMENTS.md](docs/DESIGN_AND_REQUIREMENTS.md)
+> for what the system does and the requirements it satisfies. It is the canonical
+> spec — **keep it current** (see [Keeping the design doc current](#keeping-the-design-doc-current)).
 
 ## What this project is
 
@@ -37,9 +41,23 @@ presentation only and must not contain domain math.
 
 `config.json` is the authoritative source for all German tax constants. When tax rules change, update it — not the Python code.
 
-See [docs/CODE_QUALITY_PLAN.md](docs/CODE_QUALITY_PLAN.md) for the staged plan to
-decompose the two large functions (`ui.py::build_wealth_page`,
-`forecast.py::forecast_wealth`).
+## Keeping the design doc current
+
+[docs/DESIGN_AND_REQUIREMENTS.md](docs/DESIGN_AND_REQUIREMENTS.md) is the canonical
+description of what the system does and the requirements it satisfies. Treat it as
+part of the deliverable, not as after-the-fact documentation:
+
+- When a change in a session alters something the doc covers — behaviour, a
+  forecast/tax rule, a model or enum, the module architecture, a default, an
+  input/output, a configuration key, or a functional requirement / acceptance
+  criterion — **update the doc in the same change**, so it never drifts from the code.
+- Update it proactively when you judge it relevant; you do not need to be asked.
+- A pull request that changes design- or requirement-relevant behaviour without
+  updating this doc is incomplete.
+- Keep edits scoped: change the sections the work actually affects, and keep the
+  doc consistent with `config.json`, `models.py`, and the engine.
+- If a change makes a requirement obsolete, remove or amend it rather than leaving
+  a stale entry.
 
 ## Git worktrees
 
