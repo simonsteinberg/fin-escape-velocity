@@ -163,6 +163,69 @@ def test_validate_assets_rejects_invalid_bav_transfer_ratio() -> None:
         _validate_assets([asset])
 
 
+def test_validate_assets_rejects_negative_vbl_pension() -> None:
+    asset = _valid_asset(
+        asset_type=AssetType.VBL_KLASSIK,
+        current_value=0.0,
+        vbl_monthly_pension=-1.0,
+    )
+
+    with pytest.raises(
+        ValueError, match="VBL monthly pension must be non-negative"
+    ):
+        _validate_assets([asset])
+
+
+def test_validate_assets_rejects_negative_vbl_growth() -> None:
+    asset = _valid_asset(
+        asset_type=AssetType.VBL_KLASSIK,
+        current_value=0.0,
+        vbl_monthly_growth_per_working_year=-1.0,
+    )
+
+    with pytest.raises(
+        ValueError, match="VBL growth per working year must be non-negative"
+    ):
+        _validate_assets([asset])
+
+
+def test_validate_assets_rejects_negative_vbl_start_age() -> None:
+    asset = _valid_asset(
+        asset_type=AssetType.VBL_KLASSIK,
+        current_value=0.0,
+        vbl_start_age=-1,
+    )
+
+    with pytest.raises(ValueError, match="VBL start age must be non-negative"):
+        _validate_assets([asset])
+
+
+def test_validate_assets_rejects_invalid_vbl_tax_rate() -> None:
+    asset = _valid_asset(
+        asset_type=AssetType.VBL_KLASSIK,
+        current_value=0.0,
+        vbl_tax_rate=1.5,
+    )
+
+    with pytest.raises(
+        ValueError, match="VBL tax rate must be between 0 and 1"
+    ):
+        _validate_assets([asset])
+
+
+def test_validate_assets_accepts_vbl_without_balance() -> None:
+    # A VBLklassik asset carries no balance/contribution and must validate even
+    # though those fields are left at their defaults.
+    asset = _valid_asset(
+        asset_type=AssetType.VBL_KLASSIK,
+        current_value=0.0,
+        vbl_monthly_pension=1_000.0,
+        vbl_start_age=67,
+    )
+
+    assert _validate_assets([asset]) == [asset]
+
+
 def test_bav_transfer_requires_target_assets() -> None:
     profile = _valid_profile()
     assets = [

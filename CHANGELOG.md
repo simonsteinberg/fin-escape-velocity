@@ -12,6 +12,12 @@ version is retired.
 
 ### Added
 
+- New **VBLklassik** asset type: the public-sector occupational pension modeled
+  as a lifelong, income-taxed annuity that offsets post-retirement withdrawals
+  (like the DRV state pension, but nominal — not inflation-compensated). Entered
+  as Versorgungspunkte (× €4/point) or a direct gross monthly euro amount, with a
+  "still in public service" checkbox that accrues one point per working year. Adds
+  `VBL_RENTE_PRO_PUNKT_EURO` and `VBL_BRUTTO_RENTE_STEUERSATZ` config keys.
 - Versioning system: SemVer source of truth in `pyproject.toml`, a maintained
   changelog, the in-app version label, and the `mise run release` workflow.
 - App favicon: a modern, scalable SVG icon (a rising-trend arrow) bundled as a

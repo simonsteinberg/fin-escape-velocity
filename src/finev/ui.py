@@ -206,6 +206,84 @@ def _render_asset_row(
                     e.value,
                 ),
             ).classes("w-full")
+        elif asset_type == AssetType.VBL_KLASSIK:
+            input_mode = str(row.get("vbl_input_mode", "points"))
+            with ui.column().classes("w-full gap-2"):
+                ui.select(
+                    options={
+                        "points": "Versorgungspunkte",
+                        "euro": "Monthly pension (€)",
+                    },
+                    value=input_mode,
+                    label="Input",
+                    on_change=lambda e, i=index: on_field_change(
+                        i,
+                        "vbl_input_mode",
+                        e.value,
+                    ),
+                ).classes("w-full")
+                if input_mode == "euro":
+                    ui.number(
+                        label="Monthly pension (€, gross)",
+                        value=row.get("vbl_monthly_pension") or 0,
+                        format="%.0f",
+                        min=0,
+                        step=50,
+                        on_change=lambda e, i=index: on_field_change(
+                            i,
+                            "vbl_monthly_pension",
+                            e.value,
+                        ),
+                    ).classes("w-full")
+                else:
+                    ui.number(
+                        label="Versorgungspunkte",
+                        value=row.get("vbl_points") or 0,
+                        format="%.1f",
+                        min=0,
+                        step=1,
+                        on_change=lambda e, i=index: on_field_change(
+                            i,
+                            "vbl_points",
+                            e.value,
+                        ),
+                    ).classes("w-full")
+                with ui.row().classes("w-full gap-2 items-center"):
+                    ui.checkbox(
+                        "Noch im Öffentlichen Dienst (1 Punkt/Jahr)",
+                        value=bool(row.get("vbl_still_working", False)),
+                        on_change=lambda e, i=index: on_field_change(
+                            i,
+                            "vbl_still_working",
+                            e.value,
+                        ),
+                    )
+                with ui.row().classes("w-full gap-2"):
+                    ui.number(
+                        label="Pension start age",
+                        value=row.get("vbl_start_age") or 67,
+                        format="%.0f",
+                        min=0,
+                        step=1,
+                        on_change=lambda e, i=index: on_field_change(
+                            i,
+                            "vbl_start_age",
+                            e.value,
+                        ),
+                    ).classes("w-40")
+                    ui.number(
+                        label="Tax rate (%, optional)",
+                        value=row.get("vbl_tax_rate_pct") or None,
+                        format="%.1f",
+                        min=0,
+                        max=100,
+                        step=1,
+                        on_change=lambda e, i=index: on_field_change(
+                            i,
+                            "vbl_tax_rate_pct",
+                            e.value,
+                        ),
+                    ).classes("w-40")
         else:
             with ui.grid(columns=2).classes("w-full gap-2"):
                 ui.number(
@@ -430,6 +508,8 @@ class _WealthPage:
             "bav_strategy",
             "active",
             "inheritance_relationship",
+            "vbl_input_mode",
+            "vbl_still_working",
         }:
             self.render_asset_rows()
             self.run_immediate()

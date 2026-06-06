@@ -23,6 +23,12 @@ from finev.models import (
 if TYPE_CHECKING:
     from finev.config import FinevConfig
 
+# Asset types that carry no running balance: they never appear as a balance
+# column, take no contributions, and are skipped by growth/withdrawal. Their
+# effect on the forecast is event- or income-based instead (an inheritance
+# credit, or a VBLklassik pension that offsets withdrawals).
+_NON_BALANCE_TYPES = frozenset({AssetType.INHERITANCE, AssetType.VBL_KLASSIK})
+
 
 @dataclass(frozen=True)
 class ForecastMetadata:
@@ -174,6 +180,29 @@ def _validate_assets(assets: Iterable[Asset]) -> list[Asset]:
                 ) from exc
             continue
 
+        if asset.asset_type == AssetType.VBL_KLASSIK:
+            if asset.vbl_monthly_pension < 0:
+                raise ValueError(
+                    f"Asset '{asset.name}' VBL monthly pension must be "
+                    "non-negative"
+                )
+            if asset.vbl_monthly_growth_per_working_year < 0:
+                raise ValueError(
+                    f"Asset '{asset.name}' VBL growth per working year must be "
+                    "non-negative"
+                )
+            if asset.vbl_start_age < 0:
+                raise ValueError(
+                    f"Asset '{asset.name}' VBL start age must be non-negative"
+                )
+            if asset.vbl_tax_rate is not None and not (
+                0 <= asset.vbl_tax_rate < 1
+            ):
+                raise ValueError(
+                    f"Asset '{asset.name}' VBL tax rate must be between 0 and 1"
+                )
+            continue
+
         if asset.current_value < 0:
             raise ValueError(
                 f"Asset '{asset.name}' current value must be non-negative"
@@ -287,6 +316,49 @@ def _net_state_pension_for_month(
     return gross_monthly_pension * (1 - tax_rate)
 
 
+def _net_vbl_pension_for_month(
+    metadata: ForecastMetadata,
+    vbl_assets: list[Asset],
+    age_months: int,
+    config: FinevConfig,
+) -> float:
+    """Return the combined net monthly VBLklassik pension for the given month.
+
+    Each active VBLklassik asset pays a lifelong gross monthly pension once its
+    start age is reached, plus any pension accrued from additional working years
+    in public service. Unlike the DRV state pension, the VBL pension is **not
+    inflation-compensated**: it stays nominal at its today's-euro value, so its
+    real value erodes against the inflation-indexed withdrawal target. No
+    early-retirement reduction is applied. The pension is fully income-taxed.
+
+    Args:
+        metadata: Derived timeline boundaries.
+        vbl_assets: Active VBLklassik assets contributing pension income.
+        age_months: Age in months for the current forecast month.
+        config: Loaded configuration providing the default VBL tax rate.
+
+    Returns:
+        Combined net monthly VBL pension in (nominal) euros.
+    """
+    working_years = (
+        max(metadata.retirement_age_months - metadata.start_age_months, 0) / 12
+    )
+    total_net = 0.0
+    for asset in vbl_assets:
+        if age_months < asset.vbl_start_age * 12:
+            continue
+        gross_monthly_pension = asset.vbl_monthly_pension + (
+            working_years * asset.vbl_monthly_growth_per_working_year
+        )
+        tax_rate = (
+            asset.vbl_tax_rate
+            if asset.vbl_tax_rate is not None
+            else config.vbl.brutto_rente_steuersatz
+        )
+        total_net += gross_monthly_pension * (1 - tax_rate)
+    return total_net
+
+
 @dataclass(frozen=True)
 class _EngineParams:
     """Immutable per-run context shared by every monthly step.
@@ -305,6 +377,8 @@ class _EngineParams:
     cash_indices: list[int]
     # Inheritance events as (age_in_months, gross_amount, relationship).
     inheritance_events: list[tuple[int, float, InheritanceRelationship]]
+    # Active VBLklassik assets paying lifelong pension income.
+    vbl_assets: list[Asset]
     etf_tax_rate: float
     etf_taxable_share: float
     etf_annual_allowance: float
@@ -375,6 +449,11 @@ def _build_engine_params(
         and asset.active
         and asset.inheritance_gross_amount > 0
     ]
+    vbl_assets = [
+        asset
+        for asset in assets_list
+        if asset.asset_type == AssetType.VBL_KLASSIK and asset.active
+    ]
     if transfer_assets:
         if (
             any(asset.bav_transfer_etf_ratio > 0 for asset in transfer_assets)
@@ -401,6 +480,7 @@ def _build_engine_params(
         etf_indices=etf_indices,
         cash_indices=cash_indices,
         inheritance_events=inheritance_events,
+        vbl_assets=vbl_assets,
         etf_tax_rate=config.capital_gains_tax_rate,
         etf_taxable_share=config.etf.taxable_share,
         etf_annual_allowance=config.etf.steuerfreibetrag_euro,
@@ -419,13 +499,13 @@ def _initial_state(
     """
     balances = [
         float(asset.current_value)
-        if asset.active and asset.asset_type != AssetType.INHERITANCE
+        if asset.active and asset.asset_type not in _NON_BALANCE_TYPES
         else 0.0
         for asset in params.assets_list
     ]
     cost_bases = [
         float(asset.effective_cost_basis())
-        if asset.active and asset.asset_type != AssetType.INHERITANCE
+        if asset.active and asset.asset_type not in _NON_BALANCE_TYPES
         else 0.0
         for asset in params.assets_list
     ]
@@ -476,7 +556,7 @@ def _apply_contributions(
     """Add monthly contributions to each active, non-inheritance asset."""
     contributions = [
         float(asset.monthly_contribution)
-        if asset.active and asset.asset_type != AssetType.INHERITANCE
+        if asset.active and asset.asset_type not in _NON_BALANCE_TYPES
         else 0.0
         for asset in params.assets_list
     ]
@@ -591,17 +671,19 @@ def _apply_withdrawal(
     withdrawal_target = (
         float(params.withdrawal.monthly_withdrawal) * inflation_multiplier
     )
-    withdrawal_target = max(
-        withdrawal_target
-        - _net_state_pension_for_month(
-            profile=params.profile,
-            metadata=params.metadata,
-            state_pension=params.withdrawal.state_pension,
-            age_months=age_months,
-            config=params.config,
-        ),
-        0.0,
+    net_pension = _net_state_pension_for_month(
+        profile=params.profile,
+        metadata=params.metadata,
+        state_pension=params.withdrawal.state_pension,
+        age_months=age_months,
+        config=params.config,
+    ) + _net_vbl_pension_for_month(
+        metadata=params.metadata,
+        vbl_assets=params.vbl_assets,
+        age_months=age_months,
+        config=params.config,
     )
+    withdrawal_target = max(withdrawal_target - net_pension, 0.0)
     if withdrawal_target <= 0:
         return
 
@@ -798,7 +880,7 @@ def _apply_insolvency_floor(
         for asset, balance in zip(
             params.assets_list, state.balances, strict=True
         )
-        if asset.asset_type != AssetType.INHERITANCE
+        if asset.asset_type not in _NON_BALANCE_TYPES
     )
     max_debt = asset_total + params.insolvency_floor
     if state.debt > max_debt:
@@ -822,7 +904,7 @@ def _build_row(
     }
     # INHERITANCE assets always hold a zero balance — exclude from columns.
     for asset, balance in zip(params.assets_list, state.balances, strict=True):
-        if asset.asset_type != AssetType.INHERITANCE:
+        if asset.asset_type not in _NON_BALANCE_TYPES:
             row[asset.name] = float(balance)
     # Total wealth nets outstanding debt against the asset balances, so it may
     # be negative once withdrawals have exhausted the assets.
@@ -832,7 +914,7 @@ def _build_row(
             for asset, balance in zip(
                 params.assets_list, state.balances, strict=True
             )
-            if asset.asset_type != AssetType.INHERITANCE
+            if asset.asset_type not in _NON_BALANCE_TYPES
         )
         - state.debt
     )

@@ -13,6 +13,7 @@ class AssetType(StrEnum):
     BAV = "bAV"
     CASH = "Cash"
     INHERITANCE = "Inheritance"
+    VBL_KLASSIK = "VBLklassik"
 
 
 class BAVStrategy(StrEnum):
@@ -53,6 +54,10 @@ DEFAULT_ANNUAL_GAIN_RATES: dict[AssetType, float] = {
     AssetType.BAV: 0.02,
     AssetType.CASH: 0.005,
     AssetType.INHERITANCE: 0.0,
+    # VBLklassik holds no running balance (it is a lifelong income annuity), so
+    # this rate is never compounded; it exists only to satisfy the per-asset
+    # lookup the engine performs for every asset type.
+    AssetType.VBL_KLASSIK: 0.0,
 }
 
 
@@ -100,6 +105,15 @@ class Asset:
         inheritance_gross_amount: Gross inheritance amount before tax (INHERITANCE only).
         inheritance_age: Age (years) at which the inheritance is received (INHERITANCE only).
         inheritance_relationship: Heir relationship key for tax computation (INHERITANCE only).
+        vbl_monthly_pension: Gross monthly VBLklassik pension at the start age, in
+            today's euros (VBL_KLASSIK only). VBL holds no balance — this lifelong
+            annuity offsets the post-retirement withdrawal need.
+        vbl_monthly_growth_per_working_year: Extra gross monthly VBL pension earned
+            per additional working year in public service until retirement, in
+            today's euros (VBL_KLASSIK only; one Versorgungspunkt per year).
+        vbl_start_age: Age (years) at which the VBL pension begins (VBL_KLASSIK only).
+        vbl_tax_rate: Optional flat tax rate on the gross VBL pension; the
+            configured default is used when omitted (VBL_KLASSIK only).
     """
 
     name: str
@@ -117,6 +131,10 @@ class Asset:
     inheritance_relationship: InheritanceRelationship = (
         InheritanceRelationship.KIND
     )
+    vbl_monthly_pension: float = 0.0
+    vbl_monthly_growth_per_working_year: float = 0.0
+    vbl_start_age: int = 67
+    vbl_tax_rate: float | None = None
 
     def effective_cost_basis(self) -> float:
         """Return the starting cost basis for this asset.

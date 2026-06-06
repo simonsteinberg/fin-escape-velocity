@@ -159,6 +159,65 @@ def test_asset_from_row_maps_bav_ratio_pct() -> None:
     assert asset.bav_transfer_etf_ratio == pytest.approx(0.75)
 
 
+def test_asset_from_row_vbl_points_to_pension() -> None:
+    asset = _asset_from_row(
+        {
+            "name": "VBL",
+            "type": AssetType.VBL_KLASSIK.value,
+            "vbl_input_mode": "points",
+            "vbl_points": 250.0,
+            "vbl_still_working": True,
+            "vbl_start_age": 67,
+        }
+    )
+
+    assert asset.asset_type == AssetType.VBL_KLASSIK
+    assert asset.current_value == pytest.approx(0.0)
+    # 250 points x €4/point = €1 000 gross monthly pension.
+    assert asset.vbl_monthly_pension == pytest.approx(1_000.0)
+    # Still working -> one point (€4) of extra pension per working year.
+    assert asset.vbl_monthly_growth_per_working_year == pytest.approx(4.0)
+    assert asset.vbl_start_age == 67
+
+
+def test_asset_from_row_vbl_euro_mode_and_no_growth_when_not_working() -> None:
+    asset = _asset_from_row(
+        {
+            "name": "VBL",
+            "type": AssetType.VBL_KLASSIK.value,
+            "vbl_input_mode": "euro",
+            "vbl_monthly_pension": 800.0,
+            "vbl_points": 999.0,  # ignored in euro mode
+            "vbl_still_working": False,
+            "vbl_tax_rate_pct": 10.0,
+        }
+    )
+
+    assert asset.vbl_monthly_pension == pytest.approx(800.0)
+    assert asset.vbl_monthly_growth_per_working_year == pytest.approx(0.0)
+    assert asset.vbl_tax_rate == pytest.approx(0.10)
+
+
+def test_normalize_asset_row_coerces_vbl_fields() -> None:
+    normalized = _normalize_asset_row(
+        {
+            "name": "VBL",
+            "type": AssetType.VBL_KLASSIK.value,
+            "vbl_input_mode": "bogus",
+            "vbl_points": "100",
+            "vbl_still_working": "true",
+            "vbl_start_age": "65",
+            "vbl_tax_rate_pct": "150",
+        }
+    )
+
+    assert normalized["vbl_input_mode"] == "points"
+    assert normalized["vbl_points"] == pytest.approx(100.0)
+    assert normalized["vbl_still_working"] is True
+    assert normalized["vbl_start_age"] == 65
+    assert normalized["vbl_tax_rate_pct"] == pytest.approx(100.0)
+
+
 def test_normalize_asset_row_clamps_unrealized_gains() -> None:
     normalized = _normalize_asset_row(
         {
