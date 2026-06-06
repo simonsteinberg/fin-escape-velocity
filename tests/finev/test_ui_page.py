@@ -327,3 +327,68 @@ def test_open_file_dialog_refreshes_options_and_opens(
     # The saved-profiles list is refreshed from the store before opening.
     assert page.profile_select.options == ["wife"]
     assert dialog.opened == 1
+
+
+def _wire_valid_profile(page: _WealthPage) -> None:
+    """Wire fake widgets and populate a forecastable profile/withdrawal."""
+    _wire_widgets(page)
+    page.current_age_years.value = 40
+    page.current_age_months.value = 0
+    page.retirement_age.value = 67
+    page.end_age.value = 100
+    page.currency.value = "EUR"
+    page.average_inflation_rate.value = 2.0
+    page.debt_interest_rate.value = 5.0
+    page.withdrawal_input.value = 3000
+    page.annual_income.value = 50000
+    page.state_pension_current_monthly_amount.value = 0
+    page.state_pension_start_age.value = 67
+
+
+def test_export_forecast_csv_downloads_detailed_csv(
+    page: _WealthPage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _wire_valid_profile(page)
+    downloads: list[tuple[Any, Any, Any]] = []
+    monkeypatch.setattr(
+        "finev.ui.ui.download.content",
+        lambda content, filename=None, media_type="": downloads.append(
+            (content, filename, media_type)
+        ),
+    )
+
+    page.export_forecast_csv()
+
+    assert len(downloads) == 1
+    content, filename, media_type = downloads[0]
+    assert media_type == "text/csv"
+    assert filename.startswith("wealth-forecast-") and filename.endswith(
+        ".csv"
+    )
+    header = content.splitlines()[0]
+    # Detailed export: monthly granularity columns plus every asset and total.
+    assert "month_index" in header
+    assert "total" in header
+    for name in ("ETF MSCI World", "bAV", "Daily account"):
+        assert name in header
+    # Full monthly detail (age 40→100 inclusive) far exceeds the yearly view.
+    assert len(content.strip().splitlines()) > 12 * 60
+
+
+def test_export_forecast_csv_notifies_on_invalid_inputs(
+    page: _WealthPage,
+    monkeypatch: pytest.MonkeyPatch,
+    notifications: list[tuple[str, Any]],
+) -> None:
+    _wire_widgets(page)  # all-zero profile fails forecast validation
+    downloads: list[Any] = []
+    monkeypatch.setattr(
+        "finev.ui.ui.download.content",
+        lambda *args, **kwargs: downloads.append(args),
+    )
+
+    page.export_forecast_csv()
+
+    # No download is emitted; the error surfaces as a negative notification.
+    assert downloads == []
+    assert notifications[-1][1] == "negative"

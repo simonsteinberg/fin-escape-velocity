@@ -19,6 +19,9 @@ version is retired.
 - Top navbar: an always-visible header carrying the logo and title, a **File**
   action that opens the save/load/delete profile window, and an **About** action
   that shows the current version (#26).
+- Navbar **Export** action: downloads the detailed monthly forecast (every month
+  and every backend-computed column) as a timestamped CSV via the browser's
+  download folder (#28).
 
 ### Changed
 
