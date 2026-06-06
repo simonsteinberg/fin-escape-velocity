@@ -169,20 +169,27 @@ def forecast_table_columns(value_columns: list[str]) -> list[dict[str, Any]]:
 def forecast_csv(df: pd.DataFrame) -> str:
     """Serialize the full monthly forecast frame to CSV text.
 
-    Exports the detailed engine output verbatim (every month, all computed
-    columns: ``month_index``, ``age_years``, ``age_months``, ``net_cashflow``,
+    Exports the detailed engine output (every month, all computed columns:
+    ``month_index``, ``age_years``, ``age_months``, ``net_cashflow``,
     ``taxes``, the per-asset balances, and ``total``) rather than the
-    yearly-sampled, rounded display frame, so the download holds the full
-    backend detail.
+    yearly-sampled display frame, so the download holds the full backend detail.
+
+    To keep the file frugal, the EURO-valued columns (the floating-point
+    columns: ``net_cashflow``, ``taxes``, the per-asset balances, and
+    ``total``) are rounded to whole euros and written as integers; the
+    already-integer ``month_index``/``age_*`` columns are untouched.
 
     Args:
         df: Monthly forecast frame as returned by ``forecast_wealth``.
 
     Returns:
         CSV text with a header row and one row per month, without the pandas
-        index column.
+        index column, EURO values rendered as integers.
     """
-    return df.to_csv(index=False)
+    rounded = df.copy()
+    euro_columns = rounded.select_dtypes(include="float").columns
+    rounded[euro_columns] = rounded[euro_columns].round(0).astype("int64")
+    return rounded.to_csv(index=False)
 
 
 def export_csv_filename(generated_at: datetime | None = None) -> str:
