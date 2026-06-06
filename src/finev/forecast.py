@@ -320,6 +320,7 @@ class _EngineParams:
     etf_annual_allowance: float
     bav_tax_rate: float
     debt_monthly_rate: float
+    insolvency_floor: float
 
 
 @dataclass
@@ -415,6 +416,7 @@ def _build_engine_params(
         etf_annual_allowance=config.etf.steuerfreibetrag_euro,
         bav_tax_rate=config.capital_gains_tax_rate,
         debt_monthly_rate=_annual_to_monthly_rate(profile.debt_interest_rate),
+        insolvency_floor=config.insolvency.schwelle_euro,
     )
 
 
@@ -786,6 +788,30 @@ def _apply_debt_interest(
         state.debt *= 1 + params.debt_monthly_rate
 
 
+def _apply_insolvency_floor(
+    params: _EngineParams,
+    state: _MonthlyState,
+) -> None:
+    """Cap debt at the Privatinsolvenz floor so total wealth cannot pass it.
+
+    Total wealth is ``asset_total - debt``; capping the debt at
+    ``asset_total + insolvency_floor`` floors that total at
+    ``-insolvency_floor``. Because the cap is applied to the carried-over state
+    (not just the output), the capped debt stops compounding, so a later
+    inheritance that repays it can lift the forecast back out of insolvency.
+    """
+    asset_total = sum(
+        balance
+        for asset, balance in zip(
+            params.assets_list, state.balances, strict=True
+        )
+        if asset.asset_type != AssetType.INHERITANCE
+    )
+    max_debt = asset_total + params.insolvency_floor
+    if state.debt > max_debt:
+        state.debt = max_debt
+
+
 def _build_row(
     params: _EngineParams,
     state: _MonthlyState,
@@ -878,6 +904,7 @@ def forecast_wealth(
             )
             _apply_growth(params, state, frozen_indices)
             _apply_debt_interest(params, state)
+            _apply_insolvency_floor(params, state)
 
         rows.append(
             _build_row(

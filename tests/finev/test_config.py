@@ -11,6 +11,7 @@ def test_config_loads_expected_values() -> None:
     assert config.etf.taxable_share == pytest.approx(0.7)
     assert config.etf.steuerfreibetrag_euro == pytest.approx(1000.0)
     assert config.capital_gains_tax_rate == pytest.approx(0.25 * (1 + 0.055))
+    assert config.insolvency.schwelle_euro == pytest.approx(100_000.0)
 
 
 def test_inheritance_tax_below_freibetrag_returns_zero() -> None:

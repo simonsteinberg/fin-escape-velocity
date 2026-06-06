@@ -200,6 +200,85 @@ def test_inheritance_repays_outstanding_debt() -> None:
     assert result.loc[inheritance_month, "total"] == pytest.approx(38_000.0)
 
 
+def test_privatinsolvenz_floors_total_wealth() -> None:
+    """Total wealth never falls below the configured insolvency floor."""
+    floor = get_config().insolvency.schwelle_euro
+    profile = UserProfile(
+        current_age_years=67,
+        retirement_age=67,
+        end_age=100,
+        average_inflation_rate=0.0,
+        debt_interest_rate=0.08,
+    )
+    # No assets to draw on, so debt would grow far past the floor unchecked.
+    assets = [
+        Asset(
+            name="Cash",
+            asset_type=AssetType.CASH,
+            current_value=0.0,
+            annual_gain_rate=0.0,
+            monthly_contribution=0.0,
+        )
+    ]
+    withdrawal = WithdrawalPlan(monthly_withdrawal=3_000.0)
+
+    result = forecast_wealth(
+        profile=profile, assets=assets, withdrawal=withdrawal
+    )
+
+    assert (result["total"] >= -floor - 1e-6).all()
+    assert result["total"].min() == pytest.approx(-floor)
+    # Without any rescue, the forecast ends pinned at the floor.
+    assert result["total"].iloc[-1] == pytest.approx(-floor)
+
+
+def test_inheritance_lets_forecast_escape_privatinsolvenz() -> None:
+    """A later inheritance repays the capped debt and lifts wealth back green."""
+    floor = get_config().insolvency.schwelle_euro
+    profile = UserProfile(
+        current_age_years=67,
+        retirement_age=67,
+        end_age=100,
+        average_inflation_rate=0.0,
+        debt_interest_rate=0.0,
+    )
+    assets = [
+        Asset(
+            name="Cash",
+            asset_type=AssetType.CASH,
+            current_value=0.0,
+            annual_gain_rate=0.0,
+            monthly_contribution=0.0,
+        ),
+        # Kind: gross 500 000, Freibetrag 400 000, taxable 100 000 @ 11% = 11 000
+        # tax, so 489 000 net arrives at age 70.
+        Asset(
+            name="Estate",
+            asset_type=AssetType.INHERITANCE,
+            current_value=0.0,
+            inheritance_gross_amount=500_000.0,
+            inheritance_age=70,
+            inheritance_relationship=InheritanceRelationship.KIND,
+        ),
+    ]
+    withdrawal = WithdrawalPlan(monthly_withdrawal=5_000.0)
+
+    result = forecast_wealth(
+        profile=profile, assets=assets, withdrawal=withdrawal
+    )
+
+    # Age 69: debt has been capped at the floor (Privatinsolvenz).
+    assert result.loc[24, "total"] == pytest.approx(-floor)
+    # Age 70: the 489 000 net inheritance repays the 100 000 capped debt and the
+    # remaining 389 000 (less that month's 5 000 withdrawal) is invested — wealth
+    # is firmly green again.
+    inheritance_month = (70 - 67) * 12
+    assert result.loc[inheritance_month, "total"] == pytest.approx(384_000.0)
+    # End of life: spent down again and back at the floor, never below it.
+    assert result.loc[396, "total"] == pytest.approx(-floor)
+    assert (result["total"] >= -floor - 1e-6).all()
+
+
 def test_withdrawal_inflates_with_average_rate() -> None:
     """Increase withdrawal target using average inflation rate."""
     profile = UserProfile(

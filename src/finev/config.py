@@ -59,6 +59,20 @@ class EtfTaxConfig:
 
 
 @dataclass(frozen=True)
+class InsolvencyConfig:
+    """Configuration for the Privatinsolvenz (personal insolvency) floor.
+
+    Attributes:
+        schwelle_euro: The most negative total wealth a forecast may reach. Once
+            the debt would drive total wealth below ``-schwelle_euro`` it is
+            capped here (Privatinsolvenz); the total stays at the floor unless a
+            later inheritance repays the capped debt.
+    """
+
+    schwelle_euro: float
+
+
+@dataclass(frozen=True)
 class InheritanceTaxBrackets:
     """Flat tax rates for each Erbschaftsteuer bracket.
 
@@ -179,6 +193,7 @@ class FinevConfig:
     drv: DrvConfig
     etf: EtfTaxConfig
     inheritance_tax: InheritanceTaxConfig
+    insolvency: InsolvencyConfig
 
     @property
     def capital_gains_tax_rate(self) -> float:
@@ -295,7 +310,15 @@ def _parse_config(raw: dict[str, Any]) -> FinevConfig:
             brackets=klasse_iii_brackets,
         ),
     )
-    return FinevConfig(drv=drv, etf=etf, inheritance_tax=inheritance_tax)
+    insolvency = InsolvencyConfig(
+        schwelle_euro=_require_float(raw, "PRIVATINSOLVENZ_SCHWELLE_EURO"),
+    )
+    return FinevConfig(
+        drv=drv,
+        etf=etf,
+        inheritance_tax=inheritance_tax,
+        insolvency=insolvency,
+    )
 
 
 def _require_float(raw: dict[str, Any], key: str) -> float:
@@ -342,6 +365,10 @@ def _validate_config(config: FinevConfig) -> None:
     _require_fraction(config.etf.teilfreistellung, "ETF_TEILFREISTELLUNG")
     _require_fraction(config.etf.effective_tax_rate, "ETF effective tax rate")
     _require_fraction(config.etf.taxable_share, "ETF taxable share")
+
+    _require_positive(
+        config.insolvency.schwelle_euro, "PRIVATINSOLVENZ_SCHWELLE_EURO"
+    )
 
     for name, rel in [
         ("ehegatte", config.inheritance_tax.ehegatte),
