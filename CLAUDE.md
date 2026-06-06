@@ -82,6 +82,9 @@ When asked to work in a git worktree, create it under `.worktree/<worktree-name>
 | `mise run app` | Start the NiceGUI web app |
 | `mise run run` | Run the CLI forecast |
 | `mise run kill` | Kill any running app instance |
+| `mise run version` | Print the current project version |
+| `mise run changelog-check` | Fail if `CHANGELOG.md` `[Unreleased]` is empty |
+| `mise run release -- {patch\|minor\|major}` | Bump version, roll changelog, commit, tag, push |
 
 Run a single test file or test:
 ```bash
@@ -211,6 +214,28 @@ Example: `feat(finev): add retry backoff to espresso tool`
 - Open a PR with a clear summary and explicit testing notes.
 - Do not merge until CI is green and any required reviews are complete.
 - Merge and delete the branch; sync `main`.
+
+## Versioning and releases
+
+The project uses **Semantic Versioning** (`MAJOR.MINOR.PATCH`). See
+[docs/VERSIONING.md](docs/VERSIONING.md) for the full rationale, the GitHub
+Release flow, and how to retire a vulnerable version. Operational rules:
+
+- The canonical version lives in `pyproject.toml`. **Never hand-edit it** — change
+  it only via `uv version --bump …` (driven by `mise run release`). Runtime reads
+  it through `finev.greet.get_version()`; the web UI shows it via
+  `ui_view.version_label_text()`.
+- Pre-1.0, breaking changes go in the `MINOR` slot, fixes in `PATCH`.
+- Keep `CHANGELOG.md` (Keep a Changelog format) current: add bullets under
+  `[Unreleased]` as you work. `mise run changelog-check` fails a release with an
+  empty `[Unreleased]`.
+- Cut a release with `mise run release -- {patch|minor|major}` from a clean,
+  up-to-date `main`. It runs the gates, bumps the version, rolls the changelog,
+  commits, tags `vX.Y.Z`, and pushes. The pushed tag triggers
+  `.github/workflows/release.yml`, which verifies the tagged commit and publishes
+  the GitHub Release.
+- The baseline `v0.1.0` is published by tagging directly (see the doc); the
+  `release` task is for every release after the baseline.
 
 ## Continuous integration discipline
 

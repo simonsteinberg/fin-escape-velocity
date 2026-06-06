@@ -93,7 +93,7 @@ contain no domain math.
 | [`pension.py`](../src/finev/pension.py) | DRV state-pension **display** estimates (growth-per-working-year, early-retirement penalty, pension at start). No I/O. | ✅ |
 | [`ui_state.py`](../src/finev/ui_state.py) | UI defaults, JSON state persistence (autosave cache), value coercion/clamping, row normalization, row→`Asset` conversion. No NiceGUI dependency. | ✅ |
 | [`profile_store.py`](../src/finev/profile_store.py) | Named settings-profile storage behind the `ProfileStore` abstraction; `LocalDiskProfileStore` keeps one JSON file per profile. Pluggable backend (S3/DB later). No NiceGUI dependency. | ✅ |
-| [`ui_view.py`](../src/finev/ui_view.py) | Presentation helpers: currency formatting, chart/table option shaping, yearly display frame. No NiceGUI dependency. | ✅ |
+| [`ui_view.py`](../src/finev/ui_view.py) | Presentation helpers: currency formatting, chart/table option shaping, yearly display frame, version label text. No NiceGUI dependency. | ✅ |
 | [`ui.py`](../src/finev/ui.py) | NiceGUI page. The `_WealthPage` controller holds widget refs + state and binds event handlers as methods; `build_wealth_page()` is the thin entry point. | ❌ (presentation) |
 | [`app.py`](../src/finev/app.py) | NiceGUI server launcher; auto-selects a free port in 8081–8130; honours `WEALTH_APP_PORT`. | ❌ (I/O) |
 | [`cli.py`](../src/finev/cli.py) | Console entry point: builds a default scenario, prints a yearly summary table. | ❌ (I/O) |
@@ -364,6 +364,9 @@ Assets cards with an add/reset control and per-row editors) and a right panel
 before re-running the forecast; structural changes
 (type/strategy/active/relationship, add/remove, reset) re-render immediately.
 
+The page title shows the application version (e.g. `v0.1.0`) next to "Wealth
+Forecast", sourced from `ui_view.version_label_text()` → `greet.get_version()`.
+
 The current working state is autosaved to a local JSON cache
 (`.cache/finev/wealth_state.json`, or `WEALTH_APP_STATE_PATH`).
 
@@ -461,3 +464,18 @@ Reproducible via `mise` tasks (the same gates CI runs): `format-check`, `lint`
 (Ruff), `typecheck` (mypy, strict-ish), `test` (pytest), and `coverage`
 (minimum **58%**). `mise run check` runs them together. See
 [CLAUDE.md](../CLAUDE.md) for the pre-commit and PR workflow.
+
+---
+
+## 14. Versioning and releases
+
+The project follows **Semantic Versioning** (`MAJOR.MINOR.PATCH`). The canonical
+version is the `version` field of `pyproject.toml`; it is read at runtime via
+`finev.greet.get_version()` (package metadata) and surfaced in the web UI title
+and the `finev-version` CLI. Releases are git tags `vX.Y.Z` with matching GitHub
+Releases, cut by `mise run release` and published by
+[`.github/workflows/release.yml`](../.github/workflows/release.yml) on tag push.
+History is tracked in [`CHANGELOG.md`](../CHANGELOG.md) (Keep a Changelog). The
+full scheme — including how a vulnerable version is retired via a GitHub Security
+Advisory and a superseding release — is documented in
+[docs/VERSIONING.md](VERSIONING.md).

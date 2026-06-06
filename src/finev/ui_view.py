@@ -11,7 +11,17 @@ from typing import Any
 
 import pandas as pd
 
+from finev.greet import get_version
 from finev.models import Asset, AssetType
+
+
+def version_label_text() -> str:
+    """Build the version label shown next to the page title.
+
+    Returns:
+        The installed package version prefixed with ``v`` (e.g. ``"v0.1.0"``).
+    """
+    return f"v{get_version()}"
 
 
 def format_currency(value: float, currency: str) -> str:
