@@ -8,8 +8,16 @@ from finev.models import Asset, AssetType
 from finev.ui_view import (
     asset_value_columns,
     chart_series,
+    favicon_svg,
     forecast_table_columns,
 )
+
+
+def test_favicon_svg_returns_inline_svg() -> None:
+    svg = favicon_svg()
+    # NiceGUI only treats a string starting with "<svg" as an inline favicon.
+    assert svg.lstrip().startswith("<svg")
+    assert "</svg>" in svg
 
 
 def test_asset_value_columns_excludes_inheritance_and_appends_total() -> None:
