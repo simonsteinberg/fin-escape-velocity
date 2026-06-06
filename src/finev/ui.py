@@ -25,6 +25,15 @@ from finev.pension import (
     estimate_monthly_growth_per_working_year,
     estimate_pension_at_start,
 )
+from finev.profile_store import (
+    ProfileStore,
+)
+from finev.profile_store import (
+    default_profile_store as _default_profile_store,
+)
+from finev.profile_store import (
+    normalize_profile_name as _normalize_profile_name,
+)
 from finev.ui_state import (
     apply_type_change_defaults as _apply_type_change_defaults,
 )
@@ -334,6 +343,8 @@ class _WealthPage:
     summary_label: ui.label
     chart: ui.echart
     table: ui.table
+    profile_name_input: ui.input
+    profile_select: ui.select
 
     def __init__(self) -> None:
         self.state_error: str | None = None
@@ -352,6 +363,7 @@ class _WealthPage:
         self.debounce_seconds = 0.5
         self.pending_handle: asyncio.Handle | None = None
         self.pending_rebuild = False
+        self.profile_store: ProfileStore = _default_profile_store()
 
     # ── Scheduling ──────────────────────────
     def _run_scheduled(self) -> None:
@@ -425,12 +437,20 @@ class _WealthPage:
         self.render_asset_rows()
         self.run_immediate()
 
-    def reset_state(self) -> None:
-        """Reset UI values to defaults and clear cached state."""
-        self.suppress_cache_save = True
-        self.asset_rows[:] = _default_asset_rows()
-        profile = self.default_profile_state
-        withdrawal = self.default_withdrawal_state
+    def _apply_state_to_widgets(
+        self, profile: dict[str, Any], withdrawal: dict[str, Any]
+    ) -> None:
+        """Push profile/withdrawal values onto the bound input widgets.
+
+        Shared by :meth:`reset_state` and :meth:`load_profile`; it only writes
+        widget values and leaves caching, re-rendering, and re-running to the
+        caller.
+
+        Args:
+            profile: Profile state dict (as produced by ``load_profile_state``).
+            withdrawal: Withdrawal state dict (as produced by
+                ``load_withdrawal_state``).
+        """
         self.current_age_years.value = profile["current_age_years"]
         self.current_age_years.update()
         self.current_age_months.value = profile["current_age_months"]
@@ -471,6 +491,14 @@ class _WealthPage:
             "state_pension_start_age"
         ]
         self.state_pension_start_age.update()
+
+    def reset_state(self) -> None:
+        """Reset UI values to defaults and clear cached state."""
+        self.suppress_cache_save = True
+        self.asset_rows[:] = _default_asset_rows()
+        self._apply_state_to_widgets(
+            self.default_profile_state, self.default_withdrawal_state
+        )
         self.render_asset_rows()
         self.run_immediate()
         self.suppress_cache_save = False
@@ -480,6 +508,76 @@ class _WealthPage:
             ui.notify(
                 f"Failed to clear cached state: {error}", type="negative"
             )
+
+    # ── Settings profiles ─────────────────────
+    def _refresh_profile_options(self, select: str | None = None) -> None:
+        """Reload the profile dropdown from the store.
+
+        Args:
+            select: Profile to select after refreshing; if ``None``, the current
+                selection is kept when it still exists, else cleared.
+        """
+        names = self.profile_store.list_profiles()
+        self.profile_select.options = names
+        if select is not None:
+            self.profile_select.value = select
+        elif self.profile_select.value not in names:
+            self.profile_select.value = None
+        self.profile_select.update()
+
+    def save_profile(self) -> None:
+        """Persist the current settings under the entered profile name."""
+        try:
+            name = _normalize_profile_name(self.profile_name_input.value or "")
+        except ValueError as error:
+            ui.notify(str(error), type="warning")
+            return
+        try:
+            self.profile_store.save_profile(name, self._state_snapshot())
+        except (OSError, ValueError) as error:
+            ui.notify(f"Failed to save profile: {error}", type="negative")
+            return
+        self._refresh_profile_options(select=name)
+        ui.notify(f"Saved profile '{name}'.", type="positive")
+
+    def load_profile(self) -> None:
+        """Load the selected profile's settings into the UI."""
+        name = self.profile_select.value
+        if not name:
+            ui.notify("Select a profile to load.", type="warning")
+            return
+        try:
+            state = self.profile_store.load_profile(name)
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            ui.notify(
+                f"Failed to load profile '{name}': {error}", type="negative"
+            )
+            return
+        self.suppress_cache_save = True
+        self.asset_rows[:] = _load_asset_rows(state)
+        self._apply_state_to_widgets(
+            _load_profile_state(state), _load_withdrawal_state(state)
+        )
+        self.render_asset_rows()
+        self.suppress_cache_save = False
+        self.run_immediate()
+        ui.notify(f"Loaded profile '{name}'.", type="positive")
+
+    def delete_profile(self) -> None:
+        """Delete the selected profile."""
+        name = self.profile_select.value
+        if not name:
+            ui.notify("Select a profile to delete.", type="warning")
+            return
+        try:
+            self.profile_store.delete_profile(name)
+        except OSError as error:
+            ui.notify(
+                f"Failed to delete profile '{name}': {error}", type="negative"
+            )
+            return
+        self._refresh_profile_options()
+        ui.notify(f"Deleted profile '{name}'.", type="positive")
 
     def build_assets(self) -> list[Asset]:
         """Build asset objects from the current UI rows.
@@ -622,49 +720,53 @@ class _WealthPage:
         if self.suppress_cache_save:
             return
         try:
-            state_snapshot = {
-                "assets": [
-                    _normalize_asset_row(row) for row in self.asset_rows
-                ],
-                "profile": {
-                    "current_age_years": int(
-                        self.current_age_years.value or 0
-                    ),
-                    "current_age_months": int(
-                        self.current_age_months.value or 0
-                    ),
-                    "retirement_age": int(self.retirement_age.value or 0),
-                    "end_age": int(self.end_age.value or 0),
-                    "currency": str(self.currency.value or "EUR"),
-                    "average_inflation_rate_pct": float(
-                        self.average_inflation_rate.value or 0.0
-                    ),
-                    "debt_interest_rate_pct": float(
-                        self.debt_interest_rate.value or 0.0
-                    ),
-                    "annual_income": float(self.annual_income.value or 0),
-                },
-                "withdrawal": {
-                    "monthly_withdrawal": float(
-                        self.withdrawal_input.value or 0
-                    ),
-                    "state_pension_current_monthly_amount": float(
-                        self.state_pension_current_monthly_amount.value or 0
-                    ),
-                    "state_pension_growth_per_working_year": float(
-                        monthly_growth_per_working_year_computed
-                    ),
-                    "state_pension_start_age": int(
-                        self.state_pension_start_age.value or 67
-                    ),
-                },
-            }
-            _save_cached_state(state_snapshot)
+            _save_cached_state(self._state_snapshot())
         except (OSError, ValueError) as error:
             ui.notify(
                 f"Failed to save cached state: {error}",
                 type="negative",
             )
+
+    def _state_snapshot(self) -> dict[str, Any]:
+        """Build a serializable snapshot of the current UI inputs.
+
+        Shared by the autosave cache and the named-profile store so both persist
+        an identical shape. The state-pension growth is recomputed from the
+        annual income (it is a display-only derived figure).
+
+        Returns:
+            A dict with ``assets``, ``profile`` and ``withdrawal`` keys.
+        """
+        monthly_growth = estimate_monthly_growth_per_working_year(
+            float(self.annual_income.value or 0), get_config().drv
+        )
+        return {
+            "assets": [_normalize_asset_row(row) for row in self.asset_rows],
+            "profile": {
+                "current_age_years": int(self.current_age_years.value or 0),
+                "current_age_months": int(self.current_age_months.value or 0),
+                "retirement_age": int(self.retirement_age.value or 0),
+                "end_age": int(self.end_age.value or 0),
+                "currency": str(self.currency.value or "EUR"),
+                "average_inflation_rate_pct": float(
+                    self.average_inflation_rate.value or 0.0
+                ),
+                "debt_interest_rate_pct": float(
+                    self.debt_interest_rate.value or 0.0
+                ),
+                "annual_income": float(self.annual_income.value or 0),
+            },
+            "withdrawal": {
+                "monthly_withdrawal": float(self.withdrawal_input.value or 0),
+                "state_pension_current_monthly_amount": float(
+                    self.state_pension_current_monthly_amount.value or 0
+                ),
+                "state_pension_growth_per_working_year": float(monthly_growth),
+                "state_pension_start_age": int(
+                    self.state_pension_start_age.value or 67
+                ),
+            },
+        }
 
     def build(self) -> None:
         """Construct the page widgets and render the initial forecast."""
@@ -675,6 +777,35 @@ class _WealthPage:
             with ui.row().classes("w-full gap-4 items-start"):
                 # ── Left sidebar ──────────────────────────
                 with ui.column().classes("w-[420px] shrink-0 gap-4"):
+                    with ui.card().classes("w-full p-3"):
+                        ui.label("Settings profiles").classes(
+                            "text-lg font-semibold"
+                        )
+                        ui.label(
+                            "Save the current settings under a name (e.g. one "
+                            "per person) and switch between them."
+                        ).classes("text-xs text-gray-500")
+                        with ui.row().classes("w-full gap-2 items-end"):
+                            self.profile_name_input = ui.input(
+                                label="Profile name",
+                                placeholder="e.g. wife",
+                            ).classes("flex-1")
+                            ui.button(
+                                "Save", on_click=self.save_profile
+                            ).props("color=green-4")
+                        with ui.row().classes("w-full gap-2 items-end"):
+                            self.profile_select = ui.select(
+                                options=self.profile_store.list_profiles(),
+                                label="Saved profiles",
+                                with_input=True,
+                            ).classes("flex-1")
+                            ui.button(
+                                "Load", on_click=self.load_profile
+                            ).props("outline")
+                            ui.button(
+                                "Delete", on_click=self.delete_profile
+                            ).props("outline color=red")
+
                     with ui.card().classes("w-full p-3"):
                         ui.label("Profile").classes("text-lg font-semibold")
                         with ui.grid(columns=2).classes("w-full gap-3"):

@@ -44,8 +44,10 @@ engine.
 
 - No Monte-Carlo / stochastic modelling — growth rates are deterministic.
 - No FX conversion — the currency field is a display label only.
-- No multi-user accounts or server-side persistence beyond a local JSON state
-  cache.
+- No multi-user *accounts* (authentication / per-user server sessions). Multiple
+  people are supported instead through named **settings profiles** persisted via
+  a pluggable store (local disk today; an S3/database backend can be added by
+  implementing the same interface).
 - No real-time market data; all inputs are user-supplied or configured.
 
 ---
@@ -89,7 +91,8 @@ contain no domain math.
 | [`config.py`](../src/finev/config.py) | Loads and validates `config.json` into frozen typed dataclasses; exposes ETF/DRV/Erbschaftsteuer parameters and derived rates. | ✅ |
 | [`forecast.py`](../src/finev/forecast.py) | The calculation engine: validates inputs, builds an immutable per-run context, runs the monthly pipeline, returns a pandas `DataFrame`. | ✅ |
 | [`pension.py`](../src/finev/pension.py) | DRV state-pension **display** estimates (growth-per-working-year, early-retirement penalty, pension at start). No I/O. | ✅ |
-| [`ui_state.py`](../src/finev/ui_state.py) | UI defaults, JSON state persistence, value coercion/clamping, row normalization, row→`Asset` conversion. No NiceGUI dependency. | ✅ |
+| [`ui_state.py`](../src/finev/ui_state.py) | UI defaults, JSON state persistence (autosave cache), value coercion/clamping, row normalization, row→`Asset` conversion. No NiceGUI dependency. | ✅ |
+| [`profile_store.py`](../src/finev/profile_store.py) | Named settings-profile storage behind the `ProfileStore` abstraction; `LocalDiskProfileStore` keeps one JSON file per profile. Pluggable backend (S3/DB later). No NiceGUI dependency. | ✅ |
 | [`ui_view.py`](../src/finev/ui_view.py) | Presentation helpers: currency formatting, chart/table option shaping, yearly display frame. No NiceGUI dependency. | ✅ |
 | [`ui.py`](../src/finev/ui.py) | NiceGUI page. The `_WealthPage` controller holds widget refs + state and binds event handlers as methods; `build_wealth_page()` is the thin entry point. | ❌ (presentation) |
 | [`app.py`](../src/finev/app.py) | NiceGUI server launcher; auto-selects a free port in 8081–8130; honours `WEALTH_APP_PORT`. | ❌ (I/O) |
@@ -355,12 +358,29 @@ table, and console output.
 
 `mise run app` launches `python -m finev.app`, which serves the page at `/` on the
 first free port from 8081 (override with `WEALTH_APP_PORT`). The page
-(`_WealthPage`) has a left sidebar (Profile, State pension, Assets cards with an
-add/reset control and per-row editors) and a right panel (summary label, ECharts
-line chart, yearly table). Edits are debounced (~0.5s) before re-running the
-forecast; structural changes (type/strategy/active/relationship, add/remove,
-reset) re-render immediately. UI state is persisted to a local JSON cache
+(`_WealthPage`) has a left sidebar (Settings profiles, Profile, State pension,
+Assets cards with an add/reset control and per-row editors) and a right panel
+(summary label, ECharts line chart, yearly table). Edits are debounced (~0.5s)
+before re-running the forecast; structural changes
+(type/strategy/active/relationship, add/remove, reset) re-render immediately.
+
+The current working state is autosaved to a local JSON cache
 (`.cache/finev/wealth_state.json`, or `WEALTH_APP_STATE_PATH`).
+
+### 9.1.1 Settings profiles
+
+The **Settings profiles** card lets the user save the current settings under a
+name (e.g. one per family member), then reload or delete any saved profile. This
+supports planning for several people without separate accounts. Names are
+normalized to a safe slug (`[a-z0-9_-]`), which also prevents path traversal.
+
+Storage goes through the `ProfileStore` abstraction so the backend is
+swappable. The default `LocalDiskProfileStore` writes one JSON file per profile
+under `.cache/finev/profiles/` (override the directory with
+`WEALTH_APP_PROFILES_DIR`); the saved payload is the same `assets`/`profile`/
+`withdrawal` snapshot used by the autosave cache. Loading a profile repopulates
+the inputs and re-runs the forecast. A future S3/database backend only needs to
+implement `list_profiles` / `save_profile` / `load_profile` / `delete_profile`.
 
 ### 9.2 CLI
 
@@ -380,13 +400,14 @@ total, taxes, and net cashflow.
 | FR4 | German ETF capital-gains tax (26.25% on 70% of gains) with the €1,000 annual allowance; net cashflow reflects tax; withdrawals are grossed up to the net target. |
 | FR5 | Configurable default gain rates with per-asset overrides. |
 | FR6 | Inflation-adjusted withdrawal targets from today's currency to each retirement month. |
-| FR7 | bAV transfer windows (configurable ages + ETF ratio) and bAV monthly-gains income; bAV gains fully taxed at 26.25%. |
+| FR7 | bAV transfer at a configurable single retirement age (+ ETF ratio) and bAV monthly-gains income; bAV gains fully taxed at 26.25%. |
 | FR8 | State-pension stream starting at age 63–67, with earned growth, inflation, early-retirement reduction, and configured tax rate; net pension offsets withdrawals. |
 | FR9 | Inheritance events at a configured age, taxed by Erbschaftsteuer class/Freibetrag; net proceeds credited to ETF (then Cash). |
 | FR10 | Per-asset activation toggle for what-if scenarios; deactivated assets excluded from calculations but preserved and persisted. |
 | FR11 | Inputs validated at the boundary (`forecast.py` validators, `config.py` on load, `ui_state` coercion); invalid inputs fail loudly. |
 | FR12 | When withdrawals exhaust the assets, the unmet need is borrowed so total wealth can go negative; the debt compounds monthly at the configured annual debt interest rate and is repaid by net inheritance proceeds. |
 | FR13 | Total wealth is floored at the configured Privatinsolvenz threshold (`-PRIVATINSOLVENZ_SCHWELLE_EURO`); the capped debt stops compounding, so a later inheritance can repay it and lift the forecast back out of insolvency, and the total stays at the floor for any span without such a rescue. |
+| FR14 | The user can save the current settings as a named profile, list saved profiles, load one back into the UI, and delete one. Profiles are persisted through the swappable `ProfileStore` abstraction (local disk by default); names are normalized to a safe slug. |
 
 ---
 
@@ -410,6 +431,7 @@ total, taxes, and net cashflow.
 | AC13 | Deactivating an asset excludes it from contributions/allocation/transfers while preserving its row and persisted config; reactivation restores it. |
 | AC14 | No withdrawals from a bAV before its bAV retirement age; allocation ignores bAV until withdrawable. |
 | AC15 | Inheritance below the Freibetrag is tax-free; above it the correct flat bracket rate by class applies; inactive inheritance is not injected. |
+| AC16 | Saving a named profile persists the current snapshot and lists it; loading it restores the inputs and re-runs; deleting it removes it. Profile names are slugified (rejecting empty names and neutralizing path traversal), and the local backend round-trips the stored state. |
 
 Each criterion is exercised by the test suite under [`tests/finev/`](../tests/finev/)
 (notably `test_forecast.py`, `test_forecast_golden.py`, `test_validation.py`,
