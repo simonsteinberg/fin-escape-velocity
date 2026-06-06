@@ -406,7 +406,9 @@ right panel (summary label, ECharts line chart, yearly table). The two regions
 fill the height below the navbar and **scroll independently** — each is its own
 scroll frame (`overflow-y-auto`, full height of a viewport-bounded row), so a
 tall sidebar (many asset rows) does not push the chart/table out of view and the
-page never scrolls as a single block. Edits are debounced
+page never scrolls as a single block. The ECharts chart is pinned to its fixed
+500px height (`shrink-0`) so flexbox does not collapse it inside the scroll
+frame. Edits are debounced
 (~0.5s) before re-running the forecast; structural changes
 (type/strategy/active/relationship, add/remove, reset) re-render immediately.
 
