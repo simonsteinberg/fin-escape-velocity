@@ -10,16 +10,15 @@ version is retired.
 
 ## [Unreleased]
 
-### Fixed
-
-- **Time-series chart hidden in the main panel:** after the independent scroll
-  frames change (#35), the right panel became a fixed-height flex column, and the
-  ECharts container (no intrinsic content height) was collapsed to ~0px by
-  `flex-shrink`, hiding the plot. The chart is now `shrink-0`, so its fixed
-  500px height is honored inside the scroll frame (#40).
+## [0.1.0] - 2026-06-06
 
 ### Added
 
+- Initial baseline release of the German personal-finance forecasting tool: a
+  NiceGUI web app and CLI that projects wealth over time, accounting for ETF
+  gains, bAV (occupational pension) transfers/payouts, DRV state pension,
+  inheritance (Erbschaftsteuer), and German-specific taxation (Abgeltungssteuer
+  and Soli).
 - **Independent scroll frames:** the left sidebar (Profile / State pension /
   Assets) and the right panel (summary / chart / table) now scroll independently
   within the viewport below the navbar, so a tall sidebar no longer pushes the
@@ -57,20 +56,15 @@ version is retired.
 
 ### Fixed
 
+- **Time-series chart hidden in the main panel:** after the independent scroll
+  frames change (#35), the right panel became a fixed-height flex column, and the
+  ECharts container (no intrinsic content height) was collapsed to ~0px by
+  `flex-shrink`, hiding the plot. The chart is now `shrink-0`, so its fixed
+  500px height is honored inside the scroll frame (#40).
 - README CI and Codecov badges: corrected the repository slug from the
   nonexistent `simonsteinberg/finev` to `simonsteinberg/fin-escape-velocity`, so
   the CI badge shows the live build status and the Codecov badge resolves to the
   correct project instead of reporting "unknown" (#37).
-
-## [0.1.0] - 2026-06-06
-
-### Added
-
-- Initial baseline release of the German personal-finance forecasting tool: a
-  NiceGUI web app and CLI that projects wealth over time, accounting for ETF
-  gains, bAV (occupational pension) transfers/payouts, DRV state pension,
-  inheritance (Erbschaftsteuer), and German-specific taxation (Abgeltungssteuer
-  and Soli).
 
 [Unreleased]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/simonsteinberg/fin-escape-velocity/releases/tag/v0.1.0
