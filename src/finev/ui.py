@@ -86,6 +86,12 @@ from finev.ui_view import (
     chart_series as _chart_series,
 )
 from finev.ui_view import (
+    export_csv_filename as _export_csv_filename,
+)
+from finev.ui_view import (
+    forecast_csv as _forecast_csv,
+)
+from finev.ui_view import (
     forecast_table_columns as _forecast_table_columns,
 )
 from finev.ui_view import (
@@ -607,6 +613,9 @@ class _WealthPage:
             ui.button("File", on_click=self.open_file_dialog).props(
                 "flat color=white"
             )
+            ui.button("Export", on_click=self.export_forecast_csv).props(
+                "flat color=white"
+            )
             ui.button("About", on_click=self.about_dialog.open).props(
                 "flat color=white"
             )
@@ -678,33 +687,62 @@ class _WealthPage:
                     index, row, self.update_asset_row, self.remove_asset_row
                 )
 
+    def _build_forecast_inputs(
+        self,
+    ) -> tuple[UserProfile, list[Asset], WithdrawalPlan]:
+        """Assemble the forecast inputs from the current widget values.
+
+        Reads the profile, asset rows, and withdrawal/state-pension inputs and
+        builds the engine's typed inputs. Shared by :meth:`run_forecast` and
+        :meth:`export_forecast_csv` so both project the exact same scenario.
+
+        Returns:
+            A ``(profile, assets, withdrawal)`` tuple ready for
+            :func:`forecast_wealth`; the withdrawal always carries a
+            :class:`StatePension`.
+        """
+        profile = UserProfile(
+            current_age_years=int(self.current_age_years.value or 0),
+            current_age_months=int(self.current_age_months.value or 0),
+            retirement_age=int(self.retirement_age.value or 0),
+            end_age=int(self.end_age.value or 0),
+            currency=str(self.currency.value or "EUR"),
+            average_inflation_rate=float(
+                self.average_inflation_rate.value or 0.0
+            )
+            / 100,
+            debt_interest_rate=float(self.debt_interest_rate.value or 0.0)
+            / 100,
+        )
+        assets = self.build_assets()
+        monthly_growth = estimate_monthly_growth_per_working_year(
+            float(self.annual_income.value or 0), get_config().drv
+        )
+        withdrawal = WithdrawalPlan(
+            monthly_withdrawal=float(self.withdrawal_input.value or 0),
+            state_pension=StatePension(
+                current_monthly_amount=float(
+                    self.state_pension_current_monthly_amount.value or 0
+                ),
+                monthly_growth_per_working_year=float(monthly_growth),
+                start_age=int(self.state_pension_start_age.value or 67),
+            ),
+        )
+        return profile, assets, withdrawal
+
     def run_forecast(self) -> None:
         """Run the forecast and update the UI outputs."""
         try:
-            profile = UserProfile(
-                current_age_years=int(self.current_age_years.value or 0),
-                current_age_months=int(self.current_age_months.value or 0),
-                retirement_age=int(self.retirement_age.value or 0),
-                end_age=int(self.end_age.value or 0),
-                currency=str(self.currency.value or "EUR"),
-                average_inflation_rate=float(
-                    self.average_inflation_rate.value or 0.0
-                )
-                / 100,
-                debt_interest_rate=float(self.debt_interest_rate.value or 0.0)
-                / 100,
-            )
-            assets = self.build_assets()
+            profile, assets, withdrawal = self._build_forecast_inputs()
             # State-pension estimates (display-only). The business math lives
             # in finev.pension; the UI only renders the results.
             config = get_config()
-            annual_income_value = float(self.annual_income.value or 0)
-            pension_start_age = int(self.state_pension_start_age.value or 67)
+            state_pension = withdrawal.state_pension
+            assert state_pension is not None  # always built above
             monthly_growth_per_working_year_computed = (
-                estimate_monthly_growth_per_working_year(
-                    annual_income_value, config.drv
-                )
+                state_pension.monthly_growth_per_working_year
             )
+            pension_start_age = state_pension.start_age
             penalty_fraction = early_retirement_penalty_fraction(
                 pension_start_age, config.drv
             )
@@ -712,9 +750,7 @@ class _WealthPage:
                 0, profile.retirement_age - profile.current_age_years
             )
             net_pension = estimate_pension_at_start(
-                current_monthly_amount=float(
-                    self.state_pension_current_monthly_amount.value or 0
-                ),
+                current_monthly_amount=state_pension.current_monthly_amount,
                 monthly_growth_per_working_year=(
                     monthly_growth_per_working_year_computed
                 ),
@@ -753,18 +789,6 @@ class _WealthPage:
             )
             self.state_pension_achieved_display.update()
 
-            withdrawal = WithdrawalPlan(
-                monthly_withdrawal=float(self.withdrawal_input.value or 0),
-                state_pension=StatePension(
-                    current_monthly_amount=float(
-                        self.state_pension_current_monthly_amount.value or 0
-                    ),
-                    monthly_growth_per_working_year=float(
-                        monthly_growth_per_working_year_computed
-                    ),
-                    start_age=pension_start_age,
-                ),
-            )
             df = forecast_wealth(
                 profile=profile,
                 assets=assets,
@@ -808,6 +832,28 @@ class _WealthPage:
                 f"Failed to save cached state: {error}",
                 type="negative",
             )
+
+    def export_forecast_csv(self) -> None:
+        """Export the detailed monthly forecast as a CSV download.
+
+        Recomputes the full monthly forecast for the current inputs — every
+        month and every column the engine produces, not the rounded yearly view
+        shown in the table — and streams it to the browser as a CSV download,
+        which the browser routes to the user's download folder.
+        """
+        try:
+            profile, assets, withdrawal = self._build_forecast_inputs()
+            df = forecast_wealth(
+                profile=profile,
+                assets=assets,
+                withdrawal=withdrawal,
+            )
+        except (ValueError, KeyError) as error:
+            ui.notify(str(error), type="negative")
+            return
+        ui.download.content(
+            _forecast_csv(df), _export_csv_filename(), "text/csv"
+        )
 
     def _state_snapshot(self) -> dict[str, Any]:
         """Build a serializable snapshot of the current UI inputs.

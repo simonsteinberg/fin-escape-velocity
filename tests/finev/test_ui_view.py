@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import pandas as pd
 
 from finev.models import Asset, AssetType
 from finev.ui_view import (
     asset_value_columns,
     chart_series,
+    export_csv_filename,
     favicon_svg,
+    forecast_csv,
     forecast_table_columns,
     inline_logo_svg,
 )
@@ -62,6 +66,38 @@ def test_forecast_table_columns_has_fixed_then_value_columns() -> None:
     age_column = next(c for c in columns if c["name"] == "age")
     assert age_column["sortable"] is False
     assert all(c["sortable"] is True for c in columns if c["name"] != "age")
+
+
+def test_forecast_csv_keeps_all_columns_and_rows_without_index() -> None:
+    frame = pd.DataFrame(
+        {
+            "month_index": [0, 1],
+            "age_years": [40, 40],
+            "net_cashflow": [0.0, 100.0],
+            "ETF": [1000.0, 1100.0],
+            "total": [1000.0, 1100.0],
+        }
+    )
+
+    csv = forecast_csv(frame)
+
+    lines = csv.strip().splitlines()
+    # Header carries every backend column; the pandas index is not exported.
+    assert lines[0] == "month_index,age_years,net_cashflow,ETF,total"
+    # One row per month is preserved (header + two data rows).
+    assert len(lines) == 3
+    assert lines[1].startswith("0,40,0.0,1000.0,1000.0")
+
+
+def test_export_csv_filename_is_timestamped() -> None:
+    moment = datetime(2026, 6, 6, 15, 30, 0)
+    assert export_csv_filename(moment) == "wealth-forecast-20260606-153000.csv"
+
+
+def test_export_csv_filename_defaults_to_now() -> None:
+    name = export_csv_filename()
+    assert name.startswith("wealth-forecast-")
+    assert name.endswith(".csv")
 
 
 def test_chart_series_builds_one_smooth_line_per_column() -> None:

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
+from datetime import datetime
 from importlib import resources
 from typing import Any
 
@@ -163,6 +164,41 @@ def forecast_table_columns(value_columns: list[str]) -> list[dict[str, Any]]:
         for column in value_columns
     )
     return columns
+
+
+def forecast_csv(df: pd.DataFrame) -> str:
+    """Serialize the full monthly forecast frame to CSV text.
+
+    Exports the detailed engine output verbatim (every month, all computed
+    columns: ``month_index``, ``age_years``, ``age_months``, ``net_cashflow``,
+    ``taxes``, the per-asset balances, and ``total``) rather than the
+    yearly-sampled, rounded display frame, so the download holds the full
+    backend detail.
+
+    Args:
+        df: Monthly forecast frame as returned by ``forecast_wealth``.
+
+    Returns:
+        CSV text with a header row and one row per month, without the pandas
+        index column.
+    """
+    return df.to_csv(index=False)
+
+
+def export_csv_filename(generated_at: datetime | None = None) -> str:
+    """Build a timestamped filename for a forecast CSV export.
+
+    The timestamp keeps successive downloads distinct in the browser's download
+    folder without relying on its automatic ``(1)``/``(2)`` suffixing.
+
+    Args:
+        generated_at: Moment the export was produced; defaults to ``now()``.
+
+    Returns:
+        A filename such as ``wealth-forecast-20260606-153000.csv``.
+    """
+    moment = generated_at or datetime.now()
+    return f"wealth-forecast-{moment:%Y%m%d-%H%M%S}.csv"
 
 
 def chart_series(

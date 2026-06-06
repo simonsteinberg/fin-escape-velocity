@@ -358,8 +358,8 @@ table, and console output.
 
 `mise run app` launches `python -m finev.app`, which serves the page at `/` on the
 first free port from 8081 (override with `WEALTH_APP_PORT`). An always-visible top
-**navbar** (`ui.header`) carries the app logo, the title, and a **File** and an
-**About** action. Below it the page (`_WealthPage`) has a left sidebar (Profile,
+**navbar** (`ui.header`) carries the app logo, the title, and **File**, **Export**
+and **About** actions. Below it the page (`_WealthPage`) has a left sidebar (Profile,
 State pension, Assets cards with an add/reset control and per-row editors) and a
 right panel (summary label, ECharts line chart, yearly table). Edits are debounced
 (~0.5s) before re-running the forecast; structural changes
@@ -393,6 +393,18 @@ under `.cache/finev/profiles/` (override the directory with
 `withdrawal` snapshot used by the autosave cache. Loading a profile repopulates
 the inputs and re-runs the forecast. A future S3/database backend only needs to
 implement `list_profiles` / `save_profile` / `load_profile` / `delete_profile`.
+
+### 9.1.2 CSV export
+
+The navbar's **Export** action recomputes the forecast for the current inputs
+and downloads the **detailed** result as a CSV via the browser's download folder.
+Unlike the on-screen table (a rounded, yearly-sampled view), the export is the
+full engine output: one row per month and every computed column (`month_index`,
+`age_years`, `age_months`, `net_cashflow`, `taxes`, the per-asset balances, and
+`total`). The inputs are assembled once by `_WealthPage._build_forecast_inputs`
+(shared with the live forecast), serialized by `ui_view.forecast_csv`, and named
+by `ui_view.export_csv_filename` (a timestamped `wealth-forecast-…csv`). Invalid
+inputs surface as a negative notification and emit no download.
 
 ### 9.2 CLI
 
