@@ -1,7 +1,7 @@
 # Fin-Escape-Velocity
 
-[![CI](https://github.com/simonsteinberg/finev/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/simonsteinberg/finev/actions/workflows/ci.yml)
-[![Coverage](https://codecov.io/gh/simonsteinberg/finev/branch/main/graph/badge.svg)](https://codecov.io/gh/simonsteinberg/finev)
+[![CI](https://github.com/simonsteinberg/fin-escape-velocity/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/simonsteinberg/fin-escape-velocity/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/simonsteinberg/fin-escape-velocity/branch/main/graph/badge.svg)](https://codecov.io/gh/simonsteinberg/fin-escape-velocity)
 
 Wealth forecasting CLI and NiceGUI app, managed with mise and uv.
 

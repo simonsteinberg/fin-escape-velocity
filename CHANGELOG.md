@@ -47,6 +47,13 @@ version is retired.
   overflows), the File/About actions are left-aligned next to the title, and the
   header background is a teal that matches the logo's colours.
 
+### Fixed
+
+- README CI and Codecov badges: corrected the repository slug from the
+  nonexistent `simonsteinberg/finev` to `simonsteinberg/fin-escape-velocity`, so
+  the CI badge shows the live build status and the Codecov badge resolves to the
+  correct project instead of reporting "unknown" (#37).
+
 ## [0.1.0] - 2026-06-06
 
 ### Added
