@@ -1068,10 +1068,22 @@ class _WealthPage:
         self._build_file_dialog()
         self._build_about_dialog()
         self._build_navbar()
-        with ui.column().classes("w-full p-4 gap-4"):
-            with ui.row().classes("w-full gap-4 items-start"):
-                # ── Left sidebar ──────────────────────────
-                with ui.column().classes("w-[420px] shrink-0 gap-4"):
+        # Drop the default page padding so the layout below owns the full
+        # height under the navbar; each panel then scrolls within its own
+        # frame instead of the whole page scrolling as one.
+        ui.query(".nicegui-content").classes("p-0 gap-0")
+        with (
+            ui.column()
+            .classes("w-full p-4")
+            .style("height: calc(100vh - 4rem)")
+        ):
+            with ui.row().classes(
+                "w-full h-full gap-4 items-stretch flex-nowrap"
+            ):
+                # ── Left sidebar (independent scroll frame) ─
+                with ui.column().classes(
+                    "w-[420px] shrink-0 gap-4 h-full overflow-y-auto pr-2"
+                ):
                     with ui.card().classes("w-full p-3"):
                         ui.label(self.t("profile.section")).classes(
                             "text-lg font-semibold"
@@ -1212,8 +1224,10 @@ class _WealthPage:
                                 on_click=self.reset_state,
                             ).props("outline color=red")
 
-                # ── Right panel (chart + table) ─────────────
-                with ui.column().classes("flex-1 min-w-0 gap-4"):
+                # ── Right panel (chart + table): own scroll frame ─
+                with ui.column().classes(
+                    "flex-1 min-w-0 gap-4 h-full overflow-y-auto pr-2"
+                ):
                     self.summary_label = ui.label(
                         self.t("forecast.none")
                     ).classes("text-sm")

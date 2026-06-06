@@ -402,7 +402,11 @@ first free port from 8081 (override with `WEALTH_APP_PORT`). An always-visible t
 and **About** actions, and — pushed to the far right — a **language toggle**.
 Below it the page (`_WealthPage`) has a left sidebar (Profile,
 State pension, Assets cards with an add/reset control and per-row editors) and a
-right panel (summary label, ECharts line chart, yearly table). Edits are debounced
+right panel (summary label, ECharts line chart, yearly table). The two regions
+fill the height below the navbar and **scroll independently** — each is its own
+scroll frame (`overflow-y-auto`, full height of a viewport-bounded row), so a
+tall sidebar (many asset rows) does not push the chart/table out of view and the
+page never scrolls as a single block. Edits are debounced
 (~0.5s) before re-running the forecast; structural changes
 (type/strategy/active/relationship, add/remove, reset) re-render immediately.
 

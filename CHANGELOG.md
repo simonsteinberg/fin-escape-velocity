@@ -12,6 +12,10 @@ version is retired.
 
 ### Added
 
+- **Independent scroll frames:** the left sidebar (Profile / State pension /
+  Assets) and the right panel (summary / chart / table) now scroll independently
+  within the viewport below the navbar, so a tall sidebar no longer pushes the
+  chart and table out of view (#35).
 - **Language toggle (English/German):** an always-visible navbar control switches
   the entire UI between English (default) and German. All user-facing text is
   resolved through a new pure `finev.i18n` translation catalog (English→key
