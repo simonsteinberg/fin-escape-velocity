@@ -21,7 +21,8 @@ version is retired.
   that shows the current version (#26).
 - Navbar **Export** action: downloads the detailed monthly forecast (every month
   and every backend-computed column) as a timestamped CSV via the browser's
-  download folder (#28).
+  download folder, with EURO values rounded to whole-euro integers to keep the
+  file frugal (#28).
 
 ### Changed
 

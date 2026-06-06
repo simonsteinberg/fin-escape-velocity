@@ -86,7 +86,26 @@ def test_forecast_csv_keeps_all_columns_and_rows_without_index() -> None:
     assert lines[0] == "month_index,age_years,net_cashflow,ETF,total"
     # One row per month is preserved (header + two data rows).
     assert len(lines) == 3
-    assert lines[1].startswith("0,40,0.0,1000.0,1000.0")
+    assert lines[1] == "0,40,0,1000,1000"
+
+
+def test_forecast_csv_rounds_euro_columns_to_integers() -> None:
+    frame = pd.DataFrame(
+        {
+            "month_index": [0, 1],
+            "age_years": [40, 40],
+            "net_cashflow": [12.4, -50.6],
+            "ETF": [1000.5, 1100.49],
+            "total": [1000.5, 1049.89],
+        }
+    )
+
+    lines = forecast_csv(frame).strip().splitlines()
+
+    # EURO floats are rounded to whole euros and rendered without a decimal
+    # point; integer age/index columns are untouched. (0.5 rounds to even.)
+    assert lines[1] == "0,40,12,1000,1000"
+    assert lines[2] == "1,40,-51,1100,1050"
 
 
 def test_export_csv_filename_is_timestamped() -> None:

@@ -403,7 +403,9 @@ full engine output: one row per month and every computed column (`month_index`,
 `age_years`, `age_months`, `net_cashflow`, `taxes`, the per-asset balances, and
 `total`). The inputs are assembled once by `_WealthPage._build_forecast_inputs`
 (shared with the live forecast), serialized by `ui_view.forecast_csv`, and named
-by `ui_view.export_csv_filename` (a timestamped `wealth-forecast-…csv`). Invalid
+by `ui_view.export_csv_filename` (a timestamped `wealth-forecast-…csv`). To keep
+the file frugal, `forecast_csv` rounds the EURO-valued columns to whole-euro
+integers (the `month_index`/`age_*` columns are already integers). Invalid
 inputs surface as a negative notification and emit no download.
 
 ### 9.2 CLI
