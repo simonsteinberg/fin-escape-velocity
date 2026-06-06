@@ -96,8 +96,8 @@ mise run setup-repo -- workflow_engine
 
 Engineering conventions are documented in
 [SOFTWARE_ENGINEERING.md](SOFTWARE_ENGINEERING.md) and
-[CLAUDE.md](CLAUDE.md); the staged refactor plan is in
-[docs/CODE_QUALITY_PLAN.md](docs/CODE_QUALITY_PLAN.md).
+[CLAUDE.md](CLAUDE.md); the system design and requirements are in
+[docs/DESIGN_AND_REQUIREMENTS.md](docs/DESIGN_AND_REQUIREMENTS.md).
 
 ## Quality checks
 
