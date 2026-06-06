@@ -86,6 +86,9 @@ from finev.ui_view import (
     chart_series as _chart_series,
 )
 from finev.ui_view import (
+    favicon_svg as _favicon_svg,
+)
+from finev.ui_view import (
     forecast_table_columns as _forecast_table_columns,
 )
 from finev.ui_view import (
@@ -348,6 +351,8 @@ class _WealthPage:
     table: ui.table
     profile_name_input: ui.input
     profile_select: ui.select
+    file_dialog: ui.dialog
+    about_dialog: ui.dialog
 
     def __init__(self) -> None:
         self.state_error: str | None = None
@@ -582,6 +587,78 @@ class _WealthPage:
         self._refresh_profile_options()
         ui.notify(f"Deleted profile '{name}'.", type="positive")
 
+    # ── Navbar and dialogs ─────────────────────
+    def open_file_dialog(self) -> None:
+        """Open the File window, refreshing the saved-profiles list first."""
+        self._refresh_profile_options()
+        self.file_dialog.open()
+
+    def _build_navbar(self) -> None:
+        """Render the always-visible top navbar with the File/About actions."""
+        with ui.header().classes("items-center justify-between px-4 py-2"):
+            with ui.row().classes("items-center gap-3"):
+                ui.html(_favicon_svg()).classes("w-8 h-8")
+                ui.label(
+                    "Financial Escape Velocity - Wealth Forecast"
+                ).classes("text-lg font-bold")
+            with ui.row().classes("items-center gap-1"):
+                ui.button("File", on_click=self.open_file_dialog).props(
+                    "flat color=white"
+                )
+                ui.button("About", on_click=self.about_dialog.open).props(
+                    "flat color=white"
+                )
+
+    def _build_file_dialog(self) -> None:
+        """Build the File window holding the save/load/delete profile controls.
+
+        Binds :attr:`profile_name_input` and :attr:`profile_select`, which the
+        save/load/delete handlers read from.
+        """
+        with ui.dialog() as dialog, ui.card().classes("w-[460px] p-4 gap-2"):
+            self.file_dialog = dialog
+            with ui.row().classes("w-full items-center justify-between"):
+                ui.label("Profiles").classes("text-lg font-semibold")
+                ui.button(icon="close", on_click=dialog.close).props(
+                    "flat dense round"
+                )
+            ui.label(
+                "Save the current settings under a name (e.g. one per person) "
+                "and switch between them."
+            ).classes("text-xs text-gray-500")
+            with ui.row().classes("w-full gap-2 items-end"):
+                self.profile_name_input = ui.input(
+                    label="Profile name",
+                    placeholder="e.g. wife",
+                ).classes("flex-1")
+                ui.button("Save", on_click=self.save_profile).props(
+                    "color=green-4"
+                )
+            with ui.row().classes("w-full gap-2 items-end"):
+                self.profile_select = ui.select(
+                    options=self.profile_store.list_profiles(),
+                    label="Saved profiles",
+                    with_input=True,
+                ).classes("flex-1")
+                ui.button("Load", on_click=self.load_profile).props("outline")
+                ui.button("Delete", on_click=self.delete_profile).props(
+                    "outline color=red"
+                )
+
+    def _build_about_dialog(self) -> None:
+        """Build the About window showing the application version."""
+        with (
+            ui.dialog() as dialog,
+            ui.card().classes("p-4 gap-2 items-center"),
+        ):
+            self.about_dialog = dialog
+            ui.html(_favicon_svg()).classes("w-12 h-12")
+            ui.label("Financial Escape Velocity").classes(
+                "text-lg font-semibold"
+            )
+            ui.label(_version_label_text()).classes("text-sm text-gray-500")
+            ui.button("Close", on_click=dialog.close).props("flat")
+
     def build_assets(self) -> list[Asset]:
         """Build asset objects from the current UI rows.
 
@@ -775,46 +852,13 @@ class _WealthPage:
         """Construct the page widgets and render the initial forecast."""
         profile_state = self.profile_state
         withdrawal_state = self.withdrawal_state
+        self._build_file_dialog()
+        self._build_about_dialog()
+        self._build_navbar()
         with ui.column().classes("w-full p-4 gap-4"):
-            with ui.row().classes("w-full items-baseline gap-2"):
-                ui.label(
-                    "Financial Escape Velocity - Wealth Forecast"
-                ).classes("text-2xl font-bold")
-                ui.label(_version_label_text()).classes(
-                    "text-sm text-gray-500"
-                )
             with ui.row().classes("w-full gap-4 items-start"):
                 # ── Left sidebar ──────────────────────────
                 with ui.column().classes("w-[420px] shrink-0 gap-4"):
-                    with ui.card().classes("w-full p-3"):
-                        ui.label("Settings profiles").classes(
-                            "text-lg font-semibold"
-                        )
-                        ui.label(
-                            "Save the current settings under a name (e.g. one "
-                            "per person) and switch between them."
-                        ).classes("text-xs text-gray-500")
-                        with ui.row().classes("w-full gap-2 items-end"):
-                            self.profile_name_input = ui.input(
-                                label="Profile name",
-                                placeholder="e.g. wife",
-                            ).classes("flex-1")
-                            ui.button(
-                                "Save", on_click=self.save_profile
-                            ).props("color=green-4")
-                        with ui.row().classes("w-full gap-2 items-end"):
-                            self.profile_select = ui.select(
-                                options=self.profile_store.list_profiles(),
-                                label="Saved profiles",
-                                with_input=True,
-                            ).classes("flex-1")
-                            ui.button(
-                                "Load", on_click=self.load_profile
-                            ).props("outline")
-                            ui.button(
-                                "Delete", on_click=self.delete_profile
-                            ).props("outline color=red")
-
                     with ui.card().classes("w-full p-3"):
                         ui.label("Profile").classes("text-lg font-semibold")
                         with ui.grid(columns=2).classes("w-full gap-3"):
