@@ -94,8 +94,8 @@ class Asset:
         monthly_contribution: Monthly contribution before retirement.
         active: Whether this asset is included in the forecast.
         bav_strategy: Strategy for handling bAV assets.
-        bav_transfer_start_age: Start age (years) for bAV transfer window.
-        bav_transfer_end_age: End age (years) for bAV transfer window.
+        bav_retirement_age: Age (years) at which bAV retirement occurs (transfer
+            year for the transfer strategy; payout start for the income strategy).
         bav_transfer_etf_ratio: Share of transfer allocated to ETF assets.
         inheritance_gross_amount: Gross inheritance amount before tax (INHERITANCE only).
         inheritance_age: Age (years) at which the inheritance is received (INHERITANCE only).
@@ -110,8 +110,7 @@ class Asset:
     monthly_contribution: float = 0.0
     active: bool = True
     bav_strategy: BAVStrategy = BAVStrategy.TRANSFER
-    bav_transfer_start_age: int = 67
-    bav_transfer_end_age: int = 72
+    bav_retirement_age: int = 67
     bav_transfer_etf_ratio: float = 0.5
     inheritance_gross_amount: float = 0.0
     inheritance_age: int = 67

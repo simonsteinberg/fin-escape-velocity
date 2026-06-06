@@ -204,20 +204,10 @@ def _validate_assets(assets: Iterable[Asset]) -> list[Asset]:
                     f"Asset '{asset.name}' bAV strategy must be one of: "
                     f"{valid_strategies}"
                 ) from exc
-            if asset.bav_transfer_start_age < 0:
+            if asset.bav_retirement_age < 0:
                 raise ValueError(
-                    f"Asset '{asset.name}' bAV transfer start age must be "
+                    f"Asset '{asset.name}' bAV retirement age must be "
                     "non-negative"
-                )
-            if asset.bav_transfer_end_age < 0:
-                raise ValueError(
-                    f"Asset '{asset.name}' bAV transfer end age must be "
-                    "non-negative"
-                )
-            if asset.bav_transfer_end_age < asset.bav_transfer_start_age:
-                raise ValueError(
-                    f"Asset '{asset.name}' bAV transfer end age must be "
-                    "at or after the start age"
                 )
             if not 0 <= asset.bav_transfer_etf_ratio <= 1:
                 raise ValueError(
@@ -512,7 +502,7 @@ def _withdrawable_indices(
     """Return indices of assets withdrawable at this age.
 
     ETFs and Cash are always withdrawable; bAV becomes withdrawable once its
-    configured transfer/withdraw start age has been reached.
+    configured bAV retirement age has been reached.
     """
     return [
         i
@@ -522,7 +512,7 @@ def _withdrawable_indices(
             asset.asset_type in (AssetType.ETF, AssetType.CASH)
             or (
                 asset.asset_type == AssetType.BAV
-                and age_months >= asset.bav_transfer_start_age * 12
+                and age_months >= asset.bav_retirement_age * 12
             )
         )
     ]
@@ -693,7 +683,10 @@ def _apply_bav_transfer(
     state: _MonthlyState,
     age_months: int,
 ) -> None:
-    """Transfer a slice of each in-window bAV (TRANSFER) balance to ETF/Cash."""
+    """Transfer a slice of each bAV (TRANSFER) balance to ETF/Cash.
+
+    The transfer is spread across the 12 months of the bAV retirement year.
+    """
     for index, asset in enumerate(params.assets_list):
         if not asset.active:
             continue
@@ -702,8 +695,8 @@ def _apply_bav_transfer(
             and BAVStrategy(asset.bav_strategy) == BAVStrategy.TRANSFER
         ):
             continue
-        start_months = asset.bav_transfer_start_age * 12
-        end_months = (asset.bav_transfer_end_age + 1) * 12 - 1
+        start_months = asset.bav_retirement_age * 12
+        end_months = (asset.bav_retirement_age + 1) * 12 - 1
         if not (start_months <= age_months <= end_months):
             continue
         remaining_months = end_months - age_months + 1
@@ -755,7 +748,7 @@ def _apply_bav_income(
         if (
             asset.asset_type == AssetType.BAV
             and BAVStrategy(asset.bav_strategy) == BAVStrategy.INCOME
-            and age_months >= asset.bav_transfer_start_age * 12
+            and age_months >= asset.bav_retirement_age * 12
         ):
             monthly_gain = state.balances[index] * params.monthly_rates[index]
             if monthly_gain > 0:

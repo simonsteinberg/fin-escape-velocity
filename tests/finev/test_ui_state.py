@@ -48,7 +48,7 @@ def test_type_change_seeds_inheritance_fields() -> None:
 def test_coerce_clamps_etf_ratio_and_ages() -> None:
     assert coerce_asset_field({}, "bav_transfer_etf_ratio_pct", 150) == 100.0
     assert coerce_asset_field({}, "bav_transfer_etf_ratio_pct", -5) == 0.0
-    assert coerce_asset_field({}, "bav_transfer_start_age", -3) == 0
+    assert coerce_asset_field({}, "bav_retirement_age", -3) == 0
 
 
 def test_coerce_unrealized_gains_clamped_to_current_value() -> None:

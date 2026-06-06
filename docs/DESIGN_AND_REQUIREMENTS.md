@@ -156,9 +156,9 @@ an `active` toggle. ETF/Cash/bAV also carry *unrealized gains* in the UI, which 
 converted to an `initial_cost_basis = current_value − unrealized_gains`.
 
 **bAV-specific fields:** `bav_strategy` (`transfer`/`income`),
-`bav_transfer_start_age`, `bav_transfer_end_age`, `bav_transfer_etf_ratio`
-(share to ETF; remainder to Cash). For `income`, the start age is the
-"withdraw start age".
+`bav_retirement_age`, `bav_transfer_etf_ratio` (share to ETF; remainder to
+Cash). The bAV retirement age is the transfer year for `transfer` and the payout
+start age for `income`.
 
 **Inheritance-specific fields:** `inheritance_gross_amount`, `inheritance_age`
 (year the event occurs), `inheritance_relationship` (heir class).
@@ -241,7 +241,7 @@ both balance and cost basis; the sum is recorded as positive net cashflow.
 1. Inflate the base net target to the current month.
 2. Subtract the **net state pension** for the month; floor at 0.
 3. Determine **withdrawable** assets: ETF and Cash always; bAV only once its
-   transfer/withdraw start age is reached.
+   bAV retirement age is reached.
 4. **Gross up** the net target to cover ETF capital-gains tax on the taxable
    gains portion, accounting for any remaining annual allowance (`_gross_up_withdrawal`).
 5. Allocate the grossed-up amount **proportionally** by balance across
@@ -282,15 +282,15 @@ but are computed independently.
 
 ### 7.7 bAV strategies
 
-- **Transfer:** between `bav_transfer_start_age` and `bav_transfer_end_age`
-  (inclusive, to the last month of the end-age year), transfer an equal monthly
-  fraction (`1 / remaining_months`) of the bAV balance. The gains portion is
-  taxed at the full effective rate (no Teilfreistellung), and the net transfer is
-  split to ETF/Cash by `bav_transfer_etf_ratio`. A transfer requires at least one
-  ETF target (if ratio > 0) and one Cash target (if ratio < 1).
-- **Income:** from the withdraw start age, pay out the bAV's monthly gains as
+- **Transfer:** across the 12 months of the `bav_retirement_age` year, transfer
+  an equal monthly fraction (`1 / remaining_months`) of the bAV balance. The
+  gains portion is taxed at the full effective rate (no Teilfreistellung), and the
+  net transfer is split to ETF/Cash by `bav_transfer_etf_ratio`. A transfer
+  requires at least one ETF target (if ratio > 0) and one Cash target (if ratio
+  < 1).
+- **Income:** from the `bav_retirement_age`, pay out the bAV's monthly gains as
   income, taxed at the full effective rate; the principal is **frozen** (does not
-  compound) in payout months. Before the start age, it compounds normally.
+  compound) in payout months. Before that age, it compounds normally.
 
 ### 7.8 Inheritance
 
@@ -403,12 +403,12 @@ total, taxes, and net cashflow.
 | AC6 | Cost basis updates correctly on contribution and proportionally on withdrawal. |
 | AC7 | Type-default gain rate used where no override is given; overrides take precedence. |
 | AC8 | Retirement withdrawals inflated from today's currency before gross-up and allocation. |
-| AC9 | bAV transfer allocates net balance to ETF/Cash with full-gains tax; bAV income pays monthly gains (no reinvestment) from the withdraw start age, compounding before it. |
+| AC9 | bAV transfer allocates net balance to ETF/Cash with full-gains tax; bAV income pays monthly gains (no reinvestment) from the bAV retirement age, compounding before it. |
 | AC10 | State pension start age validated to 63–67; configured tax rate and early-retirement penalty applied by the engine. |
 | AC11 | State pension reflects earned growth until retirement and monthly inflation over forecast time. |
 | AC12 | UI shows read-only computed monthly growth per working year, an estimated early-retirement penalty, and net pension at start. |
 | AC13 | Deactivating an asset excludes it from contributions/allocation/transfers while preserving its row and persisted config; reactivation restores it. |
-| AC14 | No withdrawals from a bAV before its transfer/withdraw start age; allocation ignores bAV until withdrawable. |
+| AC14 | No withdrawals from a bAV before its bAV retirement age; allocation ignores bAV until withdrawable. |
 | AC15 | Inheritance below the Freibetrag is tax-free; above it the correct flat bracket rate by class applies; inactive inheritance is not injected. |
 
 Each criterion is exercised by the test suite under [`tests/finev/`](../tests/finev/)
