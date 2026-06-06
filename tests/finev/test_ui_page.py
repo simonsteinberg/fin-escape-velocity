@@ -97,6 +97,29 @@ def test_type_change_rerenders_and_updates_default_rate(
     assert _calls(page) == ["render", ("immediate", False)]
 
 
+def test_change_to_vbl_fills_defaults_and_rerenders(
+    page: _WealthPage,
+) -> None:
+    page.update_asset_row(0, "type", AssetType.VBL_KLASSIK.value)
+    assert page.asset_rows[0]["type"] == AssetType.VBL_KLASSIK.value
+    assert page.asset_rows[0]["vbl_input_mode"] == "points"
+    assert page.asset_rows[0]["vbl_start_age"] == 67
+    assert _calls(page) == ["render", ("immediate", False)]
+
+
+def test_toggle_vbl_still_working_rerenders(page: _WealthPage) -> None:
+    page.update_asset_row(0, "type", AssetType.VBL_KLASSIK.value)
+    page.update_asset_row(0, "vbl_still_working", True)
+    assert page.asset_rows[0]["vbl_still_working"] is True
+    # Both the type change and the checkbox toggle force a rerender.
+    assert _calls(page) == [
+        "render",
+        ("immediate", False),
+        "render",
+        ("immediate", False),
+    ]
+
+
 def test_invalid_enum_value_is_coerced(page: _WealthPage) -> None:
     page.update_asset_row(0, "bav_strategy", "bogus")
     assert page.asset_rows[0]["bav_strategy"] == BAVStrategy.TRANSFER.value

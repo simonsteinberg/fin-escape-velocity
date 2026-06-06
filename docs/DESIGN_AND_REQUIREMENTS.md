@@ -21,6 +21,8 @@ end age (default 100), accounting for:
   (*Teilfreistellung*),
 - occupational pension (**bAV**) transfer/payout strategies,
 - statutory state pension (**DRV**) income that offsets withdrawals,
+- **VBLklassik** public-sector occupational pension as a lifelong, income-taxed
+  annuity that offsets withdrawals,
 - inheritance events with **Erbschaftsteuer** by heir class.
 
 It ships as both a NiceGUI web app and a CLI, backed by a single pure forecasting
@@ -67,6 +69,7 @@ engine.
 | **bAV** | *Betriebliche Altersvorsorge* — occupational pension. |
 | **bAV strategy** | How a bAV pays out: `transfer` (move balance to ETF/Cash over a window) or `income` (pay monthly gains). |
 | **DRV** | *Deutsche Rentenversicherung* — the statutory state-pension system. |
+| **VBLklassik** | Mandatory public-sector occupational pension (*Zusatzversorgung*) run by the VBL: a defined-benefit lifelong annuity of €4/Versorgungspunkt gross monthly, fully income-taxed and (here) not inflation-compensated. |
 | **Erbschaftsteuer** | German inheritance tax, by heir class and Freibetrag. |
 | **Teilfreistellung** | Partial tax exemption on equity-fund gains (30%). |
 | **Sparerpauschbetrag** | Annual capital-gains tax-free allowance (€1,000). |
@@ -153,10 +156,11 @@ the gross pension by the engine (see §7.6).
 
 ### 5.3 Assets (`Asset`)
 
-Each asset row carries a name, a type (`ETF`, `bAV`, `Cash`, `Inheritance`), a
-current value, an optional annual gain-rate override, a monthly contribution, and
-an `active` toggle. ETF/Cash/bAV also carry *unrealized gains* in the UI, which is
-converted to an `initial_cost_basis = current_value − unrealized_gains`.
+Each asset row carries a name, a type (`ETF`, `bAV`, `Cash`, `Inheritance`,
+`VBLklassik`), a current value, an optional annual gain-rate override, a monthly
+contribution, and an `active` toggle. ETF/Cash/bAV also carry *unrealized gains*
+in the UI, which is converted to an
+`initial_cost_basis = current_value − unrealized_gains`.
 
 **bAV-specific fields:** `bav_strategy` (`transfer`/`income`),
 `bav_retirement_age`, `bav_transfer_etf_ratio` (share to ETF; remainder to
@@ -166,6 +170,16 @@ start age for `income`.
 **Inheritance-specific fields:** `inheritance_gross_amount`, `inheritance_age`
 (year the event occurs), `inheritance_relationship` (heir class).
 
+**VBLklassik-specific fields:** `vbl_monthly_pension` (gross monthly pension at
+the start age, today's euros), `vbl_monthly_growth_per_working_year` (extra gross
+monthly pension per additional public-service working year — one Versorgungspunkt
+per year, i.e. `VBL_RENTE_PRO_PUNKT_EURO`), `vbl_start_age`, and an optional
+`vbl_tax_rate`. VBLklassik holds **no running balance**: like inheritance it has
+no balance column and takes no contributions; instead it pays a lifelong annuity
+that offsets withdrawals (§7.9). In the UI the user enters either Versorgungspunkte
+(× `VBL_RENTE_PRO_PUNKT_EURO`) or a direct euro amount, and a "still in public
+service" checkbox toggles the per-working-year accrual.
+
 #### Default annual gain rates (`models.DEFAULT_ANNUAL_GAIN_RATES`)
 
 | Asset type | Default annual gain rate |
@@ -174,6 +188,7 @@ start age for `income`.
 | bAV | 2.0% |
 | Cash | 0.5% |
 | Inheritance | 0.0% (no running balance) |
+| VBLklassik | 0.0% (no running balance; income annuity) |
 
 Defaults are configurable per-asset in the UI; the type default is used when no
 override is given.
@@ -194,8 +209,12 @@ override is given.
 ## 6. Configuration (`config.json`)
 
 Validated on load into frozen dataclasses (`FinevConfig` → `DrvConfig`,
-`EtfTaxConfig`, `InheritanceTaxConfig`). Fractions are range-checked `[0,1]`,
-euro amounts checked non-negative/positive as appropriate.
+`VblConfig`, `EtfTaxConfig`, `InheritanceTaxConfig`). Fractions are range-checked
+`[0,1]`, euro amounts checked non-negative/positive as appropriate.
+
+**VBLklassik** — `VBL_RENTE_PRO_PUNKT_EURO` (gross monthly pension per
+Versorgungspunkt, currently **€4.00**) and `VBL_BRUTTO_RENTE_STEUERSATZ` (default
+income-tax rate on the gross VBL pension, currently **16%**).
 
 **ETF tax** — effective rate = `abgeltungssteuer × (1 + soli + kirchensteuer)`
 (currently 25% × 1.055 = **26.25%**); taxable share = `1 − teilfreistellung`
@@ -216,7 +235,7 @@ falls into. Thresholds: 75k / 300k / 600k / 6M / 13M / 26M.
 
 **Privatinsolvenz** — `PRIVATINSOLVENZ_SCHWELLE_EURO` (currently **€100,000**, a
 positive amount) is the most negative total wealth a forecast may reach. It is a
-config-only constant (no UI control). See §7.10.
+config-only constant (no UI control). See §7.11.
 
 ---
 
@@ -242,9 +261,11 @@ both balance and cost basis; the sum is recorded as positive net cashflow.
 ### 7.4 Withdrawals (post-retirement)
 
 1. Inflate the base net target to the current month.
-2. Subtract the **net state pension** for the month; floor at 0.
+2. Subtract the **net state pension** and the **net VBLklassik pension** (§7.9)
+   for the month; floor at 0.
 3. Determine **withdrawable** assets: ETF and Cash always; bAV only once its
-   bAV retirement age is reached.
+   bAV retirement age is reached. (State and VBLklassik pensions are income, not
+   withdrawable balances.)
 4. **Gross up** the net target to cover ETF capital-gains tax on the taxable
    gains portion, accounting for any remaining annual allowance (`_gross_up_withdrawal`).
 5. Allocate the grossed-up amount **proportionally** by balance across
@@ -254,7 +275,7 @@ both balance and cost basis; the sum is recorded as positive net cashflow.
    rate; record taxes and net cashflow.
 8. If the assets could not cover the full net target, the unmet remainder is
    **borrowed**: it is added to the running debt and recorded as net cashflow, so
-   total wealth is allowed to go below zero (see §7.10).
+   total wealth is allowed to go below zero (see §7.11).
 
 ### 7.5 ETF withdrawal tax
 
@@ -303,14 +324,32 @@ by relationship (§6), and the **net** proceeds are credited to ETF assets (or
 Cash if no ETF exists), increasing both balance and cost basis. Inheritance
 assets hold no running balance and are excluded from output columns.
 
-### 7.9 Asset activation toggle
+### 7.9 VBLklassik pension
+
+For each active VBLklassik asset, from its `vbl_start_age` onward:
+
+```
+working_years = current→retirement age   (same window as the state pension)
+gross(month)  = vbl_monthly_pension + working_years × vbl_monthly_growth_per_working_year
+net(month)    = gross(month) × (1 − tax_rate)
+```
+
+`tax_rate` defaults to `VBL_BRUTTO_RENTE_STEUERSATZ` (fully income-taxed). The
+combined net VBL pension across all active VBLklassik assets reduces the
+withdrawal target (§7.4 step 2). Unlike the state pension, the VBL pension is
+**not inflation-compensated** — it stays nominal at its today's-euro value, so its
+real value erodes against the inflation-indexed withdrawal target — and **no
+early-retirement reduction** is applied. The per-working-year growth models the
+"still in public service" option as one Versorgungspunkt earned per working year.
+
+### 7.10 Asset activation toggle
 
 Deactivating an asset (`active = false`) excludes it from contributions,
 withdrawal allocation, transfers, and as a transfer/inheritance target — it is
 treated as a zero balance — while its row and configuration remain in the UI and
 persisted cache, so it can be re-activated to compare scenarios.
 
-### 7.10 Debt and Privatinsolvenz (negative total wealth)
+### 7.11 Debt and Privatinsolvenz (negative total wealth)
 
 When a month's withdrawal exceeds the available assets, the unmet net need is
 booked as **debt** — a running, non-negative balance held in engine state. Total
@@ -342,9 +381,9 @@ where no rescue follows, including permanently once none can.
 | `month_index` | 0-based month from forecast start. |
 | `age_years`, `age_months` | User age at that row. |
 | `net_cashflow` | Net received (−)/contributed (+) that month, after taxes. |
-| `taxes` | Total tax deducted that month (ETF + bAV + inheritance). |
-| *per-asset* | Balance for each non-inheritance asset (column = asset name). |
-| `total` | Sum of all non-inheritance asset balances, minus any outstanding debt; may be negative but never below the Privatinsolvenz floor (§7.10). |
+| `taxes` | Total tax deducted that month (ETF + bAV + inheritance). VBL/state pension tax is reflected via the reduced net withdrawal, not this column. |
+| *per-asset* | Balance for each balance-holding asset (column = asset name); inheritance and VBLklassik hold no balance and have no column. |
+| `total` | Sum of all balance-holding asset balances, minus any outstanding debt; may be negative but never below the Privatinsolvenz floor (§7.11). |
 
 Presentation layers derive a **yearly** view (`ui_view.yearly_display_frame`,
 every 12th month; `cli.summarize_yearly`, aggregated per age-year) for the chart,
@@ -434,6 +473,7 @@ total, taxes, and net cashflow.
 | FR12 | When withdrawals exhaust the assets, the unmet need is borrowed so total wealth can go negative; the debt compounds monthly at the configured annual debt interest rate and is repaid by net inheritance proceeds. |
 | FR13 | Total wealth is floored at the configured Privatinsolvenz threshold (`-PRIVATINSOLVENZ_SCHWELLE_EURO`); the capped debt stops compounding, so a later inheritance can repay it and lift the forecast back out of insolvency, and the total stays at the floor for any span without such a rescue. |
 | FR14 | The user can save the current settings as a named profile, list saved profiles, load one back into the UI, and delete one. Profiles are persisted through the swappable `ProfileStore` abstraction (local disk by default); names are normalized to a safe slug. |
+| FR15 | VBLklassik occupational pension as a lifelong, income-taxed annuity from a configurable start age that offsets withdrawals; entered as Versorgungspunkte (× `VBL_RENTE_PRO_PUNKT_EURO`) or a direct euro amount, with an optional "still in public service" accrual of one point per working year. The VBL pension is not inflation-compensated and holds no balance column. |
 
 ---
 
@@ -458,6 +498,7 @@ total, taxes, and net cashflow.
 | AC14 | No withdrawals from a bAV before its bAV retirement age; allocation ignores bAV until withdrawable. |
 | AC15 | Inheritance below the Freibetrag is tax-free; above it the correct flat bracket rate by class applies; inactive inheritance is not injected. |
 | AC16 | Saving a named profile persists the current snapshot and lists it; loading it restores the inputs and re-runs; deleting it removes it. Profile names are slugified (rejecting empty names and neutralizing path traversal), and the local backend round-trips the stored state. |
+| AC17 | A VBLklassik asset reduces the post-retirement withdrawal target by its net (income-taxed) monthly pension from `vbl_start_age` onward, stays nominal under inflation, accrues one point per working year when "still in public service" is set, and produces no balance column; points convert to euros at `VBL_RENTE_PRO_PUNKT_EURO`. |
 
 Each criterion is exercised by the test suite under [`tests/finev/`](../tests/finev/)
 (notably `test_forecast.py`, `test_forecast_golden.py`, `test_validation.py`,

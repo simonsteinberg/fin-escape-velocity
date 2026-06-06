@@ -119,13 +119,14 @@ def asset_value_columns(assets: Iterable[Asset]) -> list[str]:
         assets: Assets in the forecast.
 
     Returns:
-        Per-asset balance column names (excluding INHERITANCE, which holds no
-        running balance) followed by ``"total"``.
+        Per-asset balance column names (excluding INHERITANCE and VBLklassik,
+        which hold no running balance) followed by ``"total"``.
     """
     return [
         asset.name
         for asset in assets
-        if asset.asset_type != AssetType.INHERITANCE
+        if asset.asset_type
+        not in (AssetType.INHERITANCE, AssetType.VBL_KLASSIK)
     ] + ["total"]
 
 

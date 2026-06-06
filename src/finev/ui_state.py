@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from finev.config import get_config
 from finev.models import (
     DEFAULT_ANNUAL_GAIN_RATES,
     Asset,
@@ -90,6 +91,12 @@ def new_asset_row() -> dict[str, Any]:
         "inheritance_gross_amount": 0.0,
         "inheritance_age": 67,
         "inheritance_relationship": InheritanceRelationship.KIND.value,
+        "vbl_input_mode": "points",
+        "vbl_points": 0.0,
+        "vbl_monthly_pension": 0.0,
+        "vbl_still_working": False,
+        "vbl_start_age": 67,
+        "vbl_tax_rate_pct": "",
     }
 
 
@@ -266,6 +273,51 @@ def normalize_asset_row(row: dict[str, Any]) -> dict[str, Any]:
         ).value
     except ValueError:
         inheritance_relationship = InheritanceRelationship.KIND.value
+    vbl_input_mode = str(row.get("vbl_input_mode", "points")).strip().lower()
+    if vbl_input_mode not in ("points", "euro"):
+        vbl_input_mode = "points"
+    vbl_points_raw = row.get("vbl_points")
+    vbl_points = (
+        0.0
+        if vbl_points_raw in (None, "")
+        else max(coerce_float(vbl_points_raw, "assets.vbl_points"), 0.0)
+    )
+    vbl_pension_raw = row.get("vbl_monthly_pension")
+    vbl_monthly_pension = (
+        0.0
+        if vbl_pension_raw in (None, "")
+        else max(
+            coerce_float(vbl_pension_raw, "assets.vbl_monthly_pension"), 0.0
+        )
+    )
+    vbl_still_working_raw = row.get("vbl_still_working")
+    if isinstance(vbl_still_working_raw, bool):
+        vbl_still_working = vbl_still_working_raw
+    elif isinstance(vbl_still_working_raw, (int, float)):
+        vbl_still_working = bool(vbl_still_working_raw)
+    elif isinstance(vbl_still_working_raw, str):
+        vbl_still_working = vbl_still_working_raw.strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "y",
+        )
+    else:
+        vbl_still_working = False
+    vbl_start_age_raw = row.get("vbl_start_age")
+    vbl_start_age = (
+        67
+        if vbl_start_age_raw in (None, "")
+        else max(coerce_int(vbl_start_age_raw, "assets.vbl_start_age"), 0)
+    )
+    vbl_tax_raw = row.get("vbl_tax_rate_pct")
+    if vbl_tax_raw in (None, ""):
+        vbl_tax_rate_pct: float | str = ""
+    else:
+        vbl_tax_rate_pct = max(
+            min(coerce_float(vbl_tax_raw, "assets.vbl_tax_rate_pct"), 100.0),
+            0.0,
+        )
     return {
         "name": name,
         "type": asset_type.value,
@@ -280,6 +332,12 @@ def normalize_asset_row(row: dict[str, Any]) -> dict[str, Any]:
         "inheritance_gross_amount": inheritance_gross_amount,
         "inheritance_age": inheritance_age,
         "inheritance_relationship": inheritance_relationship,
+        "vbl_input_mode": vbl_input_mode,
+        "vbl_points": vbl_points,
+        "vbl_monthly_pension": vbl_monthly_pension,
+        "vbl_still_working": vbl_still_working,
+        "vbl_start_age": vbl_start_age,
+        "vbl_tax_rate_pct": vbl_tax_rate_pct,
     }
 
 
@@ -424,6 +482,34 @@ def asset_from_row(row: dict[str, Any]) -> Asset:
             inheritance_relationship=relationship,
         )
 
+    if asset_type == AssetType.VBL_KLASSIK:
+        point_value = get_config().vbl.rente_pro_punkt_euro
+        input_mode = str(row.get("vbl_input_mode", "points")).strip().lower()
+        if input_mode == "euro":
+            monthly_pension = float(row.get("vbl_monthly_pension") or 0)
+        else:
+            monthly_pension = float(row.get("vbl_points") or 0) * point_value
+        still_working = bool(row.get("vbl_still_working", False))
+        # The "still in public service" option earns one Versorgungspunkt per
+        # working year, i.e. one point's euro value of extra monthly pension.
+        growth = point_value if still_working else 0.0
+        vbl_start_age = int(row.get("vbl_start_age") or 67)
+        tax_pct = row.get("vbl_tax_rate_pct")
+        if tax_pct is None or tax_pct == "":
+            vbl_tax_rate = None
+        else:
+            vbl_tax_rate = float(tax_pct) / 100
+        return Asset(
+            name=name,
+            asset_type=asset_type,
+            current_value=0.0,
+            active=active,
+            vbl_monthly_pension=monthly_pension if active else 0.0,
+            vbl_monthly_growth_per_working_year=growth if active else 0.0,
+            vbl_start_age=vbl_start_age,
+            vbl_tax_rate=vbl_tax_rate,
+        )
+
     rate_pct = row.get("annual_gain_rate_pct")
     annual_rate: float | None
     if rate_pct is None or rate_pct == "":
@@ -494,6 +580,18 @@ def apply_type_change_defaults(
         row["inheritance_age"] = 67
     if row.get("inheritance_relationship") in (None, ""):
         row["inheritance_relationship"] = InheritanceRelationship.KIND.value
+    if row.get("vbl_input_mode") in (None, ""):
+        row["vbl_input_mode"] = "points"
+    if row.get("vbl_points") in (None, ""):
+        row["vbl_points"] = 0.0
+    if row.get("vbl_monthly_pension") in (None, ""):
+        row["vbl_monthly_pension"] = 0.0
+    if row.get("vbl_still_working") is None:
+        row["vbl_still_working"] = False
+    if row.get("vbl_start_age") in (None, ""):
+        row["vbl_start_age"] = 67
+    if "vbl_tax_rate_pct" not in row:
+        row["vbl_tax_rate_pct"] = ""
 
 
 def coerce_asset_field(row: dict[str, Any], field: str, value: Any) -> Any:
@@ -530,4 +628,16 @@ def coerce_asset_field(row: dict[str, Any], field: str, value: Any) -> Any:
         return max(int(value or 0), 0)
     if field == "bav_transfer_etf_ratio_pct":
         return max(min(float(value or 0), 100.0), 0.0)
+    if field == "vbl_input_mode":
+        return str(value) if str(value) in ("points", "euro") else "points"
+    if field in ("vbl_points", "vbl_monthly_pension"):
+        return max(float(value or 0), 0.0)
+    if field == "vbl_still_working":
+        return bool(value)
+    if field == "vbl_start_age":
+        return max(int(value or 0), 0)
+    if field == "vbl_tax_rate_pct":
+        if value in (None, ""):
+            return ""
+        return max(min(float(value), 100.0), 0.0)
     return value

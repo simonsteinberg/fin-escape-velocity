@@ -36,6 +36,22 @@ class DrvConfig:
 
 
 @dataclass(frozen=True)
+class VblConfig:
+    """Configuration for VBLklassik occupational pension calculations.
+
+    Attributes:
+        rente_pro_punkt_euro: Gross monthly pension per Versorgungspunkt, for
+            life (the VBL point value, e.g. ``4.0`` €/point).
+        brutto_rente_steuersatz: Default flat tax rate applied to the gross VBL
+            pension (it is fully income-taxed under § 22 Nr. 5 EStG). Used when an
+            asset does not override it.
+    """
+
+    rente_pro_punkt_euro: float
+    brutto_rente_steuersatz: float
+
+
+@dataclass(frozen=True)
 class EtfTaxConfig:
     """Configuration for ETF taxation."""
 
@@ -191,6 +207,7 @@ class FinevConfig:
     """Typed configuration values used across the forecast."""
 
     drv: DrvConfig
+    vbl: VblConfig
     etf: EtfTaxConfig
     inheritance_tax: InheritanceTaxConfig
     insolvency: InsolvencyConfig
@@ -262,6 +279,12 @@ def _parse_config(raw: dict[str, Any]) -> FinevConfig:
             raw, "DRV_BRUTTO_RENTE_STEUERSATZ"
         ),
     )
+    vbl = VblConfig(
+        rente_pro_punkt_euro=_require_float(raw, "VBL_RENTE_PRO_PUNKT_EURO"),
+        brutto_rente_steuersatz=_require_float(
+            raw, "VBL_BRUTTO_RENTE_STEUERSATZ"
+        ),
+    )
     etf = EtfTaxConfig(
         abgeltungssteuer=_require_float(raw, "ETF_ABGELTUNGSSTEUER"),
         solidaritaetszuschlag=_require_float(raw, "ETF_SOLIDARITAETSZUSCHLAG"),
@@ -315,6 +338,7 @@ def _parse_config(raw: dict[str, Any]) -> FinevConfig:
     )
     return FinevConfig(
         drv=drv,
+        vbl=vbl,
         etf=etf,
         inheritance_tax=inheritance_tax,
         insolvency=insolvency,
@@ -347,6 +371,13 @@ def _validate_config(config: FinevConfig) -> None:
     )
     _require_fraction(
         config.drv.brutto_rente_steuersatz, "DRV_BRUTTO_RENTE_STEUERSATZ"
+    )
+
+    _require_positive(
+        config.vbl.rente_pro_punkt_euro, "VBL_RENTE_PRO_PUNKT_EURO"
+    )
+    _require_fraction(
+        config.vbl.brutto_rente_steuersatz, "VBL_BRUTTO_RENTE_STEUERSATZ"
     )
 
     if 1 - config.drv.rentenabschlag_pro_jahr * MAX_EARLY_RETIREMENT_YEARS < 0:

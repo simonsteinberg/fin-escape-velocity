@@ -18,6 +18,35 @@ def test_new_asset_row_defaults() -> None:
     assert row["annual_gain_rate_pct"] == default_gain_pct(AssetType.ETF)
 
 
+def test_new_asset_row_includes_vbl_defaults() -> None:
+    row = new_asset_row()
+    assert row["vbl_input_mode"] == "points"
+    assert row["vbl_points"] == 0.0
+    assert row["vbl_still_working"] is False
+    assert row["vbl_start_age"] == 67
+    assert row["vbl_tax_rate_pct"] == ""
+
+
+def test_type_change_fills_vbl_defaults() -> None:
+    row = {"type": AssetType.ETF.value}
+    apply_type_change_defaults(row, AssetType.VBL_KLASSIK)
+    assert row["vbl_input_mode"] == "points"
+    assert row["vbl_points"] == 0.0
+    assert row["vbl_still_working"] is False
+    assert row["vbl_start_age"] == 67
+
+
+def test_coerce_vbl_fields() -> None:
+    row: dict[str, object] = {}
+    assert coerce_asset_field(row, "vbl_input_mode", "bogus") == "points"
+    assert coerce_asset_field(row, "vbl_input_mode", "euro") == "euro"
+    assert coerce_asset_field(row, "vbl_points", -5) == 0.0
+    assert coerce_asset_field(row, "vbl_still_working", 1) is True
+    assert coerce_asset_field(row, "vbl_start_age", "65") == 65
+    assert coerce_asset_field(row, "vbl_tax_rate_pct", "") == ""
+    assert coerce_asset_field(row, "vbl_tax_rate_pct", 150) == 100.0
+
+
 def test_type_change_updates_default_gain_rate_when_not_customised() -> None:
     # Row currently ETF with ETF's default rate -> switching to CASH should
     # adopt CASH's default (the user had not customised it).

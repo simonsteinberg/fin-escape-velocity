@@ -836,3 +836,131 @@ def test_inactive_inheritance_is_not_injected() -> None:
     injection_month = (50 - 40) * 12
     assert result.loc[injection_month, "ETF"] == pytest.approx(1_000.0)
     assert result.loc[injection_month, "taxes"] == pytest.approx(0.0)
+
+
+# ── VBLklassik tests ──────────────────────────────────────────────────────────
+
+
+def _vbl_setup(
+    *,
+    vbl_monthly_pension: float = 1_000.0,
+    vbl_monthly_growth_per_working_year: float = 0.0,
+    vbl_start_age: int = 67,
+    vbl_tax_rate: float | None = None,
+    retirement_age: int = 42,
+    average_inflation_rate: float = 0.0,
+) -> tuple[UserProfile, list[Asset], WithdrawalPlan]:
+    """Build a Cash + VBLklassik scenario with a large cash buffer."""
+    profile = UserProfile(
+        current_age_years=40,
+        retirement_age=retirement_age,
+        end_age=68,
+        average_inflation_rate=average_inflation_rate,
+    )
+    cash = Asset(
+        name="Cash",
+        asset_type=AssetType.CASH,
+        current_value=2_000_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    vbl = Asset(
+        name="VBL",
+        asset_type=AssetType.VBL_KLASSIK,
+        current_value=0.0,
+        vbl_monthly_pension=vbl_monthly_pension,
+        vbl_monthly_growth_per_working_year=vbl_monthly_growth_per_working_year,
+        vbl_start_age=vbl_start_age,
+        vbl_tax_rate=vbl_tax_rate,
+    )
+    return profile, [cash, vbl], WithdrawalPlan(monthly_withdrawal=3_000.0)
+
+
+def test_vbl_holds_no_balance_column() -> None:
+    """A VBLklassik asset is income-only and produces no balance column."""
+    profile, assets, withdrawal = _vbl_setup()
+    result = forecast_wealth(
+        profile=profile, assets=assets, withdrawal=withdrawal
+    )
+    assert "VBL" not in result.columns
+    assert "Cash" in result.columns
+
+
+def test_vbl_reduces_withdrawal_from_start_age_income_taxed() -> None:
+    """VBL pays from its start age, income-taxed, offsetting withdrawals."""
+    profile, assets, withdrawal = _vbl_setup(vbl_monthly_pension=1_000.0)
+    result = forecast_wealth(
+        profile=profile, assets=assets, withdrawal=withdrawal
+    )
+    config = get_config()
+    pre_start = (67 - 40) * 12 - 1
+    start = (67 - 40) * 12
+    net_pension = 1_000.0 * (1 - config.vbl.brutto_rente_steuersatz)
+    assert result.loc[pre_start, "net_cashflow"] == pytest.approx(-3_000.0)
+    assert result.loc[start, "net_cashflow"] == pytest.approx(
+        -(3_000.0 - net_pension)
+    )
+
+
+def test_vbl_still_working_growth_accrues_over_working_years() -> None:
+    """Growth-per-working-year adds to the pension over the working window."""
+    # 2 working years (age 40 -> retirement 42) at €4 extra per year.
+    profile, assets, withdrawal = _vbl_setup(
+        vbl_monthly_pension=1_000.0,
+        vbl_monthly_growth_per_working_year=4.0,
+        retirement_age=42,
+    )
+    result = forecast_wealth(
+        profile=profile, assets=assets, withdrawal=withdrawal
+    )
+    config = get_config()
+    start = (67 - 40) * 12
+    accrued_gross = 1_000.0 + 2 * 4.0
+    net_pension = accrued_gross * (1 - config.vbl.brutto_rente_steuersatz)
+    assert result.loc[start, "net_cashflow"] == pytest.approx(
+        -(3_000.0 - net_pension)
+    )
+
+
+def test_vbl_is_not_inflation_compensated() -> None:
+    """Unlike the DRV pension, the VBL pension stays nominal under inflation."""
+    profile, assets, withdrawal = _vbl_setup(
+        vbl_monthly_pension=1_000.0, average_inflation_rate=0.02
+    )
+    result = forecast_wealth(
+        profile=profile, assets=assets, withdrawal=withdrawal
+    )
+    config = get_config()
+    start = (67 - 40) * 12
+    monthly_rate = (1 + 0.02) ** (1 / 12) - 1
+    inflation_multiplier = (1 + monthly_rate) ** start
+    # The withdrawal target inflates; the VBL pension does not.
+    net_pension = 1_000.0 * (1 - config.vbl.brutto_rente_steuersatz)
+    expected = 3_000.0 * inflation_multiplier - net_pension
+    assert result.loc[start, "net_cashflow"] == pytest.approx(-expected)
+
+
+def test_vbl_does_not_offset_before_start_age() -> None:
+    """A VBL start age after retirement leaves early withdrawals unoffset."""
+    profile, assets, withdrawal = _vbl_setup(vbl_start_age=67)
+    result = forecast_wealth(
+        profile=profile, assets=assets, withdrawal=withdrawal
+    )
+    # Retirement at 42, VBL starts at 67: the year before VBL is unoffset.
+    just_before_vbl = (67 - 40) * 12 - 1
+    assert result.loc[just_before_vbl, "net_cashflow"] == pytest.approx(
+        -3_000.0
+    )
+
+
+def test_vbl_per_asset_tax_rate_override() -> None:
+    """A VBL asset's own tax rate overrides the configured default."""
+    profile, assets, withdrawal = _vbl_setup(
+        vbl_monthly_pension=1_000.0, vbl_tax_rate=0.0
+    )
+    result = forecast_wealth(
+        profile=profile, assets=assets, withdrawal=withdrawal
+    )
+    start = (67 - 40) * 12
+    # Tax rate 0 -> full €1 000 gross offsets the €3 000 target.
+    assert result.loc[start, "net_cashflow"] == pytest.approx(-2_000.0)
