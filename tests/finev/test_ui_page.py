@@ -7,6 +7,8 @@ with the widget-bound refresh methods stubbed out.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -415,3 +417,45 @@ def test_export_forecast_csv_notifies_on_invalid_inputs(
     # No download is emitted; the error surfaces as a negative notification.
     assert downloads == []
     assert notifications[-1][1] == "negative"
+
+
+def test_controller_defaults_to_english(page: _WealthPage) -> None:
+    assert page.language == "en"
+    assert page.t("nav.file") == "File"
+
+
+def test_set_language_switches_translator_persists_and_reloads(
+    page: _WealthPage,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _wire_widgets(page)
+    reloads: list[bool] = []
+    monkeypatch.setattr(
+        "finev.ui.ui.navigate.reload", lambda: reloads.append(True)
+    )
+
+    page.set_language("de")
+
+    # The translator now resolves to German and the choice is persisted so a
+    # reload restores it.
+    assert page.language == "de"
+    assert page.t("nav.file") == "Datei"
+    assert reloads == [True]
+    persisted = json.loads((tmp_path / "missing.json").read_text())
+    assert persisted["language"] == "de"
+
+
+def test_set_language_to_current_is_a_noop(
+    page: _WealthPage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reloads: list[bool] = []
+    monkeypatch.setattr(
+        "finev.ui.ui.navigate.reload", lambda: reloads.append(True)
+    )
+
+    page.set_language("en")
+
+    # Selecting the active language neither persists nor reloads.
+    assert page.language == "en"
+    assert reloads == []

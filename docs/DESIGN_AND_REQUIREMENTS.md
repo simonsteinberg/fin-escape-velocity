@@ -94,7 +94,8 @@ contain no domain math.
 | [`config.py`](../src/finev/config.py) | Loads and validates `config.json` into frozen typed dataclasses; exposes ETF/DRV/Erbschaftsteuer parameters and derived rates. | ✅ |
 | [`forecast.py`](../src/finev/forecast.py) | The calculation engine: validates inputs, builds an immutable per-run context, runs the monthly pipeline, returns a pandas `DataFrame`. | ✅ |
 | [`pension.py`](../src/finev/pension.py) | DRV state-pension **display** estimates (growth-per-working-year, early-retirement penalty, pension at start). No I/O. | ✅ |
-| [`ui_state.py`](../src/finev/ui_state.py) | UI defaults, JSON state persistence (autosave cache), value coercion/clamping, row normalization, row→`Asset` conversion. No NiceGUI dependency. | ✅ |
+| [`i18n.py`](../src/finev/i18n.py) | UI internationalization: the English/German translation catalog and lookup helpers (`translate`, `normalize_language`, `make_translator`), with English→key fallback. No NiceGUI dependency. | ✅ |
+| [`ui_state.py`](../src/finev/ui_state.py) | UI defaults, JSON state persistence (autosave cache, incl. the language preference), value coercion/clamping, row normalization, row→`Asset` conversion. No NiceGUI dependency. | ✅ |
 | [`profile_store.py`](../src/finev/profile_store.py) | Named settings-profile storage behind the `ProfileStore` abstraction; `LocalDiskProfileStore` keeps one JSON file per profile. Pluggable backend (S3/DB later). No NiceGUI dependency. | ✅ |
 | [`ui_view.py`](../src/finev/ui_view.py) | Presentation helpers: currency formatting, chart/table option shaping, yearly display frame, version label text. No NiceGUI dependency. | ✅ |
 | [`ui.py`](../src/finev/ui.py) | NiceGUI page. The `_WealthPage` controller holds widget refs + state and binds event handlers as methods; `build_wealth_page()` is the thin entry point. | ❌ (presentation) |
@@ -397,8 +398,9 @@ table, and console output.
 
 `mise run app` launches `python -m finev.app`, which serves the page at `/` on the
 first free port from 8081 (override with `WEALTH_APP_PORT`). An always-visible top
-**navbar** (`ui.header`) carries the app logo, the title, and **File**, **Export**
-and **About** actions. Below it the page (`_WealthPage`) has a left sidebar (Profile,
+**navbar** (`ui.header`) carries the app logo, the title, **File**, **Export**
+and **About** actions, and — pushed to the far right — a **language toggle**.
+Below it the page (`_WealthPage`) has a left sidebar (Profile,
 State pension, Assets cards with an add/reset control and per-row editors) and a
 right panel (summary label, ECharts line chart, yearly table). Edits are debounced
 (~0.5s) before re-running the forecast; structural changes
@@ -417,6 +419,22 @@ The navbar's **About** action opens a window showing the application version
 The current working state is autosaved to a local JSON cache
 (`.cache/finev/wealth_state.json`, or `WEALTH_APP_STATE_PATH`).
 
+### 9.1.0 Language toggle (i18n)
+
+The navbar carries an **EN/DE** toggle that switches the user-facing UI between
+**English** (the default) and **German**. All user-facing strings — navbar,
+dialogs, card and field labels, the asset-row editors, the forecast table column
+headers, the state-pension/forecast summary lines, and notifications — are
+resolved through `finev.i18n`: a pure catalog keyed by `(language, key)` with a
+lookup that falls back to English and then to the raw key, so a missing
+translation degrades gracefully. The `_WealthPage` controller holds the active
+language and a bound translator (`make_translator`). Switching language persists
+the choice into the autosave cache (a top-level `language` key) and reloads the
+page so every widget is rebuilt by the translator; the choice therefore survives
+reloads. The default on first load (no cache) is English. Currency/number
+formatting is **not** localized in this iteration (amounts remain
+`1,234 EUR`-style); locale-aware number formatting is a possible follow-up.
+
 ### 9.1.1 Settings profiles
 
 The navbar's **File** action opens a window that lets the user save the current
@@ -428,9 +446,11 @@ path traversal.
 Storage goes through the `ProfileStore` abstraction so the backend is
 swappable. The default `LocalDiskProfileStore` writes one JSON file per profile
 under `.cache/finev/profiles/` (override the directory with
-`WEALTH_APP_PROFILES_DIR`); the saved payload is the same `assets`/`profile`/
-`withdrawal` snapshot used by the autosave cache. Loading a profile repopulates
-the inputs and re-runs the forecast. A future S3/database backend only needs to
+`WEALTH_APP_PROFILES_DIR`); the saved payload is the same snapshot used by the
+autosave cache (`assets`/`profile`/`withdrawal`, plus the `language`
+preference). Loading a profile repopulates the inputs and re-runs the forecast
+(the active language is taken from the autosave cache, not changed on profile
+load). A future S3/database backend only needs to
 implement `list_profiles` / `save_profile` / `load_profile` / `delete_profile`.
 
 ### 9.1.2 CSV export
@@ -474,6 +494,7 @@ total, taxes, and net cashflow.
 | FR13 | Total wealth is floored at the configured Privatinsolvenz threshold (`-PRIVATINSOLVENZ_SCHWELLE_EURO`); the capped debt stops compounding, so a later inheritance can repay it and lift the forecast back out of insolvency, and the total stays at the floor for any span without such a rescue. |
 | FR14 | The user can save the current settings as a named profile, list saved profiles, load one back into the UI, and delete one. Profiles are persisted through the swappable `ProfileStore` abstraction (local disk by default); names are normalized to a safe slug. |
 | FR15 | VBLklassik occupational pension as a lifelong, income-taxed annuity from a configurable start age that offsets withdrawals; entered as Versorgungspunkte (× `VBL_RENTE_PRO_PUNKT_EURO`) or a direct euro amount, with an optional "still in public service" accrual of one point per working year. The VBL pension is not inflation-compensated and holds no balance column. |
+| FR16 | The web UI can be displayed in English (default) or German via a navbar language toggle. All user-facing text is resolved through the `finev.i18n` catalog with English→key fallback; the chosen language is persisted in the autosave cache and restored on reload. |
 
 ---
 
@@ -499,6 +520,7 @@ total, taxes, and net cashflow.
 | AC15 | Inheritance below the Freibetrag is tax-free; above it the correct flat bracket rate by class applies; inactive inheritance is not injected. |
 | AC16 | Saving a named profile persists the current snapshot and lists it; loading it restores the inputs and re-runs; deleting it removes it. Profile names are slugified (rejecting empty names and neutralizing path traversal), and the local backend round-trips the stored state. |
 | AC17 | A VBLklassik asset reduces the post-retirement withdrawal target by its net (income-taxed) monthly pension from `vbl_start_age` onward, stays nominal under inflation, accrues one point per working year when "still in public service" is set, and produces no balance column; points convert to euros at `VBL_RENTE_PRO_PUNKT_EURO`. |
+| AC18 | The navbar offers an English/German toggle; English is the default with no cache. `i18n.translate` returns the language-specific string, falling back to English and then to the raw key for missing entries. Selecting a language persists it to the cache (`language` key) and reloads; an unchanged selection is a no-op. |
 
 Each criterion is exercised by the test suite under [`tests/finev/`](../tests/finev/)
 (notably `test_forecast.py`, `test_forecast_golden.py`, `test_validation.py`,

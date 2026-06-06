@@ -11,6 +11,18 @@ from nicegui import ui
 
 from finev.config import get_config
 from finev.forecast import forecast_wealth
+from finev.i18n import (
+    LANGUAGE_TOGGLE_LABELS as _LANGUAGE_TOGGLE_LABELS,
+)
+from finev.i18n import (
+    available_languages as _available_languages,
+)
+from finev.i18n import (
+    make_translator as _make_translator,
+)
+from finev.i18n import (
+    normalize_language as _normalize_language,
+)
 from finev.models import (
     Asset,
     AssetType,
@@ -60,6 +72,9 @@ from finev.ui_state import (
 )
 from finev.ui_state import (
     load_cached_state as _load_cached_state,
+)
+from finev.ui_state import (
+    load_language as _load_language,
 )
 from finev.ui_state import (
     load_profile_state as _load_profile_state,
@@ -113,6 +128,7 @@ def _render_asset_row(
     row: dict[str, Any],
     on_field_change: Callable[[int, str, Any], None],
     on_remove: Callable[[int], None],
+    t: Callable[[str], str],
 ) -> None:
     """Render the widgets for one asset row into the current container.
 
@@ -122,6 +138,7 @@ def _render_asset_row(
         on_field_change: Called as ``(index, field, value)`` when an input
             changes.
         on_remove: Called as ``(index,)`` when the delete button is pressed.
+        t: Translator mapping a catalog key to its localized label.
     """
     with ui.column().classes("w-full gap-1 p-2 border rounded"):
         with ui.row().classes("w-full gap-2 items-center"):
@@ -141,7 +158,7 @@ def _render_asset_row(
                 ),
             ).props("dense flat")
             ui.input(
-                label="Name",
+                label=t("asset.name"),
                 value=row["name"],
                 on_change=lambda e, i=index: on_field_change(
                     i, "name", e.value
@@ -150,7 +167,7 @@ def _render_asset_row(
             ui.select(
                 options=[item.value for item in AssetType],
                 value=row["type"],
-                label="Type",
+                label=t("asset.type"),
                 on_change=lambda e, i=index: on_field_change(
                     i, "type", e.value
                 ),
@@ -161,16 +178,26 @@ def _render_asset_row(
             ).props("dense flat color=red")
         if asset_type == AssetType.INHERITANCE:
             _inheritance_relationship_labels = {
-                InheritanceRelationship.EHEGATTE.value: "Ehegatte / Lebenspartner (I, 500 K€)",
-                InheritanceRelationship.KIND.value: "Kind / Stiefkind (I, 400 K€)",
-                InheritanceRelationship.ENKEL.value: "Enkel (I, 200 K€)",
-                InheritanceRelationship.ELTERNTEIL.value: "Elternteil (I, 100 K€)",
-                InheritanceRelationship.KLASSE_II.value: "Geschwister / Nichte / Neffe (II, 20 K€)",
-                InheritanceRelationship.KLASSE_III.value: "Sonstige (III, 20 K€)",
+                InheritanceRelationship.EHEGATTE.value: t(
+                    "inheritance.rel.ehegatte"
+                ),
+                InheritanceRelationship.KIND.value: t("inheritance.rel.kind"),
+                InheritanceRelationship.ENKEL.value: t(
+                    "inheritance.rel.enkel"
+                ),
+                InheritanceRelationship.ELTERNTEIL.value: t(
+                    "inheritance.rel.elternteil"
+                ),
+                InheritanceRelationship.KLASSE_II.value: t(
+                    "inheritance.rel.klasse_ii"
+                ),
+                InheritanceRelationship.KLASSE_III.value: t(
+                    "inheritance.rel.klasse_iii"
+                ),
             }
             with ui.grid(columns=2).classes("w-full gap-2"):
                 ui.number(
-                    label="Gross amount",
+                    label=t("asset.gross_amount"),
                     value=row.get("inheritance_gross_amount") or 0,
                     format="%.0f",
                     min=0,
@@ -182,7 +209,7 @@ def _render_asset_row(
                     ),
                 ).classes("w-full")
                 ui.number(
-                    label="Age at receipt",
+                    label=t("asset.age_at_receipt"),
                     value=row.get("inheritance_age") or 67,
                     format="%.0f",
                     min=0,
@@ -199,7 +226,7 @@ def _render_asset_row(
                     "inheritance_relationship",
                     InheritanceRelationship.KIND.value,
                 ),
-                label="Relationship",
+                label=t("asset.relationship"),
                 on_change=lambda e, i=index: on_field_change(
                     i,
                     "inheritance_relationship",
@@ -211,11 +238,11 @@ def _render_asset_row(
             with ui.column().classes("w-full gap-2"):
                 ui.select(
                     options={
-                        "points": "Versorgungspunkte",
-                        "euro": "Monthly pension (€)",
+                        "points": t("asset.vbl_points_option"),
+                        "euro": t("asset.vbl_euro_option"),
                     },
                     value=input_mode,
-                    label="Input",
+                    label=t("asset.vbl_input"),
                     on_change=lambda e, i=index: on_field_change(
                         i,
                         "vbl_input_mode",
@@ -224,7 +251,7 @@ def _render_asset_row(
                 ).classes("w-full")
                 if input_mode == "euro":
                     ui.number(
-                        label="Monthly pension (€, gross)",
+                        label=t("asset.vbl_monthly_pension"),
                         value=row.get("vbl_monthly_pension") or 0,
                         format="%.0f",
                         min=0,
@@ -237,7 +264,7 @@ def _render_asset_row(
                     ).classes("w-full")
                 else:
                     ui.number(
-                        label="Versorgungspunkte",
+                        label=t("asset.vbl_points_label"),
                         value=row.get("vbl_points") or 0,
                         format="%.1f",
                         min=0,
@@ -250,7 +277,7 @@ def _render_asset_row(
                     ).classes("w-full")
                 with ui.row().classes("w-full gap-2 items-center"):
                     ui.checkbox(
-                        "Noch im Öffentlichen Dienst (1 Punkt/Jahr)",
+                        t("asset.vbl_still_working"),
                         value=bool(row.get("vbl_still_working", False)),
                         on_change=lambda e, i=index: on_field_change(
                             i,
@@ -260,7 +287,7 @@ def _render_asset_row(
                     )
                 with ui.row().classes("w-full gap-2"):
                     ui.number(
-                        label="Pension start age",
+                        label=t("asset.vbl_start_age"),
                         value=row.get("vbl_start_age") or 67,
                         format="%.0f",
                         min=0,
@@ -272,7 +299,7 @@ def _render_asset_row(
                         ),
                     ).classes("w-40")
                     ui.number(
-                        label="Tax rate (%, optional)",
+                        label=t("asset.vbl_tax_rate"),
                         value=row.get("vbl_tax_rate_pct") or None,
                         format="%.1f",
                         min=0,
@@ -287,7 +314,7 @@ def _render_asset_row(
         else:
             with ui.grid(columns=2).classes("w-full gap-2"):
                 ui.number(
-                    label="Current value",
+                    label=t("asset.current_value"),
                     value=row["current_value"],
                     format="%.0f",
                     min=0,
@@ -299,7 +326,7 @@ def _render_asset_row(
                     ),
                 ).classes("w-full")
                 ui.number(
-                    label="Unrealized gains",
+                    label=t("asset.unrealized_gains"),
                     value=row.get("unrealized_gains") or 0,
                     format="%.0f",
                     min=0,
@@ -312,7 +339,7 @@ def _render_asset_row(
                     ),
                 ).classes("w-full")
                 ui.number(
-                    label="Annual gain (%)",
+                    label=t("asset.annual_gain"),
                     value=row["annual_gain_rate_pct"],
                     format="%.1f",
                     step=0.1,
@@ -323,7 +350,7 @@ def _render_asset_row(
                     ),
                 ).classes("w-full")
                 ui.number(
-                    label="Monthly contribution",
+                    label=t("asset.monthly_contribution"),
                     value=row["monthly_contribution"],
                     format="%.0f",
                     min=0,
@@ -338,16 +365,16 @@ def _render_asset_row(
                 with ui.column().classes("w-full gap-2"):
                     ui.select(
                         options={
-                            BAVStrategy.TRANSFER.value: (
-                                "Transfer to ETF/Cash"
+                            BAVStrategy.TRANSFER.value: t(
+                                "asset.bav_transfer"
                             ),
-                            BAVStrategy.INCOME.value: ("Monthly gains income"),
+                            BAVStrategy.INCOME.value: t("asset.bav_income"),
                         },
                         value=row.get(
                             "bav_strategy",
                             BAVStrategy.TRANSFER.value,
                         ),
-                        label="bAV mode",
+                        label=t("asset.bav_mode"),
                         on_change=lambda e, i=index: on_field_change(
                             i,
                             "bav_strategy",
@@ -357,7 +384,7 @@ def _render_asset_row(
                     if row.get("bav_strategy") == (BAVStrategy.TRANSFER.value):
                         with ui.row().classes("w-full gap-2"):
                             ui.number(
-                                label="bAV retirement age",
+                                label=t("asset.bav_retirement_age"),
                                 value=row.get(
                                     "bav_retirement_age",
                                     67,
@@ -372,7 +399,7 @@ def _render_asset_row(
                                 ),
                             ).classes("w-32")
                             ui.number(
-                                label="ETF share (%)",
+                                label=t("asset.etf_share"),
                                 value=row.get(
                                     "bav_transfer_etf_ratio_pct",
                                     50.0,
@@ -389,7 +416,7 @@ def _render_asset_row(
                             ).classes("w-28")
                     elif row.get("bav_strategy") == (BAVStrategy.INCOME.value):
                         ui.number(
-                            label="bAV retirement age",
+                            label=t("asset.bav_retirement_age"),
                             value=row.get(
                                 "bav_retirement_age",
                                 67,
@@ -446,6 +473,8 @@ class _WealthPage:
         except (OSError, json.JSONDecodeError, ValueError) as exc:
             self.state_error = f"Failed to load cached state: {exc}"
             cached_state = None
+        self.language = _load_language(cached_state)
+        self.t = _make_translator(self.language)
         self.asset_rows = _load_asset_rows(cached_state)
         self.profile_state = _load_profile_state(cached_state)
         self.withdrawal_state = _load_withdrawal_state(cached_state)
@@ -569,13 +598,10 @@ class _WealthPage:
             "state_pension_current_monthly_amount"
         ]
         self.state_pension_current_monthly_amount.update()
-        self.state_pension_growth_display.text = (
-            _format_currency(
-                withdrawal["state_pension_growth_per_working_year"],
-                profile["currency"],
-            )
-            + " p.m."
-        )
+        self.state_pension_growth_display.text = _format_currency(
+            withdrawal["state_pension_growth_per_working_year"],
+            profile["currency"],
+        ) + self.t("common.pm_suffix")
         self.state_pension_growth_display.update()
         self.state_pension_penalty_display.text = ""
         self.state_pension_penalty_display.update()
@@ -600,7 +626,8 @@ class _WealthPage:
             _clear_cached_state()
         except OSError as error:
             ui.notify(
-                f"Failed to clear cached state: {error}", type="negative"
+                self.t("notify.clear_cache_fail").format(error=error),
+                type="negative",
             )
 
     # ── Settings profiles ─────────────────────
@@ -629,22 +656,30 @@ class _WealthPage:
         try:
             self.profile_store.save_profile(name, self._state_snapshot())
         except (OSError, ValueError) as error:
-            ui.notify(f"Failed to save profile: {error}", type="negative")
+            ui.notify(
+                self.t("notify.save_profile_fail").format(error=error),
+                type="negative",
+            )
             return
         self._refresh_profile_options(select=name)
-        ui.notify(f"Saved profile '{name}'.", type="positive")
+        ui.notify(
+            self.t("notify.save_profile_ok").format(name=name), type="positive"
+        )
 
     def load_profile(self) -> None:
         """Load the selected profile's settings into the UI."""
         name = self.profile_select.value
         if not name:
-            ui.notify("Select a profile to load.", type="warning")
+            ui.notify(self.t("notify.select_to_load"), type="warning")
             return
         try:
             state = self.profile_store.load_profile(name)
         except (OSError, ValueError, json.JSONDecodeError) as error:
             ui.notify(
-                f"Failed to load profile '{name}': {error}", type="negative"
+                self.t("notify.load_profile_fail").format(
+                    name=name, error=error
+                ),
+                type="negative",
             )
             return
         self.suppress_cache_save = True
@@ -655,23 +690,32 @@ class _WealthPage:
         self.render_asset_rows()
         self.suppress_cache_save = False
         self.run_immediate()
-        ui.notify(f"Loaded profile '{name}'.", type="positive")
+        ui.notify(
+            self.t("notify.load_profile_ok").format(name=name),
+            type="positive",
+        )
 
     def delete_profile(self) -> None:
         """Delete the selected profile."""
         name = self.profile_select.value
         if not name:
-            ui.notify("Select a profile to delete.", type="warning")
+            ui.notify(self.t("notify.select_to_delete"), type="warning")
             return
         try:
             self.profile_store.delete_profile(name)
         except OSError as error:
             ui.notify(
-                f"Failed to delete profile '{name}': {error}", type="negative"
+                self.t("notify.delete_profile_fail").format(
+                    name=name, error=error
+                ),
+                type="negative",
             )
             return
         self._refresh_profile_options()
-        ui.notify(f"Deleted profile '{name}'.", type="positive")
+        ui.notify(
+            self.t("notify.delete_profile_ok").format(name=name),
+            type="positive",
+        )
 
     # ── Navbar and dialogs ─────────────────────
     def open_file_dialog(self) -> None:
@@ -683,22 +727,58 @@ class _WealthPage:
         """Render the always-visible top navbar with the File/About actions.
 
         The header background is a teal that matches the logo's gradient, and the
-        logo, title and actions are all left-aligned in a single row.
+        logo, title and actions are left-aligned in a single row; the language
+        toggle is pushed to the far right.
         """
         with ui.header().classes("items-center gap-4 px-4 py-2 bg-teal-700"):
             ui.html(_inline_logo_svg()).classes("w-8 h-8 shrink-0")
-            ui.label("Financial Escape Velocity - Wealth Forecast").classes(
-                "text-lg font-bold"
+            ui.label(self.t("nav.title")).classes("text-lg font-bold")
+            ui.button(
+                self.t("nav.file"), on_click=self.open_file_dialog
+            ).props("flat color=white")
+            ui.button(
+                self.t("nav.export"), on_click=self.export_forecast_csv
+            ).props("flat color=white")
+            ui.button(
+                self.t("nav.about"), on_click=self.about_dialog.open
+            ).props("flat color=white")
+            ui.space()
+            ui.toggle(
+                {
+                    code: _LANGUAGE_TOGGLE_LABELS[code]
+                    for code in _available_languages()
+                },
+                value=self.language,
+                on_change=lambda e: self.set_language(e.value),
+            ).props("dense color=white text-color=teal-7").tooltip(
+                self.t("nav.language")
             )
-            ui.button("File", on_click=self.open_file_dialog).props(
-                "flat color=white"
+
+    def set_language(self, language: str) -> None:
+        """Switch the UI language and reload the page in that language.
+
+        The choice is persisted to the cached state first (so the current,
+        possibly unsaved, widget values survive the reload), then the page is
+        reloaded so every widget is rebuilt with the new translator. Reloading
+        avoids having to track and re-label every widget individually.
+
+        Args:
+            language: The requested language code; unknown codes are normalized
+                to the default (English).
+        """
+        normalized = _normalize_language(language)
+        if normalized == self.language:
+            return
+        self.language = normalized
+        self.t = _make_translator(normalized)
+        try:
+            _save_cached_state(self._state_snapshot())
+        except (OSError, ValueError) as error:
+            ui.notify(
+                self.t("notify.language_persist_fail").format(error=error),
+                type="negative",
             )
-            ui.button("Export", on_click=self.export_forecast_csv).props(
-                "flat color=white"
-            )
-            ui.button("About", on_click=self.about_dialog.open).props(
-                "flat color=white"
-            )
+        ui.navigate.reload()
 
     def _build_file_dialog(self) -> None:
         """Build the File window holding the save/load/delete profile controls.
@@ -709,32 +789,33 @@ class _WealthPage:
         with ui.dialog() as dialog, ui.card().classes("w-[460px] p-4 gap-2"):
             self.file_dialog = dialog
             with ui.row().classes("w-full items-center justify-between"):
-                ui.label("Profiles").classes("text-lg font-semibold")
+                ui.label(self.t("file.title")).classes("text-lg font-semibold")
                 ui.button(icon="close", on_click=dialog.close).props(
                     "flat dense round"
                 )
-            ui.label(
-                "Save the current settings under a name (e.g. one per person) "
-                "and switch between them."
-            ).classes("text-xs text-gray-500")
+            ui.label(self.t("file.description")).classes(
+                "text-xs text-gray-500"
+            )
             with ui.row().classes("w-full gap-2 items-end"):
                 self.profile_name_input = ui.input(
-                    label="Profile name",
-                    placeholder="e.g. wife",
+                    label=self.t("file.profile_name"),
+                    placeholder=self.t("file.profile_name_placeholder"),
                 ).classes("flex-1")
-                ui.button("Save", on_click=self.save_profile).props(
-                    "color=green-4"
-                )
+                ui.button(
+                    self.t("file.save"), on_click=self.save_profile
+                ).props("color=green-4")
             with ui.row().classes("w-full gap-2 items-end"):
                 self.profile_select = ui.select(
                     options=self.profile_store.list_profiles(),
-                    label="Saved profiles",
+                    label=self.t("file.saved_profiles"),
                     with_input=True,
                 ).classes("flex-1")
-                ui.button("Load", on_click=self.load_profile).props("outline")
-                ui.button("Delete", on_click=self.delete_profile).props(
-                    "outline color=red"
-                )
+                ui.button(
+                    self.t("file.load"), on_click=self.load_profile
+                ).props("outline")
+                ui.button(
+                    self.t("file.delete"), on_click=self.delete_profile
+                ).props("outline color=red")
 
     def _build_about_dialog(self) -> None:
         """Build the About window showing the application version."""
@@ -744,11 +825,11 @@ class _WealthPage:
         ):
             self.about_dialog = dialog
             ui.html(_inline_logo_svg()).classes("w-12 h-12")
-            ui.label("Financial Escape Velocity").classes(
-                "text-lg font-semibold"
-            )
+            ui.label(self.t("about.app_name")).classes("text-lg font-semibold")
             ui.label(_version_label_text()).classes("text-sm text-gray-500")
-            ui.button("Close", on_click=dialog.close).props("flat")
+            ui.button(self.t("about.close"), on_click=dialog.close).props(
+                "flat"
+            )
 
     def build_assets(self) -> list[Asset]:
         """Build asset objects from the current UI rows.
@@ -764,7 +845,11 @@ class _WealthPage:
         for index, row in enumerate(self.asset_rows):
             with self.assets_container:
                 _render_asset_row(
-                    index, row, self.update_asset_row, self.remove_asset_row
+                    index,
+                    row,
+                    self.update_asset_row,
+                    self.remove_asset_row,
+                    self.t,
                 )
 
     def _build_forecast_inputs(
@@ -838,34 +923,33 @@ class _WealthPage:
                 penalty_fraction=penalty_fraction,
             )
 
-            self.state_pension_growth_display.text = (
-                _format_currency(
-                    monthly_growth_per_working_year_computed,
-                    profile.currency,
-                )
-                + " p.m."
-            )
+            self.state_pension_growth_display.text = _format_currency(
+                monthly_growth_per_working_year_computed,
+                profile.currency,
+            ) + self.t("common.pm_suffix")
             self.state_pension_growth_display.update()
             if penalty_fraction > 0:
                 penalty_monthly = (
                     monthly_growth_per_working_year_computed * penalty_fraction
                 )
-                self.state_pension_penalty_display.text = (
-                    "Estimated early-retirement penalty: -"
-                    + _format_currency(penalty_monthly, profile.currency)
-                    + f" p.m. ({penalty_fraction * 100:.1f}% reduction)"
+                self.state_pension_penalty_display.text = self.t(
+                    "pension.penalty"
+                ).format(
+                    amount=_format_currency(penalty_monthly, profile.currency),
+                    pct=f"{penalty_fraction * 100:.1f}%",
                 )
             else:
-                self.state_pension_penalty_display.text = (
-                    "No early-retirement penalty"
+                self.state_pension_penalty_display.text = self.t(
+                    "pension.no_penalty"
                 )
             self.state_pension_penalty_display.update()
-            self.state_pension_achieved_display.text = (
-                f"Pension at age {pension_start_age}: "
-                + _format_currency(net_pension, profile.currency)
-                + " p.m. gross"
-                f" ({years_remaining} working year(s) remaining,"
-                f" retiring at {profile.retirement_age})"
+            self.state_pension_achieved_display.text = self.t(
+                "pension.achieved"
+            ).format(
+                age=pension_start_age,
+                amount=_format_currency(net_pension, profile.currency),
+                years=years_remaining,
+                ret=profile.retirement_age,
             )
             self.state_pension_achieved_display.update()
 
@@ -890,7 +974,7 @@ class _WealthPage:
         )
 
         asset_columns = _asset_value_columns(assets)
-        self.table.columns = _forecast_table_columns(asset_columns)
+        self.table.columns = _forecast_table_columns(asset_columns, self.t)
         self.table.rows = rounded.to_dict(orient="records")
         self.table.update()
 
@@ -899,9 +983,9 @@ class _WealthPage:
         self.chart.update()
 
         final_total = float(df["total"].iloc[-1])
-        self.summary_label.text = (
-            f"Total at age {profile.end_age}: "
-            f"{_format_currency(final_total, profile.currency)}"
+        self.summary_label.text = self.t("forecast.total").format(
+            age=profile.end_age,
+            amount=_format_currency(final_total, profile.currency),
         )
         if self.suppress_cache_save:
             return
@@ -909,7 +993,7 @@ class _WealthPage:
             _save_cached_state(self._state_snapshot())
         except (OSError, ValueError) as error:
             ui.notify(
-                f"Failed to save cached state: {error}",
+                self.t("notify.save_cache_fail").format(error=error),
                 type="negative",
             )
 
@@ -949,6 +1033,7 @@ class _WealthPage:
             float(self.annual_income.value or 0), get_config().drv
         )
         return {
+            "language": self.language,
             "assets": [_normalize_asset_row(row) for row in self.asset_rows],
             "profile": {
                 "current_age_years": int(self.current_age_years.value or 0),
@@ -988,16 +1073,18 @@ class _WealthPage:
                 # ── Left sidebar ──────────────────────────
                 with ui.column().classes("w-[420px] shrink-0 gap-4"):
                     with ui.card().classes("w-full p-3"):
-                        ui.label("Profile").classes("text-lg font-semibold")
+                        ui.label(self.t("profile.section")).classes(
+                            "text-lg font-semibold"
+                        )
                         with ui.grid(columns=2).classes("w-full gap-3"):
                             self.current_age_years = ui.number(
-                                label="Current age (years)",
+                                label=self.t("profile.current_age_years"),
                                 value=profile_state["current_age_years"],
                                 format="%.0f",
                                 on_change=lambda _: self.schedule_forecast(),
                             )
                             self.current_age_months = ui.number(
-                                label="Current age (months)",
+                                label=self.t("profile.current_age_months"),
                                 value=profile_state["current_age_months"],
                                 format="%.0f",
                                 min=0,
@@ -1005,24 +1092,24 @@ class _WealthPage:
                                 on_change=lambda _: self.schedule_forecast(),
                             )
                             self.retirement_age = ui.number(
-                                label="Retirement age",
+                                label=self.t("profile.retirement_age"),
                                 value=profile_state["retirement_age"],
                                 format="%.0f",
                                 on_change=lambda _: self.schedule_forecast(),
                             )
                             self.end_age = ui.number(
-                                label="End age",
+                                label=self.t("profile.end_age"),
                                 value=profile_state["end_age"],
                                 format="%.0f",
                                 on_change=lambda _: self.schedule_forecast(),
                             )
                             self.currency = ui.input(
-                                label="Currency",
+                                label=self.t("profile.currency"),
                                 value=profile_state["currency"],
                                 on_change=lambda _: self.schedule_forecast(),
                             )
                             self.average_inflation_rate = ui.number(
-                                label="Average inflation rate (%)",
+                                label=self.t("profile.inflation"),
                                 value=profile_state[
                                     "average_inflation_rate_pct"
                                 ],
@@ -1032,7 +1119,7 @@ class _WealthPage:
                                 on_change=lambda _: self.schedule_forecast(),
                             )
                             self.debt_interest_rate = ui.number(
-                                label="Debt interest rate (%)",
+                                label=self.t("profile.debt_interest"),
                                 value=profile_state["debt_interest_rate_pct"],
                                 format="%.2f",
                                 min=0,
@@ -1040,7 +1127,7 @@ class _WealthPage:
                                 on_change=lambda _: self.schedule_forecast(),
                             )
                             self.withdrawal_input = ui.number(
-                                label="Monthly withdrawal",
+                                label=self.t("profile.monthly_withdrawal"),
                                 value=withdrawal_state["monthly_withdrawal"],
                                 format="%.0f",
                                 min=0,
@@ -1049,12 +1136,12 @@ class _WealthPage:
                             )
 
                     with ui.card().classes("w-full p-3"):
-                        ui.label("State pension").classes(
+                        ui.label(self.t("pension.section")).classes(
                             "text-lg font-semibold"
                         )
                         with ui.grid(columns=2).classes("w-full gap-3"):
                             self.annual_income = ui.number(
-                                label="Annual income",
+                                label=self.t("pension.annual_income"),
                                 value=profile_state.get(
                                     "annual_income", 50000.0
                                 ),
@@ -1065,7 +1152,7 @@ class _WealthPage:
                             )
                             self.state_pension_current_monthly_amount = (
                                 ui.number(
-                                    label="State pension now (monthly)",
+                                    label=self.t("pension.now_monthly"),
                                     value=withdrawal_state[
                                         "state_pension_current_monthly_amount"
                                     ],
@@ -1084,14 +1171,14 @@ class _WealthPage:
                                     ],
                                     profile_state["currency"],
                                 )
-                                + " p.m."
+                                + self.t("common.pm_suffix")
                             )
                             # Read-only: estimated early-retirement penalty.
                             self.state_pension_penalty_display = ui.label("")
                             # Read-only: total achieved monthly pension.
                             self.state_pension_achieved_display = ui.label("")
                             self.state_pension_start_age = ui.number(
-                                label="State pension start age",
+                                label=self.t("pension.start_age"),
                                 value=withdrawal_state[
                                     "state_pension_start_age"
                                 ],
@@ -1103,10 +1190,12 @@ class _WealthPage:
                             )
 
                     with ui.card().classes("w-full p-3"):
-                        ui.label("Assets").classes("text-lg font-semibold")
-                        ui.label(
-                            "Defaults: ETF 5.0% | bAV 2.0% | Cash 0.5% (annual)"
-                        ).classes("text-xs text-gray-500")
+                        ui.label(self.t("assets.section")).classes(
+                            "text-lg font-semibold"
+                        )
+                        ui.label(self.t("assets.defaults_note")).classes(
+                            "text-xs text-gray-500"
+                        )
 
                         self.assets_container = ui.column().classes(
                             "w-full gap-2"
@@ -1115,17 +1204,19 @@ class _WealthPage:
 
                         with ui.row().classes("gap-2"):
                             ui.button(
-                                "Add asset", on_click=self.add_asset_row
+                                self.t("assets.add"),
+                                on_click=self.add_asset_row,
                             ).props("outline color=green-4")
                             ui.button(
-                                "Reset", on_click=self.reset_state
+                                self.t("assets.reset"),
+                                on_click=self.reset_state,
                             ).props("outline color=red")
 
                 # ── Right panel (chart + table) ─────────────
                 with ui.column().classes("flex-1 min-w-0 gap-4"):
-                    self.summary_label = ui.label("No forecast yet.").classes(
-                        "text-sm"
-                    )
+                    self.summary_label = ui.label(
+                        self.t("forecast.none")
+                    ).classes("text-sm")
                     self.chart = ui.echart(_build_chart_options()).classes(
                         "w-full h-[500px]"
                     )

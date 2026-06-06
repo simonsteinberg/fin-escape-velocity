@@ -12,6 +12,11 @@ version is retired.
 
 ### Added
 
+- **Language toggle (English/German):** an always-visible navbar control switches
+  the entire UI between English (default) and German. All user-facing text is
+  resolved through a new pure `finev.i18n` translation catalog (English→key
+  fallback); the chosen language is persisted in the autosave cache and restored
+  on reload. Currency/number formatting is not localized in this iteration (#33).
 - New **VBLklassik** asset type: the public-sector occupational pension modeled
   as a lifelong, income-taxed annuity that offsets post-retirement withdrawals
   (like the DRV state pension, but nominal — not inflation-compensated). Entered

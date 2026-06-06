@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from finev.config import get_config
+from finev.i18n import normalize_language
 from finev.models import (
     DEFAULT_ANNUAL_GAIN_RATES,
     Asset,
@@ -134,6 +135,25 @@ def clear_cached_state() -> None:
     path = state_path()
     if path.exists():
         path.unlink()
+
+
+def load_language(cached_state: dict[str, Any] | None) -> str:
+    """Load the persisted UI language from cached state.
+
+    The language is a UI-wide preference stored at the top level of the cached
+    state (alongside ``assets``/``profile``/``withdrawal``), so a reload restores
+    the user's last choice.
+
+    Args:
+        cached_state: The loaded cache dict, or ``None`` when no cache exists.
+
+    Returns:
+        A supported language code, defaulting to English when absent or
+        unrecognised (see :func:`finev.i18n.normalize_language`).
+    """
+    if not cached_state:
+        return normalize_language(None)
+    return normalize_language(cached_state.get("language"))
 
 
 def default_profile_state() -> dict[str, Any]:
