@@ -13,9 +13,35 @@ from typing import Any
 
 import pytest
 
+import finev.ui as ui_module
 from finev.models import Asset, AssetType, BAVStrategy
 from finev.ui import _WealthPage
+from finev.ui_config import ColorScheme
 from finev.ui_state import default_gain_pct
+
+
+class _DummyDarkMode:
+    """Stand-in for ``ui.dark_mode`` capturing the assigned value."""
+
+    def __init__(self) -> None:
+        self.value: bool | None = None
+
+    def update(self) -> None:
+        pass
+
+
+class _DummyButton:
+    """Stand-in for the navbar toggle capturing ``props``/``update`` calls."""
+
+    def __init__(self) -> None:
+        self.props_calls: list[str] = []
+
+    def props(self, value: str) -> _DummyButton:
+        self.props_calls.append(value)
+        return self
+
+    def update(self) -> None:
+        pass
 
 
 class _Recorder:
@@ -86,6 +112,45 @@ def test_current_value_edit_clamps_gains_and_rebuilds(
     # Unrealized gains cannot exceed the new current value.
     assert page.asset_rows[0]["unrealized_gains"] == 5_000
     assert _calls(page) == [("schedule", True)]
+
+
+def test_cycle_color_scheme_advances_persists_and_updates_widgets(
+    page: _WealthPage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    saved: list[dict[str, Any]] = []
+    monkeypatch.setattr(ui_module, "_save_cached_state", saved.append)
+    # The snapshot reads many bound widgets that the unit fixture never builds;
+    # stub it so the test exercises the scheme handler in isolation.
+    monkeypatch.setattr(
+        page,
+        "_state_snapshot",
+        lambda: {"color_scheme": page.color_scheme.value},
+    )
+    page.dark_mode = _DummyDarkMode()  # type: ignore[assignment]
+    page.color_scheme_button = _DummyButton()  # type: ignore[assignment]
+    page.color_scheme = ColorScheme.AUTO
+
+    page.cycle_color_scheme()
+
+    # auto → light: dark mode disabled, icon updated, choice persisted.
+    assert page.color_scheme is ColorScheme.LIGHT
+    assert page.dark_mode.value is False
+    assert page.color_scheme_button.props_calls == ["icon=light_mode"]
+    assert saved == [{"color_scheme": "light"}]
+
+
+def test_set_color_scheme_to_dark_enables_dark_mode(
+    page: _WealthPage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(ui_module, "_save_cached_state", lambda _state: None)
+    monkeypatch.setattr(page, "_state_snapshot", dict)
+    page.dark_mode = _DummyDarkMode()  # type: ignore[assignment]
+    page.color_scheme_button = _DummyButton()  # type: ignore[assignment]
+
+    page.set_color_scheme(ColorScheme.DARK)
+
+    assert page.color_scheme is ColorScheme.DARK
+    assert page.dark_mode.value is True
 
 
 def test_type_change_rerenders_and_updates_default_rate(

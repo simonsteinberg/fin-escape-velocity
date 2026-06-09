@@ -47,10 +47,20 @@ from finev.profile_store import (
     normalize_profile_name as _normalize_profile_name,
 )
 from finev.ui_config import (
+    ColorScheme,
     UiConfig,
 )
 from finev.ui_config import (
+    color_scheme_icon as _color_scheme_icon,
+)
+from finev.ui_config import (
     get_ui_config as _get_ui_config,
+)
+from finev.ui_config import (
+    next_color_scheme as _next_color_scheme,
+)
+from finev.ui_config import (
+    scheme_to_dark_mode as _scheme_to_dark_mode,
 )
 from finev.ui_state import (
     apply_type_change_defaults as _apply_type_change_defaults,
@@ -80,6 +90,9 @@ from finev.ui_state import (
     load_cached_state as _load_cached_state,
 )
 from finev.ui_state import (
+    load_color_scheme as _load_color_scheme,
+)
+from finev.ui_state import (
     load_language as _load_language,
 )
 from finev.ui_state import (
@@ -96,6 +109,9 @@ from finev.ui_state import (
 )
 from finev.ui_state import (
     save_cached_state as _save_cached_state,
+)
+from finev.ui_view import (
+    NAVBAR_CLASS as _NAVBAR_CLASS,
 )
 from finev.ui_view import (
     asset_value_columns as _asset_value_columns,
@@ -120,6 +136,9 @@ from finev.ui_view import (
 )
 from finev.ui_view import (
     inline_logo_svg as _inline_logo_svg,
+)
+from finev.ui_view import (
+    theme_css as _theme_css,
 )
 from finev.ui_view import (
     version_label_text as _version_label_text,
@@ -470,6 +489,8 @@ class _WealthPage:
     profile_select: ui.select
     file_dialog: ui.dialog
     about_dialog: ui.dialog
+    dark_mode: ui.dark_mode
+    color_scheme_button: ui.button
 
     def __init__(self) -> None:
         self.state_error: str | None = None
@@ -492,6 +513,9 @@ class _WealthPage:
         self.pending_rebuild = False
         self.profile_store: ProfileStore = _default_profile_store()
         self.ui_config: UiConfig = _get_ui_config()
+        self.color_scheme: ColorScheme = _load_color_scheme(
+            cached_state, self.ui_config.color_scheme
+        )
 
     # ── Scheduling ──────────────────────────
     def _run_scheduled(self) -> None:
@@ -733,11 +757,15 @@ class _WealthPage:
     def _build_navbar(self) -> None:
         """Render the always-visible top navbar with the File/About actions.
 
-        The header background is a teal that matches the logo's gradient, and the
-        logo, title and actions are left-aligned in a single row; the language
-        toggle is pushed to the far right.
+        The header background follows the active color scheme (teal that matches
+        the logo's gradient in light mode, dark gray in dark mode) via the
+        themed navbar class. The logo, title and actions are left-aligned in a
+        single row; the color-scheme toggle and language toggle are pushed to
+        the far right.
         """
-        with ui.header().classes("items-center gap-4 px-4 py-2 bg-teal-700"):
+        with ui.header().classes(
+            f"items-center gap-4 px-4 py-2 {_NAVBAR_CLASS}"
+        ):
             ui.html(_inline_logo_svg()).classes("w-8 h-8 shrink-0")
             ui.label(self.t("nav.title")).classes("text-lg font-bold")
             ui.button(
@@ -750,6 +778,14 @@ class _WealthPage:
                 self.t("nav.about"), on_click=self.about_dialog.open
             ).props("flat color=white")
             ui.space()
+            self.color_scheme_button = (
+                ui.button(
+                    icon=_color_scheme_icon(self.color_scheme),
+                    on_click=self.cycle_color_scheme,
+                )
+                .props("flat round color=white")
+                .tooltip(self.t("nav.color_scheme"))
+            )
             ui.toggle(
                 {
                     code: _LANGUAGE_TOGGLE_LABELS[code]
@@ -786,6 +822,35 @@ class _WealthPage:
                 type="negative",
             )
         ui.navigate.reload()
+
+    def cycle_color_scheme(self) -> None:
+        """Advance the color scheme to the next option (auto → light → dark)."""
+        self.set_color_scheme(_next_color_scheme(self.color_scheme))
+
+    def set_color_scheme(self, scheme: ColorScheme) -> None:
+        """Apply a color scheme live and persist the choice.
+
+        Updates the page's dark-mode element (no reload needed) and the navbar
+        toggle's icon, then saves the choice to the cached state so it survives a
+        reload. Auto defers to the OS/browser ``prefers-color-scheme`` setting.
+
+        Args:
+            scheme: The color scheme to switch to.
+        """
+        self.color_scheme = scheme
+        self.dark_mode.value = _scheme_to_dark_mode(scheme)
+        self.dark_mode.update()
+        self.color_scheme_button.props(f"icon={_color_scheme_icon(scheme)}")
+        self.color_scheme_button.update()
+        if self.suppress_cache_save:
+            return
+        try:
+            _save_cached_state(self._state_snapshot())
+        except (OSError, ValueError) as error:
+            ui.notify(
+                self.t("notify.color_scheme_persist_fail").format(error=error),
+                type="negative",
+            )
 
     def _build_file_dialog(self) -> None:
         """Build the File window holding the save/load/delete profile controls.
@@ -1041,6 +1106,7 @@ class _WealthPage:
         )
         return {
             "language": self.language,
+            "color_scheme": self.color_scheme.value,
             "assets": [_normalize_asset_row(row) for row in self.asset_rows],
             "profile": {
                 "current_age_years": int(self.current_age_years.value or 0),
@@ -1072,9 +1138,14 @@ class _WealthPage:
         """Construct the page widgets and render the initial forecast."""
         profile_state = self.profile_state
         withdrawal_state = self.withdrawal_state
-        # Apply the configured color scheme. ``None`` lets NiceGUI follow the
+        # Theme CSS makes the navbar, surfaces and scrollbars follow the scheme
+        # (keyed on Quasar's ``body--dark`` class) and grays out the dark
+        # palette. Apply the active scheme; ``None`` lets NiceGUI follow the
         # OS/browser ``prefers-color-scheme`` preference (auto).
-        ui.dark_mode(value=self.ui_config.dark_mode_value)
+        ui.add_head_html(f"<style>{_theme_css()}</style>")
+        self.dark_mode = ui.dark_mode(
+            value=_scheme_to_dark_mode(self.color_scheme)
+        )
         self._build_file_dialog()
         self._build_about_dialog()
         self._build_navbar()

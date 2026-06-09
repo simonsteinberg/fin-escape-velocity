@@ -97,8 +97,8 @@ contain no domain math.
 | [`i18n.py`](../src/finev/i18n.py) | UI internationalization: the English/German translation catalog and lookup helpers (`translate`, `normalize_language`, `make_translator`), with English→key fallback. No NiceGUI dependency. | ✅ |
 | [`ui_state.py`](../src/finev/ui_state.py) | UI defaults, JSON state persistence (autosave cache, incl. the language preference), value coercion/clamping, row normalization, row→`Asset` conversion. No NiceGUI dependency. | ✅ |
 | [`profile_store.py`](../src/finev/profile_store.py) | Named settings-profile storage behind the `ProfileStore` abstraction; `LocalDiskProfileStore` keeps one JSON file per profile. Pluggable backend (S3/DB later). No NiceGUI dependency. | ✅ |
-| [`ui_view.py`](../src/finev/ui_view.py) | Presentation helpers: currency formatting, chart/table option shaping, yearly display frame, version label text. No NiceGUI dependency. | ✅ |
-| [`ui_config.py`](../src/finev/ui_config.py) | Loads and validates `ui_config.json` (layout max width, color scheme) into a frozen typed dataclass; maps the scheme to NiceGUI's dark-mode value and the width to a CSS declaration. No NiceGUI dependency. | ✅ |
+| [`ui_view.py`](../src/finev/ui_view.py) | Presentation helpers: currency formatting, chart/table option shaping, yearly display frame, version label text, theme CSS (scheme-following navbar/surfaces/scrollbars). No NiceGUI dependency. | ✅ |
+| [`ui_config.py`](../src/finev/ui_config.py) | Loads and validates `ui_config.json` (layout max width, color scheme) into a frozen typed dataclass; maps the scheme to NiceGUI's dark-mode value and the width to a CSS declaration, and provides the navbar toggle's cycle/icon helpers. No NiceGUI dependency. | ✅ |
 | [`ui.py`](../src/finev/ui.py) | NiceGUI page. The `_WealthPage` controller holds widget refs + state and binds event handlers as methods; `build_wealth_page()` is the thin entry point. | ❌ (presentation) |
 | [`app.py`](../src/finev/app.py) | NiceGUI server launcher; auto-selects a free port in 8081–8130; honours `WEALTH_APP_PORT`. | ❌ (I/O) |
 | [`cli.py`](../src/finev/cli.py) | Console entry point: builds a default scenario, prints a yearly summary table. | ❌ (I/O) |
@@ -419,13 +419,14 @@ The browser tab uses a bundled SVG favicon (`src/finev/static/favicon.svg`, a
 rising-trend arrow), loaded via `ui_view.favicon_svg()` and passed to `ui.run`.
 The same artwork is rendered inline as the navbar logo and inside the About
 window via `ui_view.inline_logo_svg()`, which rescales the icon's fixed root
-dimensions to its container; the navbar background is a matching teal.
+dimensions to its container; the navbar background is a matching teal in light
+mode and a dark gray in dark mode (see the color-scheme note below).
 
 The navbar's **About** action opens a window showing the application version
 (e.g. `v0.1.0`), sourced from `ui_view.version_label_text()` →
 `greet.get_version()`.
 
-**Layout width and color scheme** are read from `ui_config.json` via
+**Layout width and color scheme** default from `ui_config.json` via
 `ui_config.get_ui_config()`. `MAX_WIDTH_PX` caps the centred content width (in
 pixels; `0` means full width — the historical behaviour), applied as a
 `max-width` CSS declaration on the page's outer column. `COLOR_SCHEME` is one of
@@ -433,6 +434,17 @@ pixels; `0` means full width — the historical behaviour), applied as a
 `light` force a fixed scheme, while `auto` defers to the operating
 system/browser preference (the `prefers-color-scheme` media query), so the app
 follows the user's Windows/macOS/Linux light-or-dark setting.
+
+A navbar **color-scheme toggle** (an icon button, left of the language toggle)
+lets the user cycle `auto → light → dark` live — `set_color_scheme` updates the
+page's `ui.dark_mode` element without a reload, swaps the button icon, and
+persists the choice to the cached state (alongside the language) so it survives a
+reload; `ui_config.json` provides only the default. Global theme CSS
+(`ui_view.theme_css`, injected via `ui.add_head_html`) keys off Quasar's
+`body--dark` class so the **navbar background** (brand teal in light, dark gray
+in dark), the **page/card surfaces** (overriding Quasar's near-black defaults
+with neutral grays) and the **scrollbars** all follow whichever scheme is active,
+including auto-resolved dark.
 
 The current working state is autosaved to a local JSON cache
 (`.cache/finev/wealth_state.json`, or `WEALTH_APP_STATE_PATH`).

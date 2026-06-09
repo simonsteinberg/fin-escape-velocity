@@ -15,9 +15,15 @@ version is retired.
 - UI configuration file (`src/finev/ui_config.json`) and loader
   (`finev.ui_config`) for presentation-only settings: `MAX_WIDTH_PX` caps and
   centres the page content width (`0` = full width), and `COLOR_SCHEME`
-  (`auto` | `light` | `dark`) selects the color scheme. `auto` follows the
-  operating system / browser `prefers-color-scheme` preference via
+  (`auto` | `light` | `dark`) selects the default color scheme. `auto` follows
+  the operating system / browser `prefers-color-scheme` preference via
   `ui.dark_mode`.
+- Navbar color-scheme toggle that cycles `auto → light → dark` live and persists
+  the choice to the cached state (alongside the language).
+- Theme CSS (`ui_view.theme_css`) so the navbar background, page/card surfaces
+  and scrollbars follow the active scheme (keyed on Quasar's `body--dark`
+  class), with a neutral-gray dark palette replacing Quasar's near-black
+  defaults.
 
 ## [0.1.1] - 2026-06-06
 

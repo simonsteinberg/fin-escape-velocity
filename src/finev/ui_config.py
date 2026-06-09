@@ -32,6 +32,69 @@ class ColorScheme(StrEnum):
     DARK = "dark"
 
 
+#: Order the navbar toggle cycles through (wraps back to the start).
+_SCHEME_CYCLE: tuple[ColorScheme, ...] = (
+    ColorScheme.AUTO,
+    ColorScheme.LIGHT,
+    ColorScheme.DARK,
+)
+
+#: Material icon name shown for each scheme on the navbar toggle.
+_SCHEME_ICONS: dict[ColorScheme, str] = {
+    ColorScheme.AUTO: "brightness_auto",
+    ColorScheme.LIGHT: "light_mode",
+    ColorScheme.DARK: "dark_mode",
+}
+
+
+def scheme_to_dark_mode(scheme: ColorScheme) -> bool | None:
+    """Map a color scheme to NiceGUI's ``ui.dark_mode`` value.
+
+    Args:
+        scheme: The active color scheme.
+
+    Returns:
+        ``True`` for dark, ``False`` for light, and ``None`` for auto — the value
+        NiceGUI interprets as "follow the OS/browser preference".
+    """
+    if scheme is ColorScheme.DARK:
+        return True
+    if scheme is ColorScheme.LIGHT:
+        return False
+    return None
+
+
+def next_color_scheme(scheme: ColorScheme) -> ColorScheme:
+    """Return the next scheme in the navbar toggle cycle.
+
+    Cycles ``auto → light → dark → auto``; an unrecognised scheme restarts the
+    cycle at its first entry.
+
+    Args:
+        scheme: The current color scheme.
+
+    Returns:
+        The scheme to switch to on the next toggle.
+    """
+    try:
+        index = _SCHEME_CYCLE.index(scheme)
+    except ValueError:
+        return _SCHEME_CYCLE[0]
+    return _SCHEME_CYCLE[(index + 1) % len(_SCHEME_CYCLE)]
+
+
+def color_scheme_icon(scheme: ColorScheme) -> str:
+    """Return the Material icon name representing a color scheme.
+
+    Args:
+        scheme: The color scheme to depict.
+
+    Returns:
+        A Material icon name (e.g. ``"dark_mode"``).
+    """
+    return _SCHEME_ICONS[scheme]
+
+
 @dataclass(frozen=True)
 class UiConfig:
     """Typed UI configuration values.
@@ -54,11 +117,7 @@ class UiConfig:
             ``True`` for dark, ``False`` for light, and ``None`` for auto — the
             value NiceGUI interprets as "follow the OS/browser preference".
         """
-        if self.color_scheme is ColorScheme.DARK:
-            return True
-        if self.color_scheme is ColorScheme.LIGHT:
-            return False
-        return None
+        return scheme_to_dark_mode(self.color_scheme)
 
     @property
     def content_max_width_style(self) -> str:

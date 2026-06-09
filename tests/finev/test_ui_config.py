@@ -10,8 +10,11 @@ import pytest
 from finev.ui_config import (
     ColorScheme,
     UiConfig,
+    color_scheme_icon,
     get_ui_config,
     load_ui_config,
+    next_color_scheme,
+    scheme_to_dark_mode,
 )
 
 
@@ -114,3 +117,41 @@ def test_non_object_config_raises(tmp_path: Path) -> None:
     path = _write_config(tmp_path, [1, 2, 3])
     with pytest.raises(ValueError, match="JSON object"):
         load_ui_config(path)
+
+
+@pytest.mark.parametrize(
+    ("scheme", "expected"),
+    [
+        (ColorScheme.DARK, True),
+        (ColorScheme.LIGHT, False),
+        (ColorScheme.AUTO, None),
+    ],
+)
+def test_scheme_to_dark_mode(
+    scheme: ColorScheme, expected: bool | None
+) -> None:
+    assert scheme_to_dark_mode(scheme) is expected
+
+
+def test_next_color_scheme_cycles() -> None:
+    # auto → light → dark → auto
+    assert next_color_scheme(ColorScheme.AUTO) is ColorScheme.LIGHT
+    assert next_color_scheme(ColorScheme.LIGHT) is ColorScheme.DARK
+    assert next_color_scheme(ColorScheme.DARK) is ColorScheme.AUTO
+
+
+def test_next_color_scheme_round_trips_every_scheme() -> None:
+    scheme = ColorScheme.AUTO
+    seen = []
+    for _ in range(len(ColorScheme)):
+        scheme = next_color_scheme(scheme)
+        seen.append(scheme)
+    assert set(seen) == set(ColorScheme)
+    assert scheme is ColorScheme.AUTO
+
+
+def test_color_scheme_icon_is_distinct_per_scheme() -> None:
+    icons = {color_scheme_icon(scheme) for scheme in ColorScheme}
+    assert len(icons) == len(ColorScheme)
+    assert color_scheme_icon(ColorScheme.DARK) == "dark_mode"
+    assert color_scheme_icon(ColorScheme.LIGHT) == "light_mode"
