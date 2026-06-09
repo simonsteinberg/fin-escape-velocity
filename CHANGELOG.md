@@ -10,6 +10,8 @@ version is retired.
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-06-09
+
 ### Changed
 
 - Trim the README quickstart: drop the standalone "Run a console forecast"
@@ -52,7 +54,8 @@ version is retired.
   inheritance (Erbschaftsteuer), and German-specific taxation (Abgeltungssteuer
   and Soli).
 
-[Unreleased]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/simonsteinberg/fin-escape-velocity/releases/tag/v0.1.0
