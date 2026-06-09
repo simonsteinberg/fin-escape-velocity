@@ -39,6 +39,7 @@ they stay unit-testable without rendering a page.
 | `ui_view.py` | Pure UI presentation helpers: currency formatting, chart options, yearly display frame; no NiceGUI dependency |
 | `i18n.py` | Pure translation catalog and lookup helpers (English default, German); `make_translator` resolves the active language to a translator callable. Lookups fall back to English then the raw key; no NiceGUI dependency |
 | `profile_store.py` | Named settings-profile storage behind a pluggable `ProfileStore` ABC (`LocalDiskProfileStore` persists each profile as JSON); layered on top of the single autosaved working state in `ui_state` |
+| `ui_config.py` | Loads and validates `ui_config.json` — presentation-only UI settings (layout max width, color scheme); maps the scheme to NiceGUI's dark-mode value and the width to a CSS declaration; no NiceGUI dependency |
 | `ui.py` | NiceGUI page: the `_WealthPage` controller class holds widget refs + state and binds event handlers as methods (unit-testable); `build_wealth_page()` is the thin entry point. Delegates all logic to the engine and `ui_state`/`ui_view` |
 | `app.py` | NiceGUI server launcher; auto-selects a free port in 8081–8130; respects `WEALTH_APP_PORT` env var |
 | `cli.py` | Console entry point: builds a default scenario and prints yearly totals |

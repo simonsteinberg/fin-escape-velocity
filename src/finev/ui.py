@@ -46,6 +46,12 @@ from finev.profile_store import (
 from finev.profile_store import (
     normalize_profile_name as _normalize_profile_name,
 )
+from finev.ui_config import (
+    UiConfig,
+)
+from finev.ui_config import (
+    get_ui_config as _get_ui_config,
+)
 from finev.ui_state import (
     apply_type_change_defaults as _apply_type_change_defaults,
 )
@@ -485,6 +491,7 @@ class _WealthPage:
         self.pending_handle: asyncio.Handle | None = None
         self.pending_rebuild = False
         self.profile_store: ProfileStore = _default_profile_store()
+        self.ui_config: UiConfig = _get_ui_config()
 
     # ── Scheduling ──────────────────────────
     def _run_scheduled(self) -> None:
@@ -1065,6 +1072,9 @@ class _WealthPage:
         """Construct the page widgets and render the initial forecast."""
         profile_state = self.profile_state
         withdrawal_state = self.withdrawal_state
+        # Apply the configured color scheme. ``None`` lets NiceGUI follow the
+        # OS/browser ``prefers-color-scheme`` preference (auto).
+        ui.dark_mode(value=self.ui_config.dark_mode_value)
         self._build_file_dialog()
         self._build_about_dialog()
         self._build_navbar()
@@ -1072,11 +1082,13 @@ class _WealthPage:
         # height under the navbar; each panel then scrolls within its own
         # frame instead of the whole page scrolling as one.
         ui.query(".nicegui-content").classes("p-0 gap-0")
-        with (
-            ui.column()
-            .classes("w-full p-4")
-            .style("height: calc(100vh - 4rem)")
-        ):
+        # Constrain the content to the configured max width and centre it
+        # (``mx-auto``); an empty max-width style means full width.
+        outer_style = "height: calc(100vh - 4rem)"
+        max_width_style = self.ui_config.content_max_width_style
+        if max_width_style:
+            outer_style = f"{outer_style}; {max_width_style}"
+        with ui.column().classes("w-full mx-auto p-4").style(outer_style):
             with ui.row().classes(
                 "w-full h-full gap-4 items-stretch flex-nowrap"
             ):

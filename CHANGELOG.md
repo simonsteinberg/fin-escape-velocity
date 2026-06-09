@@ -10,6 +10,15 @@ version is retired.
 
 ## [Unreleased]
 
+### Added
+
+- UI configuration file (`src/finev/ui_config.json`) and loader
+  (`finev.ui_config`) for presentation-only settings: `MAX_WIDTH_PX` caps and
+  centres the page content width (`0` = full width), and `COLOR_SCHEME`
+  (`auto` | `light` | `dark`) selects the color scheme. `auto` follows the
+  operating system / browser `prefers-color-scheme` preference via
+  `ui.dark_mode`.
+
 ## [0.1.1] - 2026-06-06
 
 ### Changed
