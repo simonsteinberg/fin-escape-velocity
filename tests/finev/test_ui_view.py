@@ -8,6 +8,13 @@ import pandas as pd
 
 from finev.models import Asset, AssetType
 from finev.ui_view import (
+    DARK_PAGE_BG,
+    DARK_SCROLLBAR_THUMB,
+    DARK_SURFACE_BG,
+    DARK_TEXT,
+    NAVBAR_CLASS,
+    NAVBAR_DARK_BG,
+    NAVBAR_LIGHT_BG,
     asset_value_columns,
     chart_series,
     export_csv_filename,
@@ -15,7 +22,31 @@ from finev.ui_view import (
     forecast_csv,
     forecast_table_columns,
     inline_logo_svg,
+    theme_css,
 )
+
+
+def test_theme_css_drives_scheme_from_quasar_dark_class() -> None:
+    css = theme_css()
+    # Navbar follows the scheme: brand teal in light, gray in dark.
+    assert f".{NAVBAR_CLASS} {{ background-color: {NAVBAR_LIGHT_BG}; }}" in css
+    assert (
+        f".body--dark .{NAVBAR_CLASS} {{ background-color: {NAVBAR_DARK_BG}; }}"
+        in css
+    )
+    # Dark palette overrides Quasar's near-black page default with a gray.
+    assert f"--q-dark-page: {DARK_PAGE_BG}" in css
+    # Cards and the data table sit on the lighter surface gray, not near-black.
+    assert f"--q-dark: {DARK_SURFACE_BG}" in css
+    assert ".q-card" in css
+    assert ".q-table" in css
+    assert f"background-color: {DARK_SURFACE_BG}" in css
+    # Body text is a soft gray, not pure white.
+    assert f"color: {DARK_TEXT}" in css
+    # Dark scrollbars (WebKit thumb + Firefox shorthand) are themed, not white.
+    assert DARK_SCROLLBAR_THUMB in css
+    assert "::-webkit-scrollbar-thumb" in css
+    assert "scrollbar-color:" in css
 
 
 def test_favicon_svg_returns_inline_svg() -> None:

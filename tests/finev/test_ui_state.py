@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from finev.models import AssetType, BAVStrategy, InheritanceRelationship
+from finev.ui_config import ColorScheme
 from finev.ui_state import (
     apply_type_change_defaults,
     coerce_asset_field,
     default_gain_pct,
+    load_color_scheme,
     load_language,
     new_asset_row,
 )
@@ -15,6 +17,34 @@ from finev.ui_state import (
 def test_load_language_defaults_to_english_without_cache() -> None:
     assert load_language(None) == "en"
     assert load_language({}) == "en"
+
+
+def test_load_color_scheme_falls_back_to_default() -> None:
+    assert load_color_scheme(None, ColorScheme.AUTO) is ColorScheme.AUTO
+    assert load_color_scheme({}, ColorScheme.LIGHT) is ColorScheme.LIGHT
+    # Key present but null value also falls back.
+    assert (
+        load_color_scheme({"color_scheme": None}, ColorScheme.DARK)
+        is ColorScheme.DARK
+    )
+
+
+def test_load_color_scheme_reads_persisted_value() -> None:
+    assert (
+        load_color_scheme({"color_scheme": "dark"}, ColorScheme.AUTO)
+        is ColorScheme.DARK
+    )
+    assert (
+        load_color_scheme({"color_scheme": " LIGHT "}, ColorScheme.AUTO)
+        is ColorScheme.LIGHT
+    )
+
+
+def test_load_color_scheme_ignores_unknown_value() -> None:
+    assert (
+        load_color_scheme({"color_scheme": "sepia"}, ColorScheme.DARK)
+        is ColorScheme.DARK
+    )
 
 
 def test_load_language_reads_persisted_value() -> None:

@@ -58,6 +58,59 @@ def inline_logo_svg() -> str:
     return svg
 
 
+# ── Theme palette ──────────────────────────────────────────────────────────
+# Brand teal that matches the logo gradient (light mode navbar).
+NAVBAR_LIGHT_BG = "#0f766e"
+# A neutral dark gray (not black) for the dark-mode navbar.
+NAVBAR_DARK_BG = "#1f2937"
+# Dark-mode surfaces: a gray-ish page and a slightly lighter card/surface (so the
+# profile/asset cards and the data table read as raised, mid-gray panels rather
+# than near-black), overriding Quasar's defaults (#121212 / #1d1d1d).
+DARK_PAGE_BG = "#22272e"
+DARK_SURFACE_BG = "#313945"
+# Dark-mode body text: a soft gray rather than pure white, easier on the eyes.
+DARK_TEXT = "#c4cad3"
+# Dark-mode scrollbar colors (track matches the page; thumb is a mid gray).
+DARK_SCROLLBAR_THUMB = "#4b5563"
+
+#: CSS class applied to the navbar so its background can follow the scheme.
+NAVBAR_CLASS = "fev-navbar"
+
+
+def theme_css() -> str:
+    """Build the global CSS that makes the page theme follow the color scheme.
+
+    The rules key off Quasar's ``body--dark`` class (toggled by ``ui.dark_mode``
+    for both forced-dark and auto-resolved-dark), so the navbar, page surfaces
+    and scrollbars track the active scheme without Python knowing the
+    OS preference. It also overrides Quasar's near-black dark defaults with
+    neutral grays.
+
+    Returns:
+        A CSS string (no surrounding ``<style>`` tag).
+    """
+    return (
+        # Gray-ish dark surfaces instead of Quasar's near-black defaults.
+        f":root {{ --q-dark-page: {DARK_PAGE_BG}; --q-dark: {DARK_SURFACE_BG}; }}\n"
+        f".body--dark {{ background-color: {DARK_PAGE_BG}; color: {DARK_TEXT}; }}\n"
+        # Cards (profile/asset panels) and the data table read as raised, lighter
+        # mid-gray surfaces; set explicitly so the table does not stay near-black.
+        f".body--dark .q-card, .body--dark .q-table, "
+        f".body--dark .q-table__container, .body--dark .q-table thead tr "
+        f"{{ background-color: {DARK_SURFACE_BG}; }}\n"
+        # Navbar background follows the scheme.
+        f".{NAVBAR_CLASS} {{ background-color: {NAVBAR_LIGHT_BG}; }}\n"
+        f".body--dark .{NAVBAR_CLASS} {{ background-color: {NAVBAR_DARK_BG}; }}\n"
+        # Dark scrollbars (WebKit + Firefox) so they are not left white.
+        f".body--dark {{ scrollbar-color: {DARK_SCROLLBAR_THUMB} "
+        f"{DARK_PAGE_BG}; }}\n"
+        ".body--dark ::-webkit-scrollbar { width: 12px; height: 12px; }\n"
+        f".body--dark ::-webkit-scrollbar-track {{ background: {DARK_PAGE_BG}; }}\n"
+        ".body--dark ::-webkit-scrollbar-thumb { "
+        f"background: {DARK_SCROLLBAR_THUMB}; border-radius: 6px; }}\n"
+    )
+
+
 def version_label_text() -> str:
     """Build the version label shown next to the page title.
 

@@ -41,6 +41,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "nav.export": "Export",
         "nav.about": "About",
         "nav.language": "Language",
+        "nav.color_scheme": "Color scheme",
+        "color.auto": "System",
+        "color.light": "Light",
+        "color.dark": "Dark",
         # File / profiles dialog
         "file.title": "Profiles",
         "file.description": (
@@ -142,6 +146,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "notify.language_persist_fail": (
             "Failed to save language preference: {error}"
         ),
+        "notify.color_scheme_persist_fail": (
+            "Failed to save color scheme preference: {error}"
+        ),
     },
     "de": {
         # Navbar
@@ -150,6 +157,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "nav.export": "Export",
         "nav.about": "Über",
         "nav.language": "Sprache",
+        "nav.color_scheme": "Farbschema",
+        "color.auto": "System",
+        "color.light": "Hell",
+        "color.dark": "Dunkel",
         # File / profiles dialog
         "file.title": "Profile",
         "file.description": (
@@ -263,6 +274,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "notify.language_persist_fail": (
             "Spracheinstellung konnte nicht gespeichert werden: {error}"
+        ),
+        "notify.color_scheme_persist_fail": (
+            "Farbschema-Einstellung konnte nicht gespeichert werden: {error}"
         ),
     },
 }

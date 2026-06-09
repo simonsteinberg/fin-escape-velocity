@@ -23,6 +23,7 @@ from finev.models import (
     BAVStrategy,
     InheritanceRelationship,
 )
+from finev.ui_config import ColorScheme
 
 
 def default_gain_pct(asset_type: AssetType) -> float:
@@ -154,6 +155,34 @@ def load_language(cached_state: dict[str, Any] | None) -> str:
     if not cached_state:
         return normalize_language(None)
     return normalize_language(cached_state.get("language"))
+
+
+def load_color_scheme(
+    cached_state: dict[str, Any] | None, default: ColorScheme
+) -> ColorScheme:
+    """Load the persisted color scheme from cached state.
+
+    The color scheme is a UI-wide preference stored at the top level of the
+    cached state (alongside ``language``), so a navbar toggle survives a reload.
+    When absent or unrecognised it falls back to *default* (the value configured
+    in ``ui_config.json``).
+
+    Args:
+        cached_state: The loaded cache dict, or ``None`` when no cache exists.
+        default: The scheme to use when the cache carries no valid choice.
+
+    Returns:
+        The persisted scheme, or *default*.
+    """
+    if not cached_state:
+        return default
+    raw = cached_state.get("color_scheme")
+    if raw is None:
+        return default
+    try:
+        return ColorScheme(str(raw).strip().lower())
+    except ValueError:
+        return default
 
 
 def default_profile_state() -> dict[str, Any]:
