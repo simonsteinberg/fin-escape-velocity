@@ -10,6 +10,8 @@ version is retired.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-06-09
+
 ### Added
 
 - UI configuration file (`src/finev/ui_config.json`) and loader
@@ -45,6 +47,7 @@ version is retired.
   inheritance (Erbschaftsteuer), and German-specific taxation (Abgeltungssteuer
   and Soli).
 
-[Unreleased]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/simonsteinberg/fin-escape-velocity/releases/tag/v0.1.0
