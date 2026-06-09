@@ -12,12 +12,6 @@ Install tools and dependencies:
 mise install
 mise run sync
 ```
-
-Run a console forecast:
-```bash
-mise run run
-```
-
 Launch the NiceGUI app:
 ```bash
 mise run app

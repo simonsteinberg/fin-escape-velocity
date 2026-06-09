@@ -10,6 +10,11 @@ version is retired.
 
 ## [Unreleased]
 
+### Changed
+
+- Trim the README quickstart: drop the standalone "Run a console forecast"
+  (`mise run run`) snippet, leaving the NiceGUI app as the primary entry point.
+
 ## [0.1.2] - 2026-06-09
 
 ### Added
