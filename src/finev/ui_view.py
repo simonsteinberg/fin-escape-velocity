@@ -63,10 +63,11 @@ def inline_logo_svg() -> str:
 NAVBAR_LIGHT_BG = "#0f766e"
 # A neutral dark gray (not black) for the dark-mode navbar.
 NAVBAR_DARK_BG = "#1f2937"
-# Dark-mode surfaces: a gray-ish page and a slightly lighter card/surface,
-# overriding Quasar's near-black defaults (#121212 / #1d1d1d).
+# Dark-mode surfaces: a gray-ish page and a clearly lighter card/surface (so the
+# profile/asset cards and the data table read as raised, mid-gray panels rather
+# than near-black), overriding Quasar's defaults (#121212 / #1d1d1d).
 DARK_PAGE_BG = "#22272e"
-DARK_SURFACE_BG = "#2d333b"
+DARK_SURFACE_BG = "#3a414d"
 # Dark-mode scrollbar colors (track matches the page; thumb is a mid gray).
 DARK_SCROLLBAR_THUMB = "#4b5563"
 
@@ -90,6 +91,11 @@ def theme_css() -> str:
         # Gray-ish dark surfaces instead of Quasar's near-black defaults.
         f":root {{ --q-dark-page: {DARK_PAGE_BG}; --q-dark: {DARK_SURFACE_BG}; }}\n"
         f".body--dark {{ background-color: {DARK_PAGE_BG}; }}\n"
+        # Cards (profile/asset panels) and the data table read as raised, lighter
+        # mid-gray surfaces; set explicitly so the table does not stay near-black.
+        f".body--dark .q-card, .body--dark .q-table, "
+        f".body--dark .q-table__container, .body--dark .q-table thead tr "
+        f"{{ background-color: {DARK_SURFACE_BG}; }}\n"
         # Navbar background follows the scheme.
         f".{NAVBAR_CLASS} {{ background-color: {NAVBAR_LIGHT_BG}; }}\n"
         f".body--dark .{NAVBAR_CLASS} {{ background-color: {NAVBAR_DARK_BG}; }}\n"

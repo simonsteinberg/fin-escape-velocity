@@ -10,6 +10,7 @@ from finev.models import Asset, AssetType
 from finev.ui_view import (
     DARK_PAGE_BG,
     DARK_SCROLLBAR_THUMB,
+    DARK_SURFACE_BG,
     NAVBAR_CLASS,
     NAVBAR_DARK_BG,
     NAVBAR_LIGHT_BG,
@@ -34,6 +35,11 @@ def test_theme_css_drives_scheme_from_quasar_dark_class() -> None:
     )
     # Dark palette overrides Quasar's near-black page default with a gray.
     assert f"--q-dark-page: {DARK_PAGE_BG}" in css
+    # Cards and the data table sit on the lighter surface gray, not near-black.
+    assert f"--q-dark: {DARK_SURFACE_BG}" in css
+    assert ".q-card" in css
+    assert ".q-table" in css
+    assert f"background-color: {DARK_SURFACE_BG}" in css
     # Dark scrollbars (WebKit thumb + Firefox shorthand) are themed, not white.
     assert DARK_SCROLLBAR_THUMB in css
     assert "::-webkit-scrollbar-thumb" in css

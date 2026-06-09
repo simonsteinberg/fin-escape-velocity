@@ -23,7 +23,7 @@ version is retired.
 - Theme CSS (`ui_view.theme_css`) so the navbar background, page/card surfaces
   and scrollbars follow the active scheme (keyed on Quasar's `body--dark`
   class), with a neutral-gray dark palette replacing Quasar's near-black
-  defaults.
+  defaults: a darker page behind clearly lighter mid-gray cards and data table.
 
 ## [0.1.1] - 2026-06-06
 
