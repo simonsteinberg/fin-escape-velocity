@@ -10,6 +10,12 @@ version is retired.
 
 ## [Unreleased]
 
+### Added
+
+- Hover tooltips on every input parameter (profile, state pension, and all
+  asset-row fields) giving a concise meaning plus typical values, in both English
+  and German.
+
 ## [0.2.0] - 2026-06-13
 
 ### Added
