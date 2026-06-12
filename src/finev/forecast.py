@@ -375,6 +375,10 @@ class _EngineParams:
     monthly_rates: list[float]
     etf_indices: list[int]
     cash_indices: list[int]
+    # Asset that receives state pension paid while still working (before
+    # retirement): the highest-gain-rate ETF, or the highest-rate Cash asset
+    # when no ETF exists, or None when neither is present.
+    pension_target_index: int | None
     # Inheritance events as (age_in_months, gross_amount, relationship).
     inheritance_events: list[tuple[int, float, InheritanceRelationship]]
     # Active VBLklassik assets paying lifelong pension income.
@@ -466,6 +470,19 @@ def _build_engine_params(
         ):
             raise ValueError("bAV transfer requires at least one Cash asset")
 
+    # Pre-retirement state pension is invested in the asset with the highest
+    # annual gain rate: an ETF if any exist, otherwise a Cash asset. Ties resolve
+    # to the lowest index. This target is fixed for the whole run.
+    pension_target_pool = etf_indices or cash_indices
+    pension_target_index = (
+        max(
+            pension_target_pool,
+            key=lambda index: assets_list[index].effective_annual_gain_rate(),
+        )
+        if pension_target_pool
+        else None
+    )
+
     monthly_rates = [
         _annual_to_monthly_rate(asset.effective_annual_gain_rate())
         for asset in assets_list
@@ -479,6 +496,7 @@ def _build_engine_params(
         monthly_rates=monthly_rates,
         etf_indices=etf_indices,
         cash_indices=cash_indices,
+        pension_target_index=pension_target_index,
         inheritance_events=inheritance_events,
         vbl_assets=vbl_assets,
         etf_tax_rate=config.capital_gains_tax_rate,
@@ -573,6 +591,38 @@ def _apply_contributions(
         )
     ]
     state.net_cashflow += float(sum(contributions))
+
+
+def _apply_pre_retirement_pension(
+    params: _EngineParams,
+    state: _MonthlyState,
+    age_months: int,
+) -> None:
+    """Invest state pension drawn while still working into the target asset.
+
+    When the state pension starts before retirement, the user is still working
+    yet already receiving the pension. The full net monthly pension is invested
+    in the pre-retirement target (highest-gain-rate ETF, or Cash fallback),
+    increasing both its balance and cost basis, and booked as positive net
+    cashflow. With no eligible target the income is dropped. This runs only in
+    pre-retirement months; from retirement onward the pension instead offsets
+    the withdrawal target (see :func:`_apply_withdrawal`).
+    """
+    if params.pension_target_index is None:
+        return
+    net_pension = _net_state_pension_for_month(
+        profile=params.profile,
+        metadata=params.metadata,
+        state_pension=params.withdrawal.state_pension,
+        age_months=age_months,
+        config=params.config,
+    )
+    if net_pension <= 0:
+        return
+    target = params.pension_target_index
+    state.balances[target] += net_pension
+    state.cost_bases[target] += net_pension
+    state.net_cashflow += net_pension
 
 
 def _withdrawable_indices(
@@ -969,6 +1019,7 @@ def forecast_wealth(
             _apply_inheritance(params, state, age_months)
             if age_months < metadata.retirement_age_months:
                 _apply_contributions(params, state)
+                _apply_pre_retirement_pension(params, state, age_months)
             else:
                 _apply_withdrawal(params, state, age_months)
             _apply_bav_transfer(params, state, age_months)

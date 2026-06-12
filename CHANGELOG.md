@@ -10,6 +10,14 @@ version is retired.
 
 ## [Unreleased]
 
+### Fixed
+
+- State pension drawn while still working (start age before retirement age) is no
+  longer dropped: in those gap months the full net pension is invested in the
+  highest-gain-rate ETF (or the highest-rate Cash asset when no ETF exists). From
+  retirement onward it still offsets the withdrawal target, so it is never counted
+  twice.
+
 ## [0.1.3] - 2026-06-09
 
 ### Changed

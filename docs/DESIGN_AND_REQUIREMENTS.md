@@ -262,6 +262,16 @@ cashflow events so a contribution earns growth in the same month.
 Each active, non-inheritance asset receives its monthly contribution, added to
 both balance and cost basis; the sum is recorded as positive net cashflow.
 
+If the state pension's start age falls **before** retirement, the user is still
+working yet already drawing the pension. In those gap months the full net state
+pension (computed as in §7.6) is **invested** rather than dropped: it is added to
+both the balance and cost basis of a single target asset and recorded as positive
+net cashflow. The target is the active ETF with the **highest annual gain rate**,
+or — when no ETF exists — the highest-rate active Cash asset; ties resolve to the
+lowest index and the target is fixed for the whole run. With no ETF or Cash asset
+the income is dropped. From retirement onward the pension instead offsets the
+withdrawal target (§7.4 step 2), so it is never counted twice.
+
 ### 7.4 Withdrawals (post-retirement)
 
 1. Inflate the base net target to the current month.
@@ -304,9 +314,11 @@ net(month)    = gross(month) × (1 − tax_rate)
 ```
 
 `working_years` is derived from current→retirement age. `tax_rate` defaults to
-`DRV_BRUTTO_RENTE_STEUERSATZ`. The net amount reduces the withdrawal target
-(§7.4 step 2). The display-only estimates in `pension.py` mirror this for the UI
-but are computed independently.
+`DRV_BRUTTO_RENTE_STEUERSATZ`. From retirement onward the net amount reduces the
+withdrawal target (§7.4 step 2); in any months where the pension starts before
+retirement, the same net amount is instead invested while still working (§7.3).
+The display-only estimates in `pension.py` mirror this for the UI but are computed
+independently.
 
 ### 7.7 bAV strategies
 
