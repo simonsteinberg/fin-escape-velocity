@@ -262,15 +262,16 @@ cashflow events so a contribution earns growth in the same month.
 Each active, non-inheritance asset receives its monthly contribution, added to
 both balance and cost basis; the sum is recorded as positive net cashflow.
 
-If the state pension's start age falls **before** retirement, the user is still
-working yet already drawing the pension. In those gap months the full net state
-pension (computed as in §7.6) is **invested** rather than dropped: it is added to
-both the balance and cost basis of a single target asset and recorded as positive
-net cashflow. The target is the active ETF with the **highest annual gain rate**,
-or — when no ETF exists — the highest-rate active Cash asset; ties resolve to the
-lowest index and the target is fixed for the whole run. With no ETF or Cash asset
-the income is dropped. From retirement onward the pension instead offsets the
-withdrawal target (§7.4 step 2), so it is never counted twice.
+If the state pension's (§7.6) or a VBLklassik pension's (§7.9) start age falls
+**before** retirement, the user is still working yet already drawing that pension.
+In those gap months the combined net pension is **invested** rather than dropped:
+it is added to both the balance and cost basis of a single target asset and
+recorded as positive net cashflow. The target is the active ETF with the **highest
+annual gain rate**, or — when no ETF exists — the highest-rate active Cash asset;
+ties resolve to the lowest index and the target is fixed for the whole run. With
+no ETF or Cash asset the income is dropped. From retirement onward the pensions
+instead offset the withdrawal target (§7.4 step 2), so they are never counted
+twice.
 
 ### 7.4 Withdrawals (post-retirement)
 
@@ -350,9 +351,11 @@ gross(month)  = vbl_monthly_pension + working_years × vbl_monthly_growth_per_wo
 net(month)    = gross(month) × (1 − tax_rate)
 ```
 
-`tax_rate` defaults to `VBL_BRUTTO_RENTE_STEUERSATZ` (fully income-taxed). The
-combined net VBL pension across all active VBLklassik assets reduces the
-withdrawal target (§7.4 step 2). Unlike the state pension, the VBL pension is
+`tax_rate` defaults to `VBL_BRUTTO_RENTE_STEUERSATZ` (fully income-taxed). From
+retirement onward the combined net VBL pension across all active VBLklassik assets
+reduces the withdrawal target (§7.4 step 2); for any months where a VBL pension
+starts before retirement, that net amount is instead invested while still working
+(§7.3). Unlike the state pension, the VBL pension is
 **not inflation-compensated** — it stays nominal at its today's-euro value, so its
 real value erodes against the inflation-indexed withdrawal target — and **no
 early-retirement reduction** is applied. The per-working-year growth models the

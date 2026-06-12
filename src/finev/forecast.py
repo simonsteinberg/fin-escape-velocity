@@ -598,15 +598,15 @@ def _apply_pre_retirement_pension(
     state: _MonthlyState,
     age_months: int,
 ) -> None:
-    """Invest state pension drawn while still working into the target asset.
+    """Invest pension drawn while still working into the target asset.
 
-    When the state pension starts before retirement, the user is still working
-    yet already receiving the pension. The full net monthly pension is invested
-    in the pre-retirement target (highest-gain-rate ETF, or Cash fallback),
-    increasing both its balance and cost basis, and booked as positive net
-    cashflow. With no eligible target the income is dropped. This runs only in
-    pre-retirement months; from retirement onward the pension instead offsets
-    the withdrawal target (see :func:`_apply_withdrawal`).
+    When the state (DRV) or VBLklassik pension starts before retirement, the user
+    is still working yet already receiving that pension. The combined net monthly
+    pension is invested in the pre-retirement target (highest-gain-rate ETF, or
+    Cash fallback), increasing both its balance and cost basis, and booked as
+    positive net cashflow. With no eligible target the income is dropped. This
+    runs only in pre-retirement months; from retirement onward the pensions
+    instead offset the withdrawal target (see :func:`_apply_withdrawal`).
     """
     if params.pension_target_index is None:
         return
@@ -614,6 +614,11 @@ def _apply_pre_retirement_pension(
         profile=params.profile,
         metadata=params.metadata,
         state_pension=params.withdrawal.state_pension,
+        age_months=age_months,
+        config=params.config,
+    ) + _net_vbl_pension_for_month(
+        metadata=params.metadata,
+        vbl_assets=params.vbl_assets,
         age_months=age_months,
         config=params.config,
     )

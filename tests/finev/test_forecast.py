@@ -1107,3 +1107,51 @@ def test_vbl_per_asset_tax_rate_override() -> None:
     start = (67 - 40) * 12
     # Tax rate 0 -> full €1 000 gross offsets the €3 000 target.
     assert result.loc[start, "net_cashflow"] == pytest.approx(-2_000.0)
+
+
+def test_pre_retirement_vbl_pension_invested_in_highest_rate_etf() -> None:
+    """VBL pension drawn while still working flows into the highest-rate ETF."""
+    profile = UserProfile(
+        current_age_years=60,
+        retirement_age=65,
+        end_age=66,
+        average_inflation_rate=0.0,
+    )
+    etf_low = Asset(
+        name="ETF_low",
+        asset_type=AssetType.ETF,
+        current_value=0.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    etf_high = Asset(
+        name="ETF_high",
+        asset_type=AssetType.ETF,
+        current_value=0.0,
+        annual_gain_rate=0.05,
+        monthly_contribution=0.0,
+    )
+    vbl = Asset(
+        name="VBL",
+        asset_type=AssetType.VBL_KLASSIK,
+        current_value=0.0,
+        vbl_monthly_pension=1_000.0,
+        vbl_start_age=63,
+        vbl_tax_rate=0.0,
+    )
+    withdrawal = WithdrawalPlan(monthly_withdrawal=3_000.0)
+
+    result = forecast_wealth(
+        profile=profile,
+        assets=[etf_low, etf_high, vbl],
+        withdrawal=withdrawal,
+    )
+
+    pre_pension_month = (63 - 60) * 12 - 1
+    gap_month = (63 - 60) * 12 + 1
+
+    # Tax rate 0 -> the full €1 000 gross VBL pension is invested each gap month.
+    assert result.loc[pre_pension_month, "net_cashflow"] == pytest.approx(0.0)
+    assert result.loc[gap_month, "net_cashflow"] == pytest.approx(1_000.0)
+    assert result.loc[gap_month, "ETF_high"] > 0.0
+    assert result.loc[gap_month, "ETF_low"] == pytest.approx(0.0)
