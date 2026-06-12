@@ -133,8 +133,36 @@ def format_currency(value: float, currency: str) -> str:
     return f"{value:,.0f} {currency}".strip()
 
 
-def build_chart_options() -> dict[str, Any]:
+# Lower bound of the capital (y) axis when the logarithmic scale is active.
+# A log axis cannot represent values <= 0 at all, and below this floor the
+# noise of near-zero balances dominates the plot, so we clamp the axis here
+# and let ECharts drop anything smaller.
+LOG_SCALE_Y_AXIS_MIN_EUR = 1000
+
+
+def chart_y_axis(log_scale: bool) -> dict[str, Any]:
+    """Build the capital (y) axis config for the forecast plot.
+
+    Args:
+        log_scale: When ``True``, use a logarithmic scale floored at
+            :data:`LOG_SCALE_Y_AXIS_MIN_EUR` euros (capitals at or below the
+            floor — including non-positive ones — are not plotted); otherwise
+            use a linear scale spanning the data.
+
+    Returns:
+        The ECharts ``yAxis`` configuration dictionary.
+    """
+    if log_scale:
+        return {"type": "log", "min": LOG_SCALE_Y_AXIS_MIN_EUR}
+    return {"type": "value"}
+
+
+def build_chart_options(log_scale: bool = False) -> dict[str, Any]:
     """Build default chart options for the forecast plot.
+
+    Args:
+        log_scale: When ``True``, render the capital (y) axis on a logarithmic
+            scale (see :func:`chart_y_axis`); otherwise use a linear scale.
 
     Returns:
         Base chart configuration dictionary.
@@ -143,7 +171,7 @@ def build_chart_options() -> dict[str, Any]:
         "tooltip": {"trigger": "axis"},
         "legend": {"top": 0},
         "xAxis": {"type": "category", "data": []},
-        "yAxis": {"type": "value"},
+        "yAxis": chart_y_axis(log_scale),
         "series": [],
     }
 

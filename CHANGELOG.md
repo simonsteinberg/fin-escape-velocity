@@ -10,6 +10,14 @@ version is retired.
 
 ## [Unreleased]
 
+### Added
+
+- Chart toggle to switch the capital (y) axis between linear and logarithmic
+  scale. The choice is persisted across reloads alongside the other UI
+  preferences. In log view the axis is floored at 1000 € — capitals at or below
+  the floor (including non-positive ones, which a log scale cannot represent)
+  are not plotted.
+
 ## [0.1.4] - 2026-06-12
 
 ### Fixed

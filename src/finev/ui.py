@@ -96,6 +96,9 @@ from finev.ui_state import (
     load_language as _load_language,
 )
 from finev.ui_state import (
+    load_log_scale as _load_log_scale,
+)
+from finev.ui_state import (
     load_profile_state as _load_profile_state,
 )
 from finev.ui_state import (
@@ -121,6 +124,9 @@ from finev.ui_view import (
 )
 from finev.ui_view import (
     chart_series as _chart_series,
+)
+from finev.ui_view import (
+    chart_y_axis as _chart_y_axis,
 )
 from finev.ui_view import (
     export_csv_filename as _export_csv_filename,
@@ -491,6 +497,7 @@ class _WealthPage:
     about_dialog: ui.dialog
     dark_mode: ui.dark_mode
     color_scheme_button: ui.button
+    log_scale_toggle: ui.switch
 
     def __init__(self) -> None:
         self.state_error: str | None = None
@@ -516,6 +523,7 @@ class _WealthPage:
         self.color_scheme: ColorScheme = _load_color_scheme(
             cached_state, self.ui_config.color_scheme
         )
+        self.log_scale: bool = _load_log_scale(cached_state)
 
     # ── Scheduling ──────────────────────────
     def _run_scheduled(self) -> None:
@@ -852,6 +860,29 @@ class _WealthPage:
                 type="negative",
             )
 
+    def set_log_scale(self, log_scale: bool) -> None:
+        """Switch the capital (y) axis between linear and logarithmic scale.
+
+        Re-renders the existing chart in place (no reload) by swapping the
+        y-axis type, then persists the choice to the cached state so the
+        toggle survives a reload.
+
+        Args:
+            log_scale: ``True`` to use a logarithmic scale, ``False`` for linear.
+        """
+        self.log_scale = log_scale
+        self.chart.options["yAxis"] = _chart_y_axis(log_scale)
+        self.chart.update()
+        if self.suppress_cache_save:
+            return
+        try:
+            _save_cached_state(self._state_snapshot())
+        except (OSError, ValueError) as error:
+            ui.notify(
+                self.t("notify.color_scheme_persist_fail").format(error=error),
+                type="negative",
+            )
+
     def _build_file_dialog(self) -> None:
         """Build the File window holding the save/load/delete profile controls.
 
@@ -1107,6 +1138,7 @@ class _WealthPage:
         return {
             "language": self.language,
             "color_scheme": self.color_scheme.value,
+            "log_scale": self.log_scale,
             "assets": [_normalize_asset_row(row) for row in self.asset_rows],
             "profile": {
                 "current_age_years": int(self.current_age_years.value or 0),
@@ -1311,16 +1343,24 @@ class _WealthPage:
                 with ui.column().classes(
                     "flex-1 min-w-0 gap-4 h-full overflow-y-auto pr-2"
                 ):
-                    self.summary_label = ui.label(
-                        self.t("forecast.none")
-                    ).classes("text-sm")
+                    with ui.row().classes(
+                        "w-full items-center justify-between"
+                    ):
+                        self.summary_label = ui.label(
+                            self.t("forecast.none")
+                        ).classes("text-sm")
+                        self.log_scale_toggle = ui.switch(
+                            self.t("chart.log_scale"),
+                            value=self.log_scale,
+                            on_change=lambda e: self.set_log_scale(e.value),
+                        ).props("dense")
                     # shrink-0 keeps the chart at its fixed height: as a flex
                     # child of the scroll frame its content height is 0 (the
                     # ECharts canvas is absolutely positioned), so without it
                     # flex-shrink would collapse the chart and hide the plot.
-                    self.chart = ui.echart(_build_chart_options()).classes(
-                        "w-full h-[500px] shrink-0"
-                    )
+                    self.chart = ui.echart(
+                        _build_chart_options(self.log_scale)
+                    ).classes("w-full h-[500px] shrink-0")
                     self.table = (
                         ui.table(columns=[], rows=[], row_key="month_index")
                         .props("dense flat bordered separator=horizontal")

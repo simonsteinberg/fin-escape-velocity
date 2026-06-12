@@ -185,6 +185,25 @@ def load_color_scheme(
         return default
 
 
+def load_log_scale(cached_state: dict[str, Any] | None) -> bool:
+    """Load the persisted y-axis log-scale preference from cached state.
+
+    Like ``language`` and ``color_scheme``, the chart's log-scale toggle is a
+    UI-wide preference stored at the top level of the cached state so it
+    survives a reload. Absent or non-boolean values fall back to ``False``
+    (linear scale).
+
+    Args:
+        cached_state: The loaded cache dict, or ``None`` when no cache exists.
+
+    Returns:
+        ``True`` when the capital axis should use a logarithmic scale.
+    """
+    if not cached_state:
+        return False
+    return bool(cached_state.get("log_scale", False))
+
+
 def default_profile_state() -> dict[str, Any]:
     """Return default profile values for UI inputs."""
     return {

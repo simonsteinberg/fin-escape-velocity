@@ -424,13 +424,23 @@ first free port from 8081 (override with `WEALTH_APP_PORT`). An always-visible t
 and **About** actions, and — pushed to the far right — a **language toggle**.
 Below it the page (`_WealthPage`) has a left sidebar (Profile,
 State pension, Assets cards with an add/reset control and per-row editors) and a
-right panel (summary label, ECharts line chart, yearly table). The two regions
+right panel (a row holding the summary label and a **log-scale toggle**, then the
+ECharts line chart and yearly table). The two regions
 fill the height below the navbar and **scroll independently** — each is its own
 scroll frame (`overflow-y-auto`, full height of a viewport-bounded row), so a
 tall sidebar (many asset rows) does not push the chart/table out of view and the
 page never scrolls as a single block. The ECharts chart is pinned to its fixed
 500px height (`shrink-0`) so flexbox does not collapse it inside the scroll
-frame. Edits are debounced
+frame.
+
+A **log-scale toggle** (a `ui.switch` next to the summary label) switches the
+capital (y) axis between a linear and a logarithmic scale live —
+`set_log_scale` swaps the `yAxis` config (`ui_view.chart_y_axis`) on the
+existing chart without a reload and persists the choice to the autosave cache
+(`log_scale` key, restored via `ui_state.load_log_scale`). In log view the axis
+is floored at 1000 € (`ui_view.LOG_SCALE_Y_AXIS_MIN_EUR`): a logarithmic scale
+cannot represent values ≤ 0 at all, and capitals at or below the floor are not
+plotted. Edits are debounced
 (~0.5s) before re-running the forecast; structural changes
 (type/strategy/active/relationship, add/remove, reset) re-render immediately.
 
