@@ -484,6 +484,9 @@ typical values (e.g. *"Expected average yearly return. Typical: ETF 5–7%, Cash
 0–1%."*). Tooltips are attached in `ui.py` via NiceGUI's `.tooltip()` and their
 text lives in the `finev.i18n` catalog under `tooltip.*` keys, so both English
 and German are covered and `i18n` stays the single source of user-facing strings.
+All tooltips share a **1 s show delay** (`ui._TOOLTIP_DELAY_MS`, applied once via
+the Quasar `Tooltip` class default prop) so they appear only when the user rests
+on a control, not while sweeping across the form.
 
 The current working state is autosaved to a local JSON cache
 (`.cache/finev/wealth_state.json`, or `WEALTH_APP_STATE_PATH`).
