@@ -695,6 +695,204 @@ def test_state_pension_inflation_adjusted_with_time() -> None:
     )
 
 
+def test_pre_retirement_state_pension_invested_in_highest_rate_etf() -> None:
+    """Pension drawn while still working flows into the highest-rate ETF.
+
+    With the pension starting before retirement, the gap-year pension income is
+    invested in the ETF with the highest annual gain rate (not the lowest), and
+    booked as positive net cashflow.
+    """
+    profile = UserProfile(
+        current_age_years=60,
+        retirement_age=65,
+        end_age=66,
+        average_inflation_rate=0.0,
+    )
+    etf_low = Asset(
+        name="ETF_low",
+        asset_type=AssetType.ETF,
+        current_value=0.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    # ETF_high carries the higher rate, so it is the pension target.
+    etf_high = Asset(
+        name="ETF_high",
+        asset_type=AssetType.ETF,
+        current_value=0.0,
+        annual_gain_rate=0.05,
+        monthly_contribution=0.0,
+    )
+    withdrawal = WithdrawalPlan(
+        monthly_withdrawal=3_000.0,
+        state_pension=StatePension(
+            current_monthly_amount=1_000.0,
+            monthly_growth_per_working_year=0.0,
+            start_age=63,
+        ),
+    )
+
+    result = forecast_wealth(
+        profile=profile, assets=[etf_low, etf_high], withdrawal=withdrawal
+    )
+
+    config = get_config()
+    reduction_years = 67 - 63
+    reduction_factor = 1 - (
+        config.drv.rentenabschlag_pro_jahr * reduction_years
+    )
+    net_pension = (
+        1_000.0 * reduction_factor * (1 - config.drv.brutto_rente_steuersatz)
+    )
+    pre_pension_month = (63 - 60) * 12 - 1
+    gap_month = (63 - 60) * 12 + 1
+
+    # Before the pension starts there is no inflow while still working.
+    assert result.loc[pre_pension_month, "net_cashflow"] == pytest.approx(0.0)
+    # During the gap the net pension is invested as positive net cashflow.
+    assert result.loc[gap_month, "net_cashflow"] == pytest.approx(net_pension)
+    # The high-rate ETF receives the money; the low-rate one stays empty.
+    assert result.loc[gap_month, "ETF_high"] > 0.0
+    assert result.loc[gap_month, "ETF_low"] == pytest.approx(0.0)
+
+
+def test_pre_retirement_state_pension_falls_back_to_cash_without_etf() -> None:
+    """With no ETF, the gap-year pension is invested in the highest-rate cash."""
+    profile = UserProfile(
+        current_age_years=60,
+        retirement_age=65,
+        end_age=66,
+        average_inflation_rate=0.0,
+    )
+    cash_low = Asset(
+        name="Cash_low",
+        asset_type=AssetType.CASH,
+        current_value=0.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    cash_high = Asset(
+        name="Cash_high",
+        asset_type=AssetType.CASH,
+        current_value=0.0,
+        annual_gain_rate=0.01,
+        monthly_contribution=0.0,
+    )
+    withdrawal = WithdrawalPlan(
+        monthly_withdrawal=3_000.0,
+        state_pension=StatePension(
+            current_monthly_amount=1_000.0,
+            monthly_growth_per_working_year=0.0,
+            start_age=63,
+        ),
+    )
+
+    result = forecast_wealth(
+        profile=profile, assets=[cash_low, cash_high], withdrawal=withdrawal
+    )
+
+    config = get_config()
+    reduction_years = 67 - 63
+    reduction_factor = 1 - (
+        config.drv.rentenabschlag_pro_jahr * reduction_years
+    )
+    net_pension = (
+        1_000.0 * reduction_factor * (1 - config.drv.brutto_rente_steuersatz)
+    )
+    gap_month = (63 - 60) * 12 + 1
+
+    assert result.loc[gap_month, "net_cashflow"] == pytest.approx(net_pension)
+    assert result.loc[gap_month, "Cash_high"] > 0.0
+    assert result.loc[gap_month, "Cash_low"] == pytest.approx(0.0)
+
+
+def test_pre_retirement_state_pension_accrues_working_years_progressively() -> (
+    None
+):
+    """During the gap the invested pension reflects years worked so far, not the
+    full to-retirement accrual.
+
+    The user works through the gap, so working-year growth must accrue month by
+    month (capped at retirement) rather than crediting future working years up
+    front.
+    """
+    profile = UserProfile(
+        current_age_years=60,
+        retirement_age=65,
+        end_age=66,
+        average_inflation_rate=0.0,
+    )
+    etf = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        current_value=0.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    withdrawal = WithdrawalPlan(
+        monthly_withdrawal=3_000.0,
+        state_pension=StatePension(
+            current_monthly_amount=1_500.0,
+            monthly_growth_per_working_year=30.0,
+            start_age=63,
+        ),
+    )
+
+    result = forecast_wealth(
+        profile=profile, assets=[etf], withdrawal=withdrawal
+    )
+
+    config = get_config()
+    reduction_factor = 1 - config.drv.rentenabschlag_pro_jahr * (67 - 63)
+    tax_factor = 1 - config.drv.brutto_rente_steuersatz
+
+    def expected(worked_years: int) -> float:
+        accrued = 1_500.0 + worked_years * 30.0
+        return accrued * reduction_factor * tax_factor
+
+    age63_month = (63 - 60) * 12  # exactly 3 years worked by age 63
+    age64_month = (64 - 60) * 12  # exactly 4 years worked by age 64
+
+    assert result.loc[age63_month, "net_cashflow"] == pytest.approx(
+        expected(3)
+    )
+    assert result.loc[age64_month, "net_cashflow"] == pytest.approx(
+        expected(4)
+    )
+
+
+def test_state_pension_starting_at_retirement_has_no_gap_injection() -> None:
+    """When the pension starts at retirement, no pre-retirement inflow occurs."""
+    profile = UserProfile(
+        current_age_years=60,
+        retirement_age=65,
+        end_age=66,
+        average_inflation_rate=0.0,
+    )
+    etf = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        current_value=0.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    withdrawal = WithdrawalPlan(
+        monthly_withdrawal=3_000.0,
+        state_pension=StatePension(
+            current_monthly_amount=1_000.0,
+            start_age=65,
+        ),
+    )
+
+    result = forecast_wealth(
+        profile=profile, assets=[etf], withdrawal=withdrawal
+    )
+
+    working_month = (65 - 60) * 12 - 1
+    assert result.loc[working_month, "net_cashflow"] == pytest.approx(0.0)
+    assert result.loc[working_month, "ETF"] == pytest.approx(0.0)
+
+
 # ── Inheritance tests ─────────────────────────────────────────────────────────
 
 
@@ -964,3 +1162,51 @@ def test_vbl_per_asset_tax_rate_override() -> None:
     start = (67 - 40) * 12
     # Tax rate 0 -> full €1 000 gross offsets the €3 000 target.
     assert result.loc[start, "net_cashflow"] == pytest.approx(-2_000.0)
+
+
+def test_pre_retirement_vbl_pension_invested_in_highest_rate_etf() -> None:
+    """VBL pension drawn while still working flows into the highest-rate ETF."""
+    profile = UserProfile(
+        current_age_years=60,
+        retirement_age=65,
+        end_age=66,
+        average_inflation_rate=0.0,
+    )
+    etf_low = Asset(
+        name="ETF_low",
+        asset_type=AssetType.ETF,
+        current_value=0.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    etf_high = Asset(
+        name="ETF_high",
+        asset_type=AssetType.ETF,
+        current_value=0.0,
+        annual_gain_rate=0.05,
+        monthly_contribution=0.0,
+    )
+    vbl = Asset(
+        name="VBL",
+        asset_type=AssetType.VBL_KLASSIK,
+        current_value=0.0,
+        vbl_monthly_pension=1_000.0,
+        vbl_start_age=63,
+        vbl_tax_rate=0.0,
+    )
+    withdrawal = WithdrawalPlan(monthly_withdrawal=3_000.0)
+
+    result = forecast_wealth(
+        profile=profile,
+        assets=[etf_low, etf_high, vbl],
+        withdrawal=withdrawal,
+    )
+
+    pre_pension_month = (63 - 60) * 12 - 1
+    gap_month = (63 - 60) * 12 + 1
+
+    # Tax rate 0 -> the full €1 000 gross VBL pension is invested each gap month.
+    assert result.loc[pre_pension_month, "net_cashflow"] == pytest.approx(0.0)
+    assert result.loc[gap_month, "net_cashflow"] == pytest.approx(1_000.0)
+    assert result.loc[gap_month, "ETF_high"] > 0.0
+    assert result.loc[gap_month, "ETF_low"] == pytest.approx(0.0)
