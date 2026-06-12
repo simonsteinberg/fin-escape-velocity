@@ -21,6 +21,11 @@ version is retired.
 - Default ETF annual gain rate raised from 5.0% to 6.0%. Only new ETF rows pick
   up the new default; saved profiles keep their stored rate.
 
+### Removed
+
+- The "e.g. wife" placeholder on the Profile name field (File window); the field
+  is now empty until typed.
+
 ## [0.2.0] - 2026-06-13
 
 ### Added
