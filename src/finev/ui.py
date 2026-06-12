@@ -863,16 +863,17 @@ class _WealthPage:
     def set_log_scale(self, log_scale: bool) -> None:
         """Switch the capital (y) axis between linear and logarithmic scale.
 
-        Re-renders the existing chart in place (no reload) by swapping the
-        y-axis type, then persists the choice to the cached state so the
-        toggle survives a reload.
+        Re-renders the existing chart in place (no reload): swaps the y-axis
+        config and re-runs the forecast so the series are rebuilt with (or
+        without) the log-scale floor clipping, then persists the choice to the
+        cached state so the toggle survives a reload.
 
         Args:
             log_scale: ``True`` to use a logarithmic scale, ``False`` for linear.
         """
         self.log_scale = log_scale
         self.chart.options["yAxis"] = _chart_y_axis(log_scale)
-        self.chart.update()
+        self.run_forecast()
         if self.suppress_cache_save:
             return
         try:
@@ -1082,7 +1083,9 @@ class _WealthPage:
         self.table.update()
 
         self.chart.options["xAxis"]["data"] = age_labels
-        self.chart.options["series"] = _chart_series(rounded, asset_columns)
+        self.chart.options["series"] = _chart_series(
+            rounded, asset_columns, self.log_scale
+        )
         self.chart.update()
 
         final_total = float(df["total"].iloc[-1])
