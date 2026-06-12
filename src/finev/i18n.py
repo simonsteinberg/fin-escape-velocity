@@ -53,7 +53,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "and switch between them."
         ),
         "file.profile_name": "Profile name",
-        "file.profile_name_placeholder": "e.g. wife",
         "file.save": "Save",
         "file.saved_profiles": "Saved profiles",
         "file.load": "Load",
@@ -277,7 +276,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "(z. B. eines pro Person) und wechsle zwischen ihnen."
         ),
         "file.profile_name": "Profilname",
-        "file.profile_name_placeholder": "z. B. Partnerin",
         "file.save": "Speichern",
         "file.saved_profiles": "Gespeicherte Profile",
         "file.load": "Laden",

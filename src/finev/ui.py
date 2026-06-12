@@ -917,7 +917,6 @@ class _WealthPage:
             with ui.row().classes("w-full gap-2 items-end"):
                 self.profile_name_input = ui.input(
                     label=self.t("file.profile_name"),
-                    placeholder=self.t("file.profile_name_placeholder"),
                 ).classes("flex-1")
                 ui.button(
                     self.t("file.save"), on_click=self.save_profile
