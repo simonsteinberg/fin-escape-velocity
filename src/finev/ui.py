@@ -153,6 +153,25 @@ from finev.ui_view import (
     yearly_display_frame as _yearly_display_frame,
 )
 
+#: Delay (ms) before a hover tooltip appears, so tooltips only show when the
+#: user deliberately rests on a control rather than while sweeping across the
+#: form. ~1s reads as deliberate without making the user wait.
+_TOOLTIP_DELAY_MS = 1000
+
+
+def _apply_tooltip_delay() -> None:
+    """Apply the standard hover-show delay to every tooltip.
+
+    NiceGUI's ``element.tooltip(...)`` and ``ui.tooltip(...)`` both instantiate
+    the same Quasar ``Tooltip`` class, so a single class-level default prop
+    delays every tooltip (parameter help and navbar toggles alike) without
+    touching individual call sites.
+    """
+    ui.tooltip.default_props(add=f"delay={_TOOLTIP_DELAY_MS}")
+
+
+_apply_tooltip_delay()
+
 
 def _render_asset_row(
     index: int,

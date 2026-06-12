@@ -14,7 +14,8 @@ version is retired.
 
 - Hover tooltips on every input parameter (profile, state pension, and all
   asset-row fields) giving a concise meaning plus typical values, in both English
-  and German.
+  and German. Tooltips appear after a 1 s hover delay so they only show on a
+  deliberate rest, not while sweeping across the form.
 
 ### Changed
 

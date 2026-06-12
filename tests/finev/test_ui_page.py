@@ -524,3 +524,16 @@ def test_set_language_to_current_is_a_noop(
     # Selecting the active language neither persists nor reloads.
     assert page.language == "en"
     assert reloads == []
+
+
+def test_tooltip_show_delay_is_configured() -> None:
+    # Importing finev.ui applies the class-level hover-show delay to every
+    # tooltip (re-applied here so the test is order-independent).
+    from nicegui import ui as nicegui_ui
+
+    ui_module._apply_tooltip_delay()
+
+    assert ui_module._TOOLTIP_DELAY_MS == 1000
+    assert nicegui_ui.tooltip._default_props.get("delay") == str(
+        ui_module._TOOLTIP_DELAY_MS
+    )
