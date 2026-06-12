@@ -314,7 +314,11 @@ gross(month)  = accrued × inflation_multiplier(month) × (1 − rentenabschlag 
 net(month)    = gross(month) × (1 − tax_rate)
 ```
 
-`working_years` is derived from current→retirement age. `tax_rate` defaults to
+`working_years` is the working time accrued **so far**, capped at retirement:
+`(min(age, retirement) − current) / 12`. From retirement onward this equals the
+full current→retirement window; when the pension starts **before** retirement it
+grows month by month through the gap, so the pension is not credited with working
+years the user has not yet worked. `tax_rate` defaults to
 `DRV_BRUTTO_RENTE_STEUERSATZ`. From retirement onward the net amount reduces the
 withdrawal target (§7.4 step 2); in any months where the pension starts before
 retirement, the same net amount is instead invested while still working (§7.3).
@@ -346,7 +350,7 @@ assets hold no running balance and are excluded from output columns.
 For each active VBLklassik asset, from its `vbl_start_age` onward:
 
 ```
-working_years = current→retirement age   (same window as the state pension)
+working_years = (min(age, retirement) − current) / 12   (accrued so far, as §7.6)
 gross(month)  = vbl_monthly_pension + working_years × vbl_monthly_growth_per_working_year
 net(month)    = gross(month) × (1 − tax_rate)
 ```

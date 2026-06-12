@@ -806,6 +806,61 @@ def test_pre_retirement_state_pension_falls_back_to_cash_without_etf() -> None:
     assert result.loc[gap_month, "Cash_low"] == pytest.approx(0.0)
 
 
+def test_pre_retirement_state_pension_accrues_working_years_progressively() -> (
+    None
+):
+    """During the gap the invested pension reflects years worked so far, not the
+    full to-retirement accrual.
+
+    The user works through the gap, so working-year growth must accrue month by
+    month (capped at retirement) rather than crediting future working years up
+    front.
+    """
+    profile = UserProfile(
+        current_age_years=60,
+        retirement_age=65,
+        end_age=66,
+        average_inflation_rate=0.0,
+    )
+    etf = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        current_value=0.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    withdrawal = WithdrawalPlan(
+        monthly_withdrawal=3_000.0,
+        state_pension=StatePension(
+            current_monthly_amount=1_500.0,
+            monthly_growth_per_working_year=30.0,
+            start_age=63,
+        ),
+    )
+
+    result = forecast_wealth(
+        profile=profile, assets=[etf], withdrawal=withdrawal
+    )
+
+    config = get_config()
+    reduction_factor = 1 - config.drv.rentenabschlag_pro_jahr * (67 - 63)
+    tax_factor = 1 - config.drv.brutto_rente_steuersatz
+
+    def expected(worked_years: int) -> float:
+        accrued = 1_500.0 + worked_years * 30.0
+        return accrued * reduction_factor * tax_factor
+
+    age63_month = (63 - 60) * 12  # exactly 3 years worked by age 63
+    age64_month = (64 - 60) * 12  # exactly 4 years worked by age 64
+
+    assert result.loc[age63_month, "net_cashflow"] == pytest.approx(
+        expected(3)
+    )
+    assert result.loc[age64_month, "net_cashflow"] == pytest.approx(
+        expected(4)
+    )
+
+
 def test_state_pension_starting_at_retirement_has_no_gap_injection() -> None:
     """When the pension starts at retirement, no pre-retirement inflow occurs."""
     profile = UserProfile(

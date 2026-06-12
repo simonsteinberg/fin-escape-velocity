@@ -278,6 +278,25 @@ def _validate_withdrawal(withdrawal: WithdrawalPlan) -> None:
         raise ValueError("State pension tax rate must be between 0 and 1")
 
 
+def _working_years_so_far(
+    metadata: ForecastMetadata,
+    age_months: int,
+) -> float:
+    """Return whole-plus-fractional working years accrued by this month.
+
+    Working-year pension growth accrues only while the user is working: from the
+    forecast start until retirement. Capping at the current month makes the
+    accrual progressive during a pension that starts before retirement (the
+    user has not yet worked the remaining years), while leaving the
+    post-retirement value at the full to-retirement window.
+    """
+    worked_months = (
+        min(age_months, metadata.retirement_age_months)
+        - metadata.start_age_months
+    )
+    return max(worked_months, 0) / 12
+
+
 def _net_state_pension_for_month(
     profile: UserProfile,
     metadata: ForecastMetadata,
@@ -290,9 +309,7 @@ def _net_state_pension_for_month(
         return 0.0
     if age_months < state_pension.start_age * 12:
         return 0.0
-    working_years = (
-        max(metadata.retirement_age_months - metadata.start_age_months, 0) / 12
-    )
+    working_years = _working_years_so_far(metadata, age_months)
     accrued_monthly_pension = state_pension.current_monthly_amount + (
         working_years * state_pension.monthly_growth_per_working_year
     )
@@ -340,9 +357,7 @@ def _net_vbl_pension_for_month(
     Returns:
         Combined net monthly VBL pension in (nominal) euros.
     """
-    working_years = (
-        max(metadata.retirement_age_months - metadata.start_age_months, 0) / 12
-    )
+    working_years = _working_years_so_far(metadata, age_months)
     total_net = 0.0
     for asset in vbl_assets:
         if age_months < asset.vbl_start_age * 12:

@@ -17,6 +17,9 @@ version is retired.
   pension is invested in the highest-gain-rate ETF (or the highest-rate Cash asset
   when no ETF exists). From retirement onward they still offset the withdrawal
   target, so they are never counted twice.
+- Working-year pension growth now accrues progressively (capped at retirement)
+  instead of crediting the full to-retirement amount up front. A pension that
+  starts before retirement no longer overstates its value during the gap years.
 
 ## [0.1.3] - 2026-06-09
 
