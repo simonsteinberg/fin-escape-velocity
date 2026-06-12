@@ -14,9 +14,9 @@ version is retired.
 
 - Chart toggle to switch the capital (y) axis between linear and logarithmic
   scale. The choice is persisted across reloads alongside the other UI
-  preferences. In log view, values below the 1000 € floor (including
-  non-positive ones, which a log scale cannot represent) are clipped to 999 € so
-  the line descends and hugs the bottom of the chart instead of vanishing.
+  preferences. In log view, values below the 1 € floor (including non-positive
+  ones, which a log scale cannot represent) are clamped to 1 € so the line
+  descends and hugs the bottom of the chart instead of vanishing.
 
 ## [0.1.4] - 2026-06-12
 

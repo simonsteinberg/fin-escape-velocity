@@ -438,11 +438,11 @@ capital (y) axis between a linear and a logarithmic scale live —
 `set_log_scale` swaps the `yAxis` config (`ui_view.chart_y_axis`), re-runs the
 forecast to rebuild the series, and persists the choice to the autosave cache
 (`log_scale` key, restored via `ui_state.load_log_scale`) — all without a reload.
-In log view, because a logarithmic axis cannot represent values ≤ 0 and sub-1000 €
-balances would otherwise make a series vanish abruptly, `ui_view.chart_series`
-**clips** any value below the 1000 € floor (`LOG_SCALE_FLOOR_EUR`, including
-non-positive ones) to 999 € (`LOG_SCALE_CLIP_EUR`); the y-axis minimum sits at
-that clip value so the line descends and hugs the bottom of the chart instead of
+In log view, because a logarithmic axis cannot represent values ≤ 0 (which would
+otherwise make a series vanish abruptly), `ui_view.chart_series` **clamps** any
+value below the 1 € floor (`LOG_SCALE_FLOOR_EUR`, including non-positive ones) up
+to that floor, and the y-axis minimum sits at the same floor — so the line
+descends all the way down and hugs the bottom of the chart instead of
 disappearing. Edits are debounced
 (~0.5s) before re-running the forecast; structural changes
 (type/strategy/active/relationship, add/remove, reset) re-render immediately.

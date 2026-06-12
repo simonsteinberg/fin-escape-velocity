@@ -103,9 +103,9 @@ def test_build_chart_options_has_expected_shape() -> None:
 def test_build_chart_options_log_scale_sets_log_y_axis() -> None:
     log_axis = _build_chart_options(log_scale=True)["yAxis"]
     assert log_axis["type"] == "log"
-    # Axis bottom sits at the 999 EUR clip value so series clipped to the floor
-    # stay visible at the bottom instead of vanishing.
-    assert log_axis["min"] == 999
+    # Axis bottom sits at the 1 EUR floor so series clamped to it stay visible
+    # at the bottom instead of vanishing.
+    assert log_axis["min"] == 1
 
     linear_axis = _build_chart_options(log_scale=False)["yAxis"]
     assert linear_axis["type"] == "value"
