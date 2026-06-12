@@ -50,7 +50,7 @@ class InheritanceRelationship(StrEnum):
 
 
 DEFAULT_ANNUAL_GAIN_RATES: dict[AssetType, float] = {
-    AssetType.ETF: 0.05,
+    AssetType.ETF: 0.06,
     AssetType.BAV: 0.02,
     AssetType.CASH: 0.005,
     AssetType.INHERITANCE: 0.0,
