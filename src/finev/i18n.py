@@ -119,7 +119,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # Assets card
         "assets.section": "Assets",
         "assets.defaults_note": (
-            "Defaults: ETF 5.0% | bAV 2.0% | Cash 0.5% (annual)"
+            "Defaults: ETF 6.0% | bAV 2.0% | Cash 0.5% (annual)"
         ),
         "assets.add": "Add asset",
         "assets.reset": "Reset",
@@ -348,7 +348,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # Assets card
         "assets.section": "Vermögenswerte",
         "assets.defaults_note": (
-            "Standardwerte: ETF 5,0 % | bAV 2,0 % | Cash 0,5 % (jährlich)"
+            "Standardwerte: ETF 6,0 % | bAV 2,0 % | Cash 0,5 % (jährlich)"
         ),
         "assets.add": "Vermögenswert hinzufügen",
         "assets.reset": "Zurücksetzen",

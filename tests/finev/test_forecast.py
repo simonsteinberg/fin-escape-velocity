@@ -3,6 +3,7 @@ import pytest
 from finev.config import get_config
 from finev.forecast import forecast_wealth
 from finev.models import (
+    DEFAULT_ANNUAL_GAIN_RATES,
     Asset,
     AssetType,
     BAVStrategy,
@@ -26,7 +27,8 @@ def test_default_rate_used_for_missing_rate() -> None:
 
     result = forecast_wealth(profile=profile, assets=[asset])
 
-    monthly_rate = (1 + 0.05) ** (1 / 12) - 1
+    default_rate = DEFAULT_ANNUAL_GAIN_RATES[AssetType.ETF]
+    monthly_rate = (1 + default_rate) ** (1 / 12) - 1
     expected = 100.0 * (1 + monthly_rate)
 
     assert result.loc[0, "ETF"] == pytest.approx(100.0)

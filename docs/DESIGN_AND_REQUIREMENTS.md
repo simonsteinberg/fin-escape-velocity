@@ -188,7 +188,7 @@ service" checkbox toggles the per-working-year accrual.
 
 | Asset type | Default annual gain rate |
 |---|---|
-| ETF | 5.0% |
+| ETF | 6.0% |
 | bAV | 2.0% |
 | Cash | 0.5% |
 | Inheritance | 0.0% (no running balance) |

@@ -16,6 +16,11 @@ version is retired.
   asset-row fields) giving a concise meaning plus typical values, in both English
   and German.
 
+### Changed
+
+- Default ETF annual gain rate raised from 5.0% to 6.0%. Only new ETF rows pick
+  up the new default; saved profiles keep their stored rate.
+
 ## [0.2.0] - 2026-06-13
 
 ### Added
