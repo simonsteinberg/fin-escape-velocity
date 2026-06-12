@@ -10,6 +10,7 @@ from finev.ui_state import (
     default_gain_pct,
     load_color_scheme,
     load_language,
+    load_log_scale,
     new_asset_row,
 )
 
@@ -27,6 +28,16 @@ def test_load_color_scheme_falls_back_to_default() -> None:
         load_color_scheme({"color_scheme": None}, ColorScheme.DARK)
         is ColorScheme.DARK
     )
+
+
+def test_load_log_scale_defaults_to_false() -> None:
+    assert load_log_scale(None) is False
+    assert load_log_scale({}) is False
+    assert load_log_scale({"log_scale": False}) is False
+
+
+def test_load_log_scale_reads_persisted_value() -> None:
+    assert load_log_scale({"log_scale": True}) is True
 
 
 def test_load_color_scheme_reads_persisted_value() -> None:

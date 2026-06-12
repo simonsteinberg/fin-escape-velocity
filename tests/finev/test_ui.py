@@ -100,6 +100,18 @@ def test_build_chart_options_has_expected_shape() -> None:
     assert options["series"] == []
 
 
+def test_build_chart_options_log_scale_sets_log_y_axis() -> None:
+    log_axis = _build_chart_options(log_scale=True)["yAxis"]
+    assert log_axis["type"] == "log"
+    # 1000 EUR floor: log axes cannot show values <= 0 and we hide sub-1000
+    # balances, so the axis minimum is clamped.
+    assert log_axis["min"] == 1000
+
+    linear_axis = _build_chart_options(log_scale=False)["yAxis"]
+    assert linear_axis["type"] == "value"
+    assert "min" not in linear_axis
+
+
 def test_default_withdrawal_state_includes_state_pension_inputs() -> None:
     state = _default_withdrawal_state()
 
