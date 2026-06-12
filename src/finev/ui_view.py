@@ -133,28 +133,32 @@ def format_currency(value: float, currency: str) -> str:
     return f"{value:,.0f} {currency}".strip()
 
 
-# Floor for the capital (y) axis when the logarithmic scale is active.
-# A log axis cannot represent values <= 0 at all, so to keep a falling series
-# visible rather than vanishing we clamp every value up to this floor and pin the
-# axis minimum here. The line then descends to 1 € and hugs the bottom of the
-# chart instead of disappearing.
-LOG_SCALE_FLOOR_EUR = 1
+# Logarithmic capital (y) axis behaviour.
+#
+# The visible axis bottom stays at 1000 € (``LOG_SCALE_Y_AXIS_MIN_EUR``). Series
+# values are independently clamped up to a 1 € minimum (``LOG_SCALE_VALUE_FLOOR_EUR``)
+# only so the log axis stays well-defined — a log scale cannot represent values
+# <= 0. Because the value floor (1 €) is below the axis minimum (1000 €), a
+# falling series descends past the 1000 € gridline and slides off the bottom of
+# the chart on its own, rather than throwing on a non-positive value.
+LOG_SCALE_Y_AXIS_MIN_EUR = 1000
+LOG_SCALE_VALUE_FLOOR_EUR = 1
 
 
 def chart_y_axis(log_scale: bool) -> dict[str, Any]:
     """Build the capital (y) axis config for the forecast plot.
 
     Args:
-        log_scale: When ``True``, use a logarithmic scale whose lower bound is
-            :data:`LOG_SCALE_FLOOR_EUR` euros, so series clamped to the floor by
-            :func:`chart_series` stay visible at the bottom; otherwise use a
-            linear scale spanning the data.
+        log_scale: When ``True``, use a logarithmic scale whose visible lower
+            bound is :data:`LOG_SCALE_Y_AXIS_MIN_EUR` euros (series falling below
+            it leave the chart at the bottom); otherwise use a linear scale
+            spanning the data.
 
     Returns:
         The ECharts ``yAxis`` configuration dictionary.
     """
     if log_scale:
-        return {"type": "log", "min": LOG_SCALE_FLOOR_EUR}
+        return {"type": "log", "min": LOG_SCALE_Y_AXIS_MIN_EUR}
     return {"type": "value"}
 
 
@@ -321,10 +325,10 @@ def chart_series(
     Args:
         frame: Display frame containing the value columns.
         value_columns: Column names to plot.
-        log_scale: When ``True``, clamp any value below
-            :data:`LOG_SCALE_FLOOR_EUR` (including non-positive ones, which a log
-            axis cannot show) up to the floor, so the line descends to the bottom
-            of the chart instead of vanishing.
+        log_scale: When ``True``, clamp every value up to a 1 € minimum
+            (:data:`LOG_SCALE_VALUE_FLOOR_EUR`) so the log axis stays well-defined
+            for non-positive values. The axis bottom is 1000 €, so values below
+            it simply slide off the bottom of the chart.
 
     Returns:
         One smooth line-series definition per value column.
@@ -334,7 +338,7 @@ def chart_series(
         values = frame[column].tolist()
         if not log_scale:
             return values
-        return [max(value, LOG_SCALE_FLOOR_EUR) for value in values]
+        return [max(value, LOG_SCALE_VALUE_FLOOR_EUR) for value in values]
 
     return [
         {

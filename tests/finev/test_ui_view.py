@@ -176,18 +176,19 @@ def test_chart_series_builds_one_smooth_line_per_column() -> None:
     assert all(s["type"] == "line" and s["smooth"] for s in series)
 
 
-def test_chart_series_clamps_sub_floor_values_in_log_scale() -> None:
+def test_chart_series_clamps_non_positive_values_in_log_scale() -> None:
     frame = pd.DataFrame(
         {
-            # Above the floor, on it, then non-positive (zero and negative).
-            "total": [5000.0, 1.0, 0.5, 0.0, -200.0],
+            # Above the axis bottom, below it but positive, then non-positive.
+            "total": [5000.0, 500.0, 1.0, 0.0, -200.0],
         }
     )
 
     linear = chart_series(frame, ["total"], log_scale=False)
-    assert linear[0]["data"] == [5000.0, 1.0, 0.5, 0.0, -200.0]
+    assert linear[0]["data"] == [5000.0, 500.0, 1.0, 0.0, -200.0]
 
     logarithmic = chart_series(frame, ["total"], log_scale=True)
-    # Values below the 1 EUR floor (incl. 0 and negatives, which a log axis
-    # cannot show) clamp up to 1; positive values pass through unchanged.
-    assert logarithmic[0]["data"] == [5000.0, 1.0, 1, 1, 1]
+    # Only the 1 EUR value floor matters: non-positive values clamp up to 1 so
+    # the log axis stays well-defined. Positive values (incl. 500, which is below
+    # the 1000 EUR axis bottom) pass through and slide off the chart on their own.
+    assert logarithmic[0]["data"] == [5000.0, 500.0, 1.0, 1, 1]
