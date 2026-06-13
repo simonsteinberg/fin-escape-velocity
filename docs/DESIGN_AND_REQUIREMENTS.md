@@ -486,10 +486,12 @@ are rendered by the `_panel_header(title, help_text)` helper in `ui.py` (a
 `ui.icon` anchor, which — unlike an input — does not duplicate its DOM `id`, so
 exactly one tooltip shows). The help text lives in the `finev.i18n` catalog under
 `panel.*.help` keys, so both English and German are covered and `i18n` stays the
-single source of user-facing strings. The tooltip uses a **2.5 s show delay**
+single source of user-facing strings. The tooltip uses a **1.5 s show delay**
 (`ui._TOOLTIP_DELAY_MS`, applied once via the Quasar `Tooltip` class default
 prop) so help appears only on a deliberate pause, not while sweeping across the
-form.
+form, and is styled for readability — capped at `_HELP_MAX_WIDTH_CH` (80)
+character widths so long text wraps, and set to `_HELP_FONT_SIZE_PX` (16px,
++2 over Quasar's default).
 
 The current working state is autosaved to a local JSON cache
 (`.cache/finev/wealth_state.json`, or `WEALTH_APP_STATE_PATH`).

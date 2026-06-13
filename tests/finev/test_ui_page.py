@@ -533,7 +533,7 @@ def test_tooltip_show_delay_is_configured() -> None:
 
     ui_module._apply_tooltip_delay()
 
-    assert ui_module._TOOLTIP_DELAY_MS == 2500
+    assert ui_module._TOOLTIP_DELAY_MS == 1500
     assert nicegui_ui.tooltip._default_props.get("delay") == str(
         ui_module._TOOLTIP_DELAY_MS
     )

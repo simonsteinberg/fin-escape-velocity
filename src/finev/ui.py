@@ -155,8 +155,16 @@ from finev.ui_view import (
 
 #: Delay (ms) before a hover tooltip appears, so a panel's help text only shows
 #: when the user deliberately rests on its ``?`` icon rather than while sweeping
-#: across the form. ~2.5s reads as a clear, intentional pause.
-_TOOLTIP_DELAY_MS = 2500
+#: across the form. ~1.5s reads as a deliberate pause without feeling sluggish.
+_TOOLTIP_DELAY_MS = 1500
+
+#: Max width of a panel help box, in character widths (``ch``), so long help
+#: text wraps to readable lines instead of stretching into one very wide row.
+_HELP_MAX_WIDTH_CH = 80
+
+#: Font size (px) for panel help text. Quasar's desktop tooltip default is 14px;
+#: +2px improves readability of the longer panel read-mes.
+_HELP_FONT_SIZE_PX = 16
 
 
 def _apply_tooltip_delay() -> None:
@@ -186,9 +194,13 @@ def _panel_header(title: str, help_text: str) -> None:
     """
     with ui.row().classes("w-full items-center gap-1 flex-nowrap"):
         ui.label(title).classes("text-lg font-semibold")
-        ui.icon("help_outline").classes(
+        with ui.icon("help_outline").classes(
             "text-gray-400 cursor-help text-lg"
-        ).tooltip(help_text)
+        ):
+            ui.tooltip(help_text).style(
+                f"max-width: {_HELP_MAX_WIDTH_CH}ch; "
+                f"font-size: {_HELP_FONT_SIZE_PX}px"
+            )
 
 
 def _render_asset_row(
