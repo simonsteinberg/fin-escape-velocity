@@ -491,7 +491,10 @@ single source of user-facing strings. The tooltip uses a **1.5 s show delay**
 prop) so help appears only on a deliberate pause, not while sweeping across the
 form, and is styled for readability — capped at `_HELP_MAX_WIDTH_CH` (40)
 character widths so long text wraps to a narrow column, and set to
-`_HELP_FONT_SIZE_PX` (16px, +2 over Quasar's default).
+`_HELP_FONT_SIZE_PX` (16px, +2 over Quasar's default). The width cap is enforced
+by an `!important` stylesheet rule (`_help_tip_css`, keyed on the
+`finev-help-tip` class) because Quasar's tooltip position engine writes its own
+inline `max-width` (95vw) that would otherwise override a plain inline style.
 
 The current working state is autosaved to a local JSON cache
 (`.cache/finev/wealth_state.json`, or `WEALTH_APP_STATE_PATH`).

@@ -166,6 +166,20 @@ _HELP_MAX_WIDTH_CH = 40
 #: +2px improves readability of the longer panel read-mes.
 _HELP_FONT_SIZE_PX = 16
 
+#: CSS class marking a panel help tooltip. Quasar's tooltip position engine
+#: writes its own inline ``max-width`` (95vw), which silently overrides an inline
+#: style, so the width cap must come from a stylesheet rule with ``!important``.
+_HELP_TIP_CLASS = "finev-help-tip"
+
+
+def _help_tip_css() -> str:
+    """CSS that caps panel help tooltips to a narrow, readable column.
+
+    Returns the rule as a string; it must win over Quasar's inline
+    ``max-width`` (which carries no ``!important``), hence the ``!important``.
+    """
+    return f".{_HELP_TIP_CLASS} {{ max-width: {_HELP_MAX_WIDTH_CH}ch !important; }}"
+
 
 def _apply_tooltip_delay() -> None:
     """Apply the standard hover-show delay to every tooltip.
@@ -197,8 +211,7 @@ def _panel_header(title: str, help_text: str) -> None:
         with ui.icon("help_outline").classes(
             "text-gray-400 cursor-help text-lg"
         ):
-            ui.tooltip(help_text).style(
-                f"max-width: {_HELP_MAX_WIDTH_CH}ch; "
+            ui.tooltip(help_text).classes(_HELP_TIP_CLASS).style(
                 f"font-size: {_HELP_FONT_SIZE_PX}px"
             )
 
@@ -1226,6 +1239,9 @@ class _WealthPage:
         # palette. Apply the active scheme; ``None`` lets NiceGUI follow the
         # OS/browser ``prefers-color-scheme`` preference (auto).
         ui.add_head_html(f"<style>{_theme_css()}</style>")
+        # Cap panel help tooltips to a readable column. Quasar's position engine
+        # overwrites an inline max-width, so this rule needs ``!important``.
+        ui.add_head_html(f"<style>{_help_tip_css()}</style>")
         self.dark_mode = ui.dark_mode(
             value=_scheme_to_dark_mode(self.color_scheme)
         )
