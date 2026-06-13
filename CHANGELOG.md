@@ -10,6 +10,8 @@ version is retired.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-13
+
 ### Added
 
 - A single `?` help icon in each input panel header (Profile, State pension,
@@ -97,7 +99,8 @@ version is retired.
   inheritance (Erbschaftsteuer), and German-specific taxation (Abgeltungssteuer
   and Soli).
 
-[Unreleased]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.1.4...v0.2.0
 [0.1.4]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.1.2...v0.1.3
