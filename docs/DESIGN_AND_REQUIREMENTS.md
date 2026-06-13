@@ -489,9 +489,9 @@ exactly one tooltip shows). The help text lives in the `finev.i18n` catalog unde
 single source of user-facing strings. The tooltip uses a **1.5 s show delay**
 (`ui._TOOLTIP_DELAY_MS`, applied once via the Quasar `Tooltip` class default
 prop) so help appears only on a deliberate pause, not while sweeping across the
-form, and is styled for readability — capped at `_HELP_MAX_WIDTH_CH` (80)
-character widths so long text wraps, and set to `_HELP_FONT_SIZE_PX` (16px,
-+2 over Quasar's default).
+form, and is styled for readability — capped at `_HELP_MAX_WIDTH_CH` (40)
+character widths so long text wraps to a narrow column, and set to
+`_HELP_FONT_SIZE_PX` (16px, +2 over Quasar's default).
 
 The current working state is autosaved to a local JSON cache
 (`.cache/finev/wealth_state.json`, or `WEALTH_APP_STATE_PATH`).

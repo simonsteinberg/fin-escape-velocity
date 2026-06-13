@@ -159,8 +159,8 @@ from finev.ui_view import (
 _TOOLTIP_DELAY_MS = 1500
 
 #: Max width of a panel help box, in character widths (``ch``), so long help
-#: text wraps to readable lines instead of stretching into one very wide row.
-_HELP_MAX_WIDTH_CH = 80
+#: text wraps to a narrow, readable column instead of a very wide row.
+_HELP_MAX_WIDTH_CH = 40
 
 #: Font size (px) for panel help text. Quasar's desktop tooltip default is 14px;
 #: +2px improves readability of the longer panel read-mes.

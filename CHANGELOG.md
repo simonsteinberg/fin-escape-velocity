@@ -15,7 +15,7 @@ version is retired.
 - A single `?` help icon in each input panel header (Profile, State pension,
   Assets). Hovering it shows a concise read-me for that panel's parameters, in
   both English and German, after a 1.5 s deliberate-pause delay. The help box
-  wraps at 80 character widths and uses a slightly larger (16px) font for
+  wraps at 40 character widths and uses a slightly larger (16px) font for
   readability. This replaces the per-field hover tooltips (which also fixed a
   duplicate-tooltip bug on some number inputs).
 
