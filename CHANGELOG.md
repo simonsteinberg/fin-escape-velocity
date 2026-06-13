@@ -10,10 +10,22 @@ version is retired.
 
 ## [Unreleased]
 
+### Added
+
+- New **"Rentenanpassung p.a."** (annual pension adjustment) input in the State
+  pension panel, defaulting to 1%. The state pension now grows at this rate over
+  time independently of price inflation, instead of automatically tracking the
+  inflation rate. When the adjustment rate is below inflation (e.g. 1% vs. 2%),
+  the pension grows slower than the inflation-indexed withdrawal target, so its
+  real value erodes — the realistic outcome for the German statutory pension.
+
 ### Changed
 
 - Redesigned the app favicon/logo from the abstract growth-chart arrow to a
   detailed rocket on a starfield (the "escape velocity" motif).
+- The state pension is no longer indexed to the inflation rate. Existing
+  scenarios with inflation above 1% will show a lower real state pension than
+  before, reflecting the new 1% default adjustment rate.
 
 ## [0.3.0] - 2026-06-13
 

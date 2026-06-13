@@ -119,6 +119,7 @@ def test_default_withdrawal_state_includes_state_pension_inputs() -> None:
     assert state["state_pension_current_monthly_amount"] == pytest.approx(0.0)
     assert state["state_pension_growth_per_working_year"] == pytest.approx(0.0)
     assert state["state_pension_start_age"] == 67
+    assert state["state_pension_adjustment_rate_pct"] == pytest.approx(1.0)
 
 
 def test_asset_from_row_maps_unrealized_gains_to_cost_basis() -> None:

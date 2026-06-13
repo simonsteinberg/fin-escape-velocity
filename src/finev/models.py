@@ -171,12 +171,17 @@ class StatePension:
         start_age: Age (years) when state pension starts, between 63 and 67.
         tax_rate: Optional flat tax rate applied to monthly state pension. When
             omitted, the configured default is used.
+        adjustment_rate: Annual statutory pension adjustment ("Rentenanpassung")
+            as a decimal fraction. The accrued pension grows at this rate over
+            time, independently of price inflation. When it is below
+            ``UserProfile.average_inflation_rate`` the pension loses real value.
     """
 
     current_monthly_amount: float = 0.0
     monthly_growth_per_working_year: float = 0.0
     start_age: int = 67
     tax_rate: float | None = None
+    adjustment_rate: float = 0.01
 
 
 @dataclass(frozen=True)

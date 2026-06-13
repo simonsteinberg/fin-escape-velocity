@@ -590,6 +590,7 @@ def test_state_pension_reduces_withdrawal_from_start_age() -> None:
             current_monthly_amount=1_000.0,
             monthly_growth_per_working_year=30.0,
             start_age=67,
+            adjustment_rate=0.0,
         ),
     )
 
@@ -633,6 +634,7 @@ def test_state_pension_applies_early_retirement_reduction() -> None:
             current_monthly_amount=1_000.0,
             monthly_growth_per_working_year=0.0,
             start_age=65,
+            adjustment_rate=0.0,
         ),
     )
 
@@ -656,7 +658,14 @@ def test_state_pension_applies_early_retirement_reduction() -> None:
     )
 
 
-def test_state_pension_inflation_adjusted_with_time() -> None:
+def test_state_pension_grows_with_adjustment_rate_not_inflation() -> None:
+    """The pension grows at its own adjustment rate, independent of inflation.
+
+    When the adjustment rate (1%) is below price inflation (2%), the pension
+    grows slower than the inflation-indexed withdrawal target loses value, so
+    the net withdrawal gap is wider than it would be if the pension tracked
+    inflation.
+    """
     profile = UserProfile(
         current_age_years=40,
         retirement_age=42,
@@ -676,6 +685,7 @@ def test_state_pension_inflation_adjusted_with_time() -> None:
             current_monthly_amount=1_000.0,
             monthly_growth_per_working_year=30.0,
             start_age=67,
+            adjustment_rate=0.01,
         ),
     )
 
@@ -684,13 +694,14 @@ def test_state_pension_inflation_adjusted_with_time() -> None:
     )
 
     config = get_config()
+    tax_factor = 1 - config.drv.brutto_rente_steuersatz
     start_month = (67 - 40) * 12
-    monthly_rate = (1 + 0.02) ** (1 / 12) - 1
-    inflation_multiplier = (1 + monthly_rate) ** start_month
-    base_net_gap = 3_000.0 - (
-        (1_000.0 + 2 * 30.0) * (1 - config.drv.brutto_rente_steuersatz)
-    )
-    expected_withdrawal = base_net_gap * inflation_multiplier
+    inflation_multiplier = ((1 + 0.02) ** (1 / 12)) ** start_month
+    adjustment_multiplier = ((1 + 0.01) ** (1 / 12)) ** start_month
+    accrued_pension = 1_000.0 + 2 * 30.0
+    expected_target = 3_000.0 * inflation_multiplier
+    expected_pension = accrued_pension * adjustment_multiplier * tax_factor
+    expected_withdrawal = expected_target - expected_pension
 
     assert result.loc[start_month, "net_cashflow"] == pytest.approx(
         -expected_withdrawal
@@ -731,6 +742,7 @@ def test_pre_retirement_state_pension_invested_in_highest_rate_etf() -> None:
             current_monthly_amount=1_000.0,
             monthly_growth_per_working_year=0.0,
             start_age=63,
+            adjustment_rate=0.0,
         ),
     )
 
@@ -786,6 +798,7 @@ def test_pre_retirement_state_pension_falls_back_to_cash_without_etf() -> None:
             current_monthly_amount=1_000.0,
             monthly_growth_per_working_year=0.0,
             start_age=63,
+            adjustment_rate=0.0,
         ),
     )
 
@@ -837,6 +850,7 @@ def test_pre_retirement_state_pension_accrues_working_years_progressively() -> (
             current_monthly_amount=1_500.0,
             monthly_growth_per_working_year=30.0,
             start_age=63,
+            adjustment_rate=0.0,
         ),
     )
 

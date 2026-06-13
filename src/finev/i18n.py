@@ -105,6 +105,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "pension.annual_income": "Annual income",
         "pension.now_monthly": "State pension now (monthly)",
         "pension.start_age": "State pension start age",
+        "pension.adjustment_rate": "Annual pension adjustment (%)",
         "pension.no_penalty": "No early-retirement penalty",
         "pension.penalty": (
             "Estimated early-retirement penalty: -{amount} p.m. "
@@ -160,9 +161,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "panel.pension.help": (
             "German state pension (DRV) inputs: your current gross annual "
             "income and the monthly pension you have already earned in today's "
-            "money, plus the age you start drawing it. The read-only lines show "
-            "the projected growth per working year, any early-start penalty, "
-            "and the resulting achieved monthly pension."
+            "money, plus the age you start drawing it. The annual pension "
+            "adjustment grows the pension over time independently of price "
+            "inflation; when it is below your inflation rate, the pension loses "
+            "real value. The read-only lines show the projected growth per "
+            "working year, any early-start penalty, and the resulting achieved "
+            "monthly pension."
         ),
         "panel.assets.help": (
             "Your wealth building blocks. Add ETF, bAV (occupational pension), "
@@ -246,6 +250,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "pension.annual_income": "Jahreseinkommen",
         "pension.now_monthly": "Gesetzliche Rente heute (monatlich)",
         "pension.start_age": "Rentenbeginn-Alter (gesetzlich)",
+        "pension.adjustment_rate": "Rentenanpassung p.a. (%)",
         "pension.no_penalty": ("Kein Abschlag bei vorzeitigem Renteneintritt"),
         "pension.penalty": (
             "Geschätzter Abschlag bei vorzeitigem Renteneintritt: "
@@ -310,9 +315,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "panel.pension.help": (
             "Eingaben zur gesetzlichen Rente (DRV): aktuelles Bruttojahresgehalt "
             "und die bereits erworbene Monatsrente in heutigem Geld sowie das "
-            "Alter des Rentenbeginns. Die schreibgeschützten Zeilen zeigen den "
-            "jährlichen Rentenzuwachs, einen etwaigen Abschlag bei frühem "
-            "Beginn und die sich daraus ergebende erreichte Monatsrente."
+            "Alter des Rentenbeginns. Die Rentenanpassung p.a. lässt die Rente "
+            "über die Zeit unabhängig von der Preisinflation wachsen; liegt sie "
+            "unter deiner Inflationsrate, verliert die Rente real an Wert. Die "
+            "schreibgeschützten Zeilen zeigen den jährlichen Rentenzuwachs, "
+            "einen etwaigen Abschlag bei frühem Beginn und die sich daraus "
+            "ergebende erreichte Monatsrente."
         ),
         "panel.assets.help": (
             "Deine Vermögensbausteine. Füge ETF, bAV, Cash, Erbschaft oder "

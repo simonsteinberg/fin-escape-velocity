@@ -306,6 +306,20 @@ def test_validate_withdrawal_rejects_invalid_inputs() -> None:
             )
         )
 
+    with pytest.raises(
+        ValueError, match="State pension adjustment rate must be above -100%"
+    ):
+        _validate_withdrawal(
+            WithdrawalPlan(
+                state_pension=StatePension(
+                    current_monthly_amount=1.0,
+                    monthly_growth_per_working_year=0.0,
+                    start_age=67,
+                    adjustment_rate=-1.0,
+                )
+            )
+        )
+
 
 def test_forecast_handles_withdrawal_when_balances_are_zero() -> None:
     profile = UserProfile(

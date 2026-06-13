@@ -136,7 +136,7 @@ types slot in as additional steps/handlers rather than edits to a monolithic loo
 | Retirement age | 67 | Contributions stop / withdrawals begin. |
 | End age | 100 | Must be ≥ retirement age and > current age. |
 | Currency | `EUR` | Display label only; no FX. |
-| Average inflation rate | 2% (UI) / 0.02 (model) | Annual; inflates withdrawal targets and state pension. Must be > −100%. |
+| Average inflation rate | 2% (UI) / 0.02 (model) | Annual; inflates withdrawal targets. Must be > −100%. |
 | Debt interest rate | 8% (UI) / 0.08 (model) | Annual rate charged on negative total wealth (debt); compounds monthly. Must be ≥ 0. |
 
 ### 5.2 State pension (`StatePension` + UI-derived display)
@@ -147,6 +147,7 @@ types slot in as additional steps/handlers rather than edits to a monolithic loo
 | Annual income | Yes (UI) | Drives the read-only pension-points estimate. |
 | Monthly growth per working year | Derived | Extra gross monthly pension per additional working year. Computed in `pension.py` from annual income and DRV params; shown read-only. |
 | Start age | Yes | Must be **63–67** inclusive. |
+| Annual pension adjustment (*Rentenanpassung p.a.*) | 1% (UI) / 0.01 (model) | Annual growth applied to the accrued pension over time, **independent of price inflation**. When below the inflation rate, the pension loses real value. Must be > −100%. |
 | Tax rate | Optional | Defaults to `DRV_BRUTTO_RENTE_STEUERSATZ` when omitted; must be in `[0, 1)`. |
 
 DRV parameters (from `config.json`): `DRV_RENTENABSCHLAG_PRO_JAHR` (early-retirement
@@ -310,9 +311,15 @@ For months at/after the start age:
 
 ```
 accrued       = current_monthly + working_years × growth_per_working_year
-gross(month)  = accrued × inflation_multiplier(month) × (1 − rentenabschlag × (67 − start_age))
+gross(month)  = accrued × adjustment_multiplier(month) × (1 − rentenabschlag × (67 − start_age))
 net(month)    = gross(month) × (1 − tax_rate)
 ```
+
+`adjustment_multiplier(month)` compounds the **annual pension adjustment**
+(*Rentenanpassung p.a.*, default 1%) over the months since the forecast start —
+**not** price inflation. The withdrawal target itself remains inflation-indexed
+(§7.4), so when the adjustment rate is below inflation the pension's real value
+erodes over time.
 
 `working_years` is the working time accrued **so far**, capped at retirement:
 `(min(age, retirement) − current) / 12`. From retirement onward this equals the
@@ -566,7 +573,7 @@ total, taxes, and net cashflow.
 | FR5 | Configurable default gain rates with per-asset overrides. |
 | FR6 | Inflation-adjusted withdrawal targets from today's currency to each retirement month. |
 | FR7 | bAV transfer at a configurable single retirement age (+ ETF ratio) and bAV monthly-gains income; bAV gains fully taxed at 26.25%. |
-| FR8 | State-pension stream starting at age 63–67, with earned growth, inflation, early-retirement reduction, and configured tax rate; net pension offsets withdrawals. |
+| FR8 | State-pension stream starting at age 63–67, with earned growth, a configurable annual pension adjustment (*Rentenanpassung p.a.*, default 1%) applied independently of price inflation, early-retirement reduction, and configured tax rate; net pension offsets withdrawals. |
 | FR9 | Inheritance events at a configured age, taxed by Erbschaftsteuer class/Freibetrag; net proceeds credited to ETF (then Cash). |
 | FR10 | Per-asset activation toggle for what-if scenarios; deactivated assets excluded from calculations but preserved and persisted. |
 | FR11 | Inputs validated at the boundary (`forecast.py` validators, `config.py` on load, `ui_state` coercion); invalid inputs fail loudly. |
@@ -593,7 +600,7 @@ total, taxes, and net cashflow.
 | AC8 | Retirement withdrawals inflated from today's currency before gross-up and allocation. |
 | AC9 | bAV transfer allocates net balance to ETF/Cash with full-gains tax; bAV income pays monthly gains (no reinvestment) from the bAV retirement age, compounding before it. |
 | AC10 | State pension start age validated to 63–67; configured tax rate and early-retirement penalty applied by the engine. |
-| AC11 | State pension reflects earned growth until retirement and monthly inflation over forecast time. |
+| AC11 | State pension reflects earned growth until retirement and compounds the annual pension adjustment (*Rentenanpassung p.a.*) over forecast time, independently of price inflation; when the adjustment rate is below inflation, the pension loses real value against the inflation-indexed withdrawal target. |
 | AC12 | UI shows read-only computed monthly growth per working year, an estimated early-retirement penalty, and net pension at start. |
 | AC13 | Deactivating an asset excludes it from contributions/allocation/transfers while preserving its row and persisted config; reactivation restores it. |
 | AC14 | No withdrawals from a bAV before its bAV retirement age; allocation ignores bAV until withdrawable. |

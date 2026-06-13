@@ -75,18 +75,21 @@ def _annual_to_monthly_rate(annual_rate: float) -> float:
     return (1 + annual_rate) ** (1 / 12) - 1
 
 
-def _inflation_multiplier(
+def _compound_growth_multiplier(
     annual_rate: float,
     months_since_start: int,
 ) -> float:
-    """Return the cumulative inflation multiplier for a number of months.
+    """Return the cumulative compound multiplier for a number of months.
+
+    Used both for price inflation (on the withdrawal target) and for the
+    statutory pension adjustment (on the accrued state pension).
 
     Args:
-        annual_rate: Average annual inflation rate as a decimal fraction.
+        annual_rate: Annual growth rate as a decimal fraction.
         months_since_start: Number of months since the forecast start.
 
     Returns:
-        Inflation multiplier to apply to today's currency.
+        Compound multiplier to apply to a today's-currency amount.
     """
     monthly_rate = _annual_to_monthly_rate(annual_rate)
     return (1 + monthly_rate) ** months_since_start
@@ -271,6 +274,8 @@ def _validate_withdrawal(withdrawal: WithdrawalPlan) -> None:
         raise ValueError("State pension growth must be non-negative")
     if not 63 <= state_pension.start_age <= 67:
         raise ValueError("State pension start age must be between 63 and 67")
+    if state_pension.adjustment_rate <= -1:
+        raise ValueError("State pension adjustment rate must be above -100%")
     if (
         state_pension.tax_rate is not None
         and not 0 <= state_pension.tax_rate < 1
@@ -298,7 +303,6 @@ def _working_years_so_far(
 
 
 def _net_state_pension_for_month(
-    profile: UserProfile,
     metadata: ForecastMetadata,
     state_pension: StatePension | None,
     age_months: int,
@@ -314,8 +318,8 @@ def _net_state_pension_for_month(
         working_years * state_pension.monthly_growth_per_working_year
     )
     months_since_start = age_months - metadata.start_age_months
-    inflation_multiplier = _inflation_multiplier(
-        profile.average_inflation_rate,
+    adjustment_multiplier = _compound_growth_multiplier(
+        state_pension.adjustment_rate,
         months_since_start,
     )
     reduction_years = max(67 - state_pension.start_age, 0)
@@ -323,7 +327,7 @@ def _net_state_pension_for_month(
         config.drv.rentenabschlag_pro_jahr * reduction_years
     )
     gross_monthly_pension = (
-        accrued_monthly_pension * inflation_multiplier * reduction_factor
+        accrued_monthly_pension * adjustment_multiplier * reduction_factor
     )
     tax_rate = (
         state_pension.tax_rate
@@ -626,7 +630,6 @@ def _apply_pre_retirement_pension(
     if params.pension_target_index is None:
         return
     net_pension = _net_state_pension_for_month(
-        profile=params.profile,
         metadata=params.metadata,
         state_pension=params.withdrawal.state_pension,
         age_months=age_months,
@@ -735,14 +738,13 @@ def _apply_withdrawal(
     across the withdrawable assets.
     """
     months_since_start = age_months - params.metadata.start_age_months
-    inflation_multiplier = _inflation_multiplier(
+    inflation_multiplier = _compound_growth_multiplier(
         params.profile.average_inflation_rate, months_since_start
     )
     withdrawal_target = (
         float(params.withdrawal.monthly_withdrawal) * inflation_multiplier
     )
     net_pension = _net_state_pension_for_month(
-        profile=params.profile,
         metadata=params.metadata,
         state_pension=params.withdrawal.state_pension,
         age_months=age_months,
