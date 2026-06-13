@@ -479,14 +479,17 @@ in dark), the **page/card surfaces** (overriding Quasar's near-black defaults
 with neutral grays) and the **scrollbars** all follow whichever scheme is active,
 including auto-resolved dark.
 
-Every input **parameter carries a hover tooltip** giving a concise meaning plus
-typical values (e.g. *"Expected average yearly return. Typical: ETF 5–7%, Cash
-0–1%."*). Tooltips are attached in `ui.py` via NiceGUI's `.tooltip()` and their
-text lives in the `finev.i18n` catalog under `tooltip.*` keys, so both English
-and German are covered and `i18n` stays the single source of user-facing strings.
-All tooltips share a **1 s show delay** (`ui._TOOLTIP_DELAY_MS`, applied once via
-the Quasar `Tooltip` class default prop) so they appear only when the user rests
-on a control, not while sweeping across the form.
+Each input panel (Profile, State pension, Assets) carries a single **`?` help
+icon** in its header instead of a tooltip per field. Resting on the icon reveals
+a concise read-me describing that panel's parameters. The icon and its tooltip
+are rendered by the `_panel_header(title, help_text)` helper in `ui.py` (a
+`ui.icon` anchor, which — unlike an input — does not duplicate its DOM `id`, so
+exactly one tooltip shows). The help text lives in the `finev.i18n` catalog under
+`panel.*.help` keys, so both English and German are covered and `i18n` stays the
+single source of user-facing strings. The tooltip uses a **2.5 s show delay**
+(`ui._TOOLTIP_DELAY_MS`, applied once via the Quasar `Tooltip` class default
+prop) so help appears only on a deliberate pause, not while sweeping across the
+form.
 
 The current working state is autosaved to a local JSON cache
 (`.cache/finev/wealth_state.json`, or `WEALTH_APP_STATE_PATH`).

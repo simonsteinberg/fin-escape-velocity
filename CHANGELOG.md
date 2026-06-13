@@ -12,10 +12,11 @@ version is retired.
 
 ### Added
 
-- Hover tooltips on every input parameter (profile, state pension, and all
-  asset-row fields) giving a concise meaning plus typical values, in both English
-  and German. Tooltips appear after a 1 s hover delay so they only show on a
-  deliberate rest, not while sweeping across the form.
+- A single `?` help icon in each input panel header (Profile, State pension,
+  Assets). Hovering it shows a concise read-me for that panel's parameters, in
+  both English and German, after a 2.5 s deliberate-pause delay. This replaces
+  the per-field hover tooltips (which also fixed a duplicate-tooltip bug on some
+  number inputs).
 
 ### Changed
 

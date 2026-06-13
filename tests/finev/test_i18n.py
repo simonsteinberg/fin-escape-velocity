@@ -87,45 +87,19 @@ def test_format_templates_have_placeholders() -> None:
         assert "{amount}" in translate("forecast.total", language)
 
 
-#: Every input parameter that must carry a hover tooltip (catalog key suffix).
-PARAMETER_TOOLTIP_KEYS = [
-    "tooltip.profile.current_age_years",
-    "tooltip.profile.current_age_months",
-    "tooltip.profile.retirement_age",
-    "tooltip.profile.end_age",
-    "tooltip.profile.currency",
-    "tooltip.profile.inflation",
-    "tooltip.profile.debt_interest",
-    "tooltip.profile.monthly_withdrawal",
-    "tooltip.pension.annual_income",
-    "tooltip.pension.now_monthly",
-    "tooltip.pension.start_age",
-    "tooltip.asset.name",
-    "tooltip.asset.type",
-    "tooltip.asset.gross_amount",
-    "tooltip.asset.age_at_receipt",
-    "tooltip.asset.relationship",
-    "tooltip.asset.current_value",
-    "tooltip.asset.unrealized_gains",
-    "tooltip.asset.annual_gain",
-    "tooltip.asset.monthly_contribution",
-    "tooltip.asset.bav_mode",
-    "tooltip.asset.bav_retirement_age",
-    "tooltip.asset.etf_share",
-    "tooltip.asset.vbl_input",
-    "tooltip.asset.vbl_monthly_pension",
-    "tooltip.asset.vbl_points_label",
-    "tooltip.asset.vbl_still_working",
-    "tooltip.asset.vbl_start_age",
-    "tooltip.asset.vbl_tax_rate",
+#: Every input panel that must carry a hover ``?`` help text (catalog key).
+PANEL_HELP_KEYS = [
+    "panel.profile.help",
+    "panel.pension.help",
+    "panel.assets.help",
 ]
 
 
-@pytest.mark.parametrize("key", PARAMETER_TOOLTIP_KEYS)
-def test_parameter_tooltip_keys_are_translated(key: str) -> None:
-    # Each parameter tooltip must resolve to a real, non-empty string in both
+@pytest.mark.parametrize("key", PANEL_HELP_KEYS)
+def test_panel_help_keys_are_translated(key: str) -> None:
+    # Each panel help text must resolve to a real, non-empty string in both
     # languages (not the key itself, which is the missing-translation fallback).
     for language in ("en", "de"):
         text = translate(key, language)
-        assert text != key, f"missing {language} tooltip for {key}"
-        assert text.strip(), f"empty {language} tooltip for {key}"
+        assert text != key, f"missing {language} panel help for {key}"
+        assert text.strip(), f"empty {language} panel help for {key}"

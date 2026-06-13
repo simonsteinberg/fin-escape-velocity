@@ -149,112 +149,26 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "notify.color_scheme_persist_fail": (
             "Failed to save color scheme preference: {error}"
         ),
-        # Parameter tooltips (hover help: meaning + typical values)
-        "tooltip.profile.current_age_years": (
-            "Your age today in whole years; the forecast starts here. "
-            "Typical: 25-60."
+        # Panel help (one ? icon per input panel, replacing per-field tooltips)
+        "panel.profile.help": (
+            "Your personal and economic assumptions: current age, the age you "
+            "retire and the age the projection ends, the display currency, "
+            "expected average inflation, the interest charged if wealth goes "
+            "negative, and the net monthly amount you plan to withdraw in "
+            "retirement."
         ),
-        "tooltip.profile.current_age_months": (
-            "Extra months on top of your age in years (0-11) for a precise "
-            "start."
+        "panel.pension.help": (
+            "German state pension (DRV) inputs: your current gross annual "
+            "income and the monthly pension you have already earned in today's "
+            "money, plus the age you start drawing it. The read-only lines show "
+            "the projected growth per working year, any early-start penalty, "
+            "and the resulting achieved monthly pension."
         ),
-        "tooltip.profile.retirement_age": (
-            "Age when contributions stop and withdrawals begin. Typical: "
-            "63-67."
-        ),
-        "tooltip.profile.end_age": (
-            "Last age the forecast runs to. Typical: 90-100."
-        ),
-        "tooltip.profile.currency": (
-            "Display label for amounts only — no currency conversion is "
-            "applied. E.g. EUR."
-        ),
-        "tooltip.profile.inflation": (
-            "Average yearly inflation, used to deflate future values. "
-            "Typical: 2-3%."
-        ),
-        "tooltip.profile.debt_interest": (
-            "Annual interest charged when total wealth goes negative. "
-            "Typical: 5-10%."
-        ),
-        "tooltip.profile.monthly_withdrawal": (
-            "Net monthly amount drawn in retirement; taxes are added on top. "
-            "E.g. 2,000-4,000."
-        ),
-        "tooltip.pension.annual_income": (
-            "Current gross yearly salary; estimates state-pension accrual. "
-            "E.g. 40,000-80,000."
-        ),
-        "tooltip.pension.now_monthly": (
-            "State pension already earned, in today's monthly euros. "
-            "E.g. 0-1,500."
-        ),
-        "tooltip.pension.start_age": (
-            "Age you start drawing the state pension. Typical: 63-67."
-        ),
-        "tooltip.asset.name": (
-            "A label for this asset, e.g. 'MSCI World ETF' or 'Savings "
-            "account'."
-        ),
-        "tooltip.asset.type": (
-            "ETF, bAV (occupational pension), Cash, Inheritance, or "
-            "VBLklassik. Determines which fields apply."
-        ),
-        "tooltip.asset.gross_amount": (
-            "Inheritance amount before tax; Erbschaftsteuer applies per heir "
-            "class. E.g. 50,000+."
-        ),
-        "tooltip.asset.age_at_receipt": (
-            "Your age when the inheritance is received. Typical: 40-80."
-        ),
-        "tooltip.asset.relationship": (
-            "Your relation to the deceased — sets the tax-free allowance and "
-            "tax rate."
-        ),
-        "tooltip.asset.current_value": (
-            "Today's total balance of this asset. E.g. 10,000-500,000."
-        ),
-        "tooltip.asset.unrealized_gains": (
-            "Portion of the current value that is profit (value minus what "
-            "you paid). Only this part is taxed on withdrawal."
-        ),
-        "tooltip.asset.annual_gain": (
-            "Expected average yearly return. Typical: ETF 5-7%, Cash 0-1%."
-        ),
-        "tooltip.asset.monthly_contribution": (
-            "Amount added every month until retirement. E.g. 0-2,000."
-        ),
-        "tooltip.asset.bav_mode": (
-            "How the bAV pays out: transfer the balance to ETF/Cash, or pay "
-            "monthly gains as income."
-        ),
-        "tooltip.asset.bav_retirement_age": (
-            "Age the bAV pays out or starts transferring. Typical: 63-67."
-        ),
-        "tooltip.asset.etf_share": (
-            "Share of the transferred bAV that goes into ETF (rest to Cash). "
-            "Typical: 0-100%."
-        ),
-        "tooltip.asset.vbl_input": (
-            "Enter the VBLklassik pension as Versorgungspunkte or directly as "
-            "a monthly euro amount."
-        ),
-        "tooltip.asset.vbl_monthly_pension": (
-            "Gross monthly VBLklassik pension in euros. E.g. 100-800."
-        ),
-        "tooltip.asset.vbl_points_label": (
-            "Versorgungspunkte accrued; each point ≈ €4 gross monthly pension."
-        ),
-        "tooltip.asset.vbl_still_working": (
-            "Tick if still in public service — adds about 1 point per "
-            "remaining working year."
-        ),
-        "tooltip.asset.vbl_start_age": (
-            "Age the VBLklassik pension begins. Typical: 63-67."
-        ),
-        "tooltip.asset.vbl_tax_rate": (
-            "Optional income-tax rate applied to the VBL pension. Leave blank "
-            "to skip. E.g. 0-30%."
+        "panel.assets.help": (
+            "Your wealth building blocks. Add ETF, bAV (occupational pension), "
+            "Cash, Inheritance, or VBLklassik entries; each type shows only the "
+            "fields relevant to it. Use the eye icon to include or exclude an "
+            "asset for what-if scenarios."
         ),
     },
     "de": {
@@ -385,115 +299,26 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "notify.color_scheme_persist_fail": (
             "Farbschema-Einstellung konnte nicht gespeichert werden: {error}"
         ),
-        # Parameter-Tooltips (Hover-Hilfe: Bedeutung + typische Werte)
-        "tooltip.profile.current_age_years": (
-            "Dein heutiges Alter in vollen Jahren; hier startet die Prognose. "
-            "Typisch: 25-60."
+        # Panel-Hilfe (ein ?-Symbol je Eingabe-Panel statt Tooltips pro Feld)
+        "panel.profile.help": (
+            "Deine persönlichen und wirtschaftlichen Annahmen: heutiges Alter, "
+            "Alter bei Renteneintritt und Alter, bis zu dem die Prognose läuft, "
+            "die Anzeigewährung, die erwartete durchschnittliche Inflation, der "
+            "Sollzins bei negativem Vermögen sowie die geplante monatliche "
+            "Netto-Entnahme im Ruhestand."
         ),
-        "tooltip.profile.current_age_months": (
-            "Zusätzliche Monate zum Alter in Jahren (0-11) für einen genauen "
-            "Start."
+        "panel.pension.help": (
+            "Eingaben zur gesetzlichen Rente (DRV): aktuelles Bruttojahresgehalt "
+            "und die bereits erworbene Monatsrente in heutigem Geld sowie das "
+            "Alter des Rentenbeginns. Die schreibgeschützten Zeilen zeigen den "
+            "jährlichen Rentenzuwachs, einen etwaigen Abschlag bei frühem "
+            "Beginn und die sich daraus ergebende erreichte Monatsrente."
         ),
-        "tooltip.profile.retirement_age": (
-            "Alter, in dem Beiträge enden und Entnahmen beginnen. Typisch: "
-            "63-67."
-        ),
-        "tooltip.profile.end_age": (
-            "Letztes Alter, bis zu dem die Prognose läuft. Typisch: 90-100."
-        ),
-        "tooltip.profile.currency": (
-            "Nur Anzeige-Label für Beträge — es findet keine "
-            "Währungsumrechnung statt. Z. B. EUR."
-        ),
-        "tooltip.profile.inflation": (
-            "Durchschnittliche jährliche Inflation zur Abwertung künftiger "
-            "Werte. Typisch: 2-3 %."
-        ),
-        "tooltip.profile.debt_interest": (
-            "Jährlicher Sollzins, wenn das Gesamtvermögen negativ wird. "
-            "Typisch: 5-10 %."
-        ),
-        "tooltip.profile.monthly_withdrawal": (
-            "Gewünschte monatliche Netto-Entnahme im Ruhestand; Steuern "
-            "kommen obendrauf. Z. B. 2.000-4.000."
-        ),
-        "tooltip.pension.annual_income": (
-            "Aktuelles Bruttojahresgehalt; schätzt den Rentenaufbau. "
-            "Z. B. 40.000-80.000."
-        ),
-        "tooltip.pension.now_monthly": (
-            "Bereits erworbene gesetzliche Rente in heutigen Monatsbeträgen. "
-            "Z. B. 0-1.500."
-        ),
-        "tooltip.pension.start_age": (
-            "Alter des gesetzlichen Rentenbeginns. Typisch: 63-67."
-        ),
-        "tooltip.asset.name": (
-            "Eine Bezeichnung für diesen Vermögenswert, z. B. „MSCI World "
-            "ETF“ oder „Tagesgeld“."
-        ),
-        "tooltip.asset.type": (
-            "ETF, bAV, Cash, Erbschaft oder VBLklassik. Bestimmt, welche "
-            "Felder gelten."
-        ),
-        "tooltip.asset.gross_amount": (
-            "Erbschaftsbetrag vor Steuer; Erbschaftsteuer je Steuerklasse. "
-            "Z. B. ab 50.000."
-        ),
-        "tooltip.asset.age_at_receipt": (
-            "Dein Alter beim Erhalt der Erbschaft. Typisch: 40-80."
-        ),
-        "tooltip.asset.relationship": (
-            "Verwandtschaft zum Erblasser — bestimmt Freibetrag und "
-            "Steuersatz."
-        ),
-        "tooltip.asset.current_value": (
-            "Heutiger Gesamtwert dieses Vermögenswerts. Z. B. 10.000-500.000."
-        ),
-        "tooltip.asset.unrealized_gains": (
-            "Anteil des aktuellen Werts, der Gewinn ist (Wert minus "
-            "Einzahlungen). Nur dieser Teil wird bei Entnahme besteuert."
-        ),
-        "tooltip.asset.annual_gain": (
-            "Erwartete durchschnittliche Jahresrendite. Typisch: ETF 5-7 %, "
-            "Cash 0-1 %."
-        ),
-        "tooltip.asset.monthly_contribution": (
-            "Monatliche Einzahlung bis zum Ruhestand. Z. B. 0-2.000."
-        ),
-        "tooltip.asset.bav_mode": (
-            "Auszahlung der bAV: Guthaben auf ETF/Cash übertragen oder "
-            "monatliche Gewinne als Einkommen."
-        ),
-        "tooltip.asset.bav_retirement_age": (
-            "Alter, in dem die bAV auszahlt bzw. der Übertrag startet. "
-            "Typisch: 63-67."
-        ),
-        "tooltip.asset.etf_share": (
-            "Anteil der übertragenen bAV in ETF (Rest in Cash). Typisch: "
-            "0-100 %."
-        ),
-        "tooltip.asset.vbl_input": (
-            "VBLklassik-Rente als Versorgungspunkte oder direkt als "
-            "Monatsbetrag in Euro eingeben."
-        ),
-        "tooltip.asset.vbl_monthly_pension": (
-            "Monatliche VBLklassik-Bruttorente in Euro. Z. B. 100-800."
-        ),
-        "tooltip.asset.vbl_points_label": (
-            "Erworbene Versorgungspunkte; je Punkt ca. 4 € Bruttorente "
-            "monatlich."
-        ),
-        "tooltip.asset.vbl_still_working": (
-            "Ankreuzen, wenn weiterhin im öffentlichen Dienst — ca. 1 Punkt "
-            "je verbleibendem Arbeitsjahr."
-        ),
-        "tooltip.asset.vbl_start_age": (
-            "Alter des VBLklassik-Rentenbeginns. Typisch: 63-67."
-        ),
-        "tooltip.asset.vbl_tax_rate": (
-            "Optionaler Steuersatz auf die VBL-Rente. Leer lassen zum "
-            "Überspringen. Z. B. 0-30 %."
+        "panel.assets.help": (
+            "Deine Vermögensbausteine. Füge ETF, bAV, Cash, Erbschaft oder "
+            "VBLklassik hinzu; jeder Typ zeigt nur die relevanten Felder. Mit "
+            "dem Augen-Symbol kannst du einen Vermögenswert für Was-wäre-wenn-"
+            "Szenarien ein- oder ausblenden."
         ),
     },
 }

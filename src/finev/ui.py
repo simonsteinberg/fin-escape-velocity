@@ -153,10 +153,10 @@ from finev.ui_view import (
     yearly_display_frame as _yearly_display_frame,
 )
 
-#: Delay (ms) before a hover tooltip appears, so tooltips only show when the
-#: user deliberately rests on a control rather than while sweeping across the
-#: form. ~1s reads as deliberate without making the user wait.
-_TOOLTIP_DELAY_MS = 1000
+#: Delay (ms) before a hover tooltip appears, so a panel's help text only shows
+#: when the user deliberately rests on its ``?`` icon rather than while sweeping
+#: across the form. ~2.5s reads as a clear, intentional pause.
+_TOOLTIP_DELAY_MS = 2500
 
 
 def _apply_tooltip_delay() -> None:
@@ -171,6 +171,24 @@ def _apply_tooltip_delay() -> None:
 
 
 _apply_tooltip_delay()
+
+
+def _panel_header(title: str, help_text: str) -> None:
+    """Render a panel title with a hover ``?`` help icon.
+
+    The icon is the single help affordance for the whole panel: resting on it
+    reveals ``help_text`` after the standard tooltip delay. Using a ``ui.icon``
+    as the anchor keeps one tooltip per panel instead of one per input field.
+
+    Args:
+        title: The panel's heading text.
+        help_text: The localized read-me shown when hovering the ``?`` icon.
+    """
+    with ui.row().classes("w-full items-center gap-1 flex-nowrap"):
+        ui.label(title).classes("text-lg font-semibold")
+        ui.icon("help_outline").classes(
+            "text-gray-400 cursor-help text-lg"
+        ).tooltip(help_text)
 
 
 def _render_asset_row(
@@ -213,7 +231,7 @@ def _render_asset_row(
                 on_change=lambda e, i=index: on_field_change(
                     i, "name", e.value
                 ),
-            ).classes("flex-1").tooltip(t("tooltip.asset.name"))
+            ).classes("flex-1")
             ui.select(
                 options=[item.value for item in AssetType],
                 value=row["type"],
@@ -221,7 +239,7 @@ def _render_asset_row(
                 on_change=lambda e, i=index: on_field_change(
                     i, "type", e.value
                 ),
-            ).classes("w-28").tooltip(t("tooltip.asset.type"))
+            ).classes("w-28")
             ui.button(
                 icon="delete",
                 on_click=lambda i=index: on_remove(i),
@@ -257,7 +275,7 @@ def _render_asset_row(
                         "inheritance_gross_amount",
                         e.value,
                     ),
-                ).classes("w-full").tooltip(t("tooltip.asset.gross_amount"))
+                ).classes("w-full")
                 ui.number(
                     label=t("asset.age_at_receipt"),
                     value=row.get("inheritance_age") or 67,
@@ -269,7 +287,7 @@ def _render_asset_row(
                         "inheritance_age",
                         e.value,
                     ),
-                ).classes("w-full").tooltip(t("tooltip.asset.age_at_receipt"))
+                ).classes("w-full")
             ui.select(
                 options=_inheritance_relationship_labels,
                 value=row.get(
@@ -282,7 +300,7 @@ def _render_asset_row(
                     "inheritance_relationship",
                     e.value,
                 ),
-            ).classes("w-full").tooltip(t("tooltip.asset.relationship"))
+            ).classes("w-full")
         elif asset_type == AssetType.VBL_KLASSIK:
             input_mode = str(row.get("vbl_input_mode", "points"))
             with ui.column().classes("w-full gap-2"):
@@ -298,7 +316,7 @@ def _render_asset_row(
                         "vbl_input_mode",
                         e.value,
                     ),
-                ).classes("w-full").tooltip(t("tooltip.asset.vbl_input"))
+                ).classes("w-full")
                 if input_mode == "euro":
                     ui.number(
                         label=t("asset.vbl_monthly_pension"),
@@ -311,9 +329,7 @@ def _render_asset_row(
                             "vbl_monthly_pension",
                             e.value,
                         ),
-                    ).classes("w-full").tooltip(
-                        t("tooltip.asset.vbl_monthly_pension")
-                    )
+                    ).classes("w-full")
                 else:
                     ui.number(
                         label=t("asset.vbl_points_label"),
@@ -326,9 +342,7 @@ def _render_asset_row(
                             "vbl_points",
                             e.value,
                         ),
-                    ).classes("w-full").tooltip(
-                        t("tooltip.asset.vbl_points_label")
-                    )
+                    ).classes("w-full")
                 with ui.row().classes("w-full gap-2 items-center"):
                     ui.checkbox(
                         t("asset.vbl_still_working"),
@@ -338,7 +352,7 @@ def _render_asset_row(
                             "vbl_still_working",
                             e.value,
                         ),
-                    ).tooltip(t("tooltip.asset.vbl_still_working"))
+                    )
                 with ui.row().classes("w-full gap-2"):
                     ui.number(
                         label=t("asset.vbl_start_age"),
@@ -351,7 +365,7 @@ def _render_asset_row(
                             "vbl_start_age",
                             e.value,
                         ),
-                    ).classes("w-40").tooltip(t("tooltip.asset.vbl_start_age"))
+                    ).classes("w-40")
                     ui.number(
                         label=t("asset.vbl_tax_rate"),
                         value=row.get("vbl_tax_rate_pct") or None,
@@ -364,7 +378,7 @@ def _render_asset_row(
                             "vbl_tax_rate_pct",
                             e.value,
                         ),
-                    ).classes("w-40").tooltip(t("tooltip.asset.vbl_tax_rate"))
+                    ).classes("w-40")
         else:
             with ui.grid(columns=2).classes("w-full gap-2"):
                 ui.number(
@@ -378,7 +392,7 @@ def _render_asset_row(
                         "current_value",
                         e.value,
                     ),
-                ).classes("w-full").tooltip(t("tooltip.asset.current_value"))
+                ).classes("w-full")
                 ui.number(
                     label=t("asset.unrealized_gains"),
                     value=row.get("unrealized_gains") or 0,
@@ -391,9 +405,7 @@ def _render_asset_row(
                         "unrealized_gains",
                         e.value,
                     ),
-                ).classes("w-full").tooltip(
-                    t("tooltip.asset.unrealized_gains")
-                )
+                ).classes("w-full")
                 ui.number(
                     label=t("asset.annual_gain"),
                     value=row["annual_gain_rate_pct"],
@@ -404,7 +416,7 @@ def _render_asset_row(
                         "annual_gain_rate_pct",
                         e.value,
                     ),
-                ).classes("w-full").tooltip(t("tooltip.asset.annual_gain"))
+                ).classes("w-full")
                 ui.number(
                     label=t("asset.monthly_contribution"),
                     value=row["monthly_contribution"],
@@ -416,9 +428,7 @@ def _render_asset_row(
                         "monthly_contribution",
                         e.value,
                     ),
-                ).classes("w-full").tooltip(
-                    t("tooltip.asset.monthly_contribution")
-                )
+                ).classes("w-full")
             if asset_type == AssetType.BAV:
                 with ui.column().classes("w-full gap-2"):
                     ui.select(
@@ -438,7 +448,7 @@ def _render_asset_row(
                             "bav_strategy",
                             e.value,
                         ),
-                    ).classes("w-full").tooltip(t("tooltip.asset.bav_mode"))
+                    ).classes("w-full")
                     if row.get("bav_strategy") == (BAVStrategy.TRANSFER.value):
                         with ui.row().classes("w-full gap-2"):
                             ui.number(
@@ -455,9 +465,7 @@ def _render_asset_row(
                                     "bav_retirement_age",
                                     e.value,
                                 ),
-                            ).classes("w-32").tooltip(
-                                t("tooltip.asset.bav_retirement_age")
-                            )
+                            ).classes("w-32")
                             ui.number(
                                 label=t("asset.etf_share"),
                                 value=row.get(
@@ -473,9 +481,7 @@ def _render_asset_row(
                                     "bav_transfer_etf_ratio_pct",
                                     e.value,
                                 ),
-                            ).classes("w-28").tooltip(
-                                t("tooltip.asset.etf_share")
-                            )
+                            ).classes("w-28")
                     elif row.get("bav_strategy") == (BAVStrategy.INCOME.value):
                         ui.number(
                             label=t("asset.bav_retirement_age"),
@@ -491,9 +497,7 @@ def _render_asset_row(
                                 "bav_retirement_age",
                                 e.value,
                             ),
-                        ).classes("w-32").tooltip(
-                            t("tooltip.asset.bav_retirement_age")
-                        )
+                        ).classes("w-32")
 
 
 class _WealthPage:
@@ -1235,8 +1239,9 @@ class _WealthPage:
                     "w-[420px] shrink-0 gap-4 h-full overflow-y-auto pr-2"
                 ):
                     with ui.card().classes("w-full p-3"):
-                        ui.label(self.t("profile.section")).classes(
-                            "text-lg font-semibold"
+                        _panel_header(
+                            self.t("profile.section"),
+                            self.t("panel.profile.help"),
                         )
                         with ui.grid(columns=2).classes("w-full gap-3"):
                             self.current_age_years = ui.number(
@@ -1244,8 +1249,6 @@ class _WealthPage:
                                 value=profile_state["current_age_years"],
                                 format="%.0f",
                                 on_change=lambda _: self.schedule_forecast(),
-                            ).tooltip(
-                                self.t("tooltip.profile.current_age_years")
                             )
                             self.current_age_months = ui.number(
                                 label=self.t("profile.current_age_months"),
@@ -1254,26 +1257,24 @@ class _WealthPage:
                                 min=0,
                                 max=11,
                                 on_change=lambda _: self.schedule_forecast(),
-                            ).tooltip(
-                                self.t("tooltip.profile.current_age_months")
                             )
                             self.retirement_age = ui.number(
                                 label=self.t("profile.retirement_age"),
                                 value=profile_state["retirement_age"],
                                 format="%.0f",
                                 on_change=lambda _: self.schedule_forecast(),
-                            ).tooltip(self.t("tooltip.profile.retirement_age"))
+                            )
                             self.end_age = ui.number(
                                 label=self.t("profile.end_age"),
                                 value=profile_state["end_age"],
                                 format="%.0f",
                                 on_change=lambda _: self.schedule_forecast(),
-                            ).tooltip(self.t("tooltip.profile.end_age"))
+                            )
                             self.currency = ui.input(
                                 label=self.t("profile.currency"),
                                 value=profile_state["currency"],
                                 on_change=lambda _: self.schedule_forecast(),
-                            ).tooltip(self.t("tooltip.profile.currency"))
+                            )
                             self.average_inflation_rate = ui.number(
                                 label=self.t("profile.inflation"),
                                 value=profile_state[
@@ -1283,7 +1284,7 @@ class _WealthPage:
                                 min=-99.9,
                                 step=0.1,
                                 on_change=lambda _: self.schedule_forecast(),
-                            ).tooltip(self.t("tooltip.profile.inflation"))
+                            )
                             self.debt_interest_rate = ui.number(
                                 label=self.t("profile.debt_interest"),
                                 value=profile_state["debt_interest_rate_pct"],
@@ -1291,7 +1292,7 @@ class _WealthPage:
                                 min=0,
                                 step=0.1,
                                 on_change=lambda _: self.schedule_forecast(),
-                            ).tooltip(self.t("tooltip.profile.debt_interest"))
+                            )
                             self.withdrawal_input = ui.number(
                                 label=self.t("profile.monthly_withdrawal"),
                                 value=withdrawal_state["monthly_withdrawal"],
@@ -1299,13 +1300,12 @@ class _WealthPage:
                                 min=0,
                                 step=50,
                                 on_change=lambda _: self.schedule_forecast(),
-                            ).tooltip(
-                                self.t("tooltip.profile.monthly_withdrawal")
                             )
 
                     with ui.card().classes("w-full p-3"):
-                        ui.label(self.t("pension.section")).classes(
-                            "text-lg font-semibold"
+                        _panel_header(
+                            self.t("pension.section"),
+                            self.t("panel.pension.help"),
                         )
                         with ui.grid(columns=2).classes("w-full gap-3"):
                             self.annual_income = ui.number(
@@ -1317,7 +1317,7 @@ class _WealthPage:
                                 min=0,
                                 step=1000,
                                 on_change=lambda _: self.schedule_forecast(),
-                            ).tooltip(self.t("tooltip.pension.annual_income"))
+                            )
                             self.state_pension_current_monthly_amount = (
                                 ui.number(
                                     label=self.t("pension.now_monthly"),
@@ -1330,8 +1330,6 @@ class _WealthPage:
                                     on_change=lambda _: (
                                         self.schedule_forecast()
                                     ),
-                                ).tooltip(
-                                    self.t("tooltip.pension.now_monthly")
                                 )
                             )
                             self.state_pension_growth_display = ui.label(
@@ -1357,11 +1355,12 @@ class _WealthPage:
                                 max=67,
                                 step=1,
                                 on_change=lambda _: self.schedule_forecast(),
-                            ).tooltip(self.t("tooltip.pension.start_age"))
+                            )
 
                     with ui.card().classes("w-full p-3"):
-                        ui.label(self.t("assets.section")).classes(
-                            "text-lg font-semibold"
+                        _panel_header(
+                            self.t("assets.section"),
+                            self.t("panel.assets.help"),
                         )
                         ui.label(self.t("assets.defaults_note")).classes(
                             "text-xs text-gray-500"
