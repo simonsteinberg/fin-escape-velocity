@@ -549,6 +549,7 @@ class _WealthPage:
     state_pension_penalty_display: ui.label
     state_pension_achieved_display: ui.label
     state_pension_start_age: ui.number
+    state_pension_adjustment_rate: ui.number
     assets_container: ui.column
     summary_label: ui.label
     chart: ui.echart
@@ -712,6 +713,10 @@ class _WealthPage:
             "state_pension_start_age"
         ]
         self.state_pension_start_age.update()
+        self.state_pension_adjustment_rate.value = withdrawal[
+            "state_pension_adjustment_rate_pct"
+        ]
+        self.state_pension_adjustment_rate.update()
 
     def reset_state(self) -> None:
         """Reset UI values to defaults and clear cached state."""
@@ -1056,6 +1061,10 @@ class _WealthPage:
                 ),
                 monthly_growth_per_working_year=float(monthly_growth),
                 start_age=int(self.state_pension_start_age.value or 67),
+                adjustment_rate=float(
+                    self.state_pension_adjustment_rate.value or 0.0
+                )
+                / 100,
             ),
         )
         return profile, assets, withdrawal
@@ -1227,6 +1236,9 @@ class _WealthPage:
                 "state_pension_start_age": int(
                     self.state_pension_start_age.value or 67
                 ),
+                "state_pension_adjustment_rate_pct": float(
+                    self.state_pension_adjustment_rate.value or 0.0
+                ),
             },
         }
 
@@ -1382,6 +1394,16 @@ class _WealthPage:
                                 min=63,
                                 max=67,
                                 step=1,
+                                on_change=lambda _: self.schedule_forecast(),
+                            )
+                            self.state_pension_adjustment_rate = ui.number(
+                                label=self.t("pension.adjustment_rate"),
+                                value=withdrawal_state[
+                                    "state_pension_adjustment_rate_pct"
+                                ],
+                                format="%.2f",
+                                min=-99.9,
+                                step=0.1,
                                 on_change=lambda _: self.schedule_forecast(),
                             )
 

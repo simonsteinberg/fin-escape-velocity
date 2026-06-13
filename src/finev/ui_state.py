@@ -225,6 +225,7 @@ def default_withdrawal_state() -> dict[str, Any]:
         "state_pension_current_monthly_amount": 0.0,
         "state_pension_growth_per_working_year": 0.0,
         "state_pension_start_age": 67,
+        "state_pension_adjustment_rate_pct": 1.0,
     }
 
 
@@ -516,6 +517,14 @@ def load_withdrawal_state(
         withdrawal_state["state_pension_start_age"] = coerce_int(
             raw_withdrawal.get("state_pension_start_age"),
             "withdrawal.state_pension_start_age",
+        )
+    if raw_withdrawal.get("state_pension_adjustment_rate_pct") not in (
+        None,
+        "",
+    ):
+        withdrawal_state["state_pension_adjustment_rate_pct"] = coerce_float(
+            raw_withdrawal.get("state_pension_adjustment_rate_pct"),
+            "withdrawal.state_pension_adjustment_rate_pct",
         )
     return withdrawal_state
 

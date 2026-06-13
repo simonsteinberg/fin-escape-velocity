@@ -104,7 +104,7 @@ def test_golden_inheritance_and_pension_scenario() -> None:
         ),
     )
     result = forecast_wealth(profile, assets, withdrawal)
-    assert _signature(result) == ("29628e8b45eaeaab", 721)
+    assert _signature(result) == ("a588bf14e9c7846a", 721)
 
 
 def test_golden_inactive_asset_and_fractional_start_age() -> None:

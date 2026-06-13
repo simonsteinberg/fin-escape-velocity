@@ -252,6 +252,7 @@ def test_reset_state_restores_defaults_and_clears_cache(
         "state_pension_penalty_display",
         "state_pension_achieved_display",
         "state_pension_start_age",
+        "state_pension_adjustment_rate",
     ):
         setattr(page, name, _FakeWidget())
     cleared: list[bool] = []
@@ -288,6 +289,7 @@ _WIDGET_NAMES = (
     "state_pension_penalty_display",
     "state_pension_achieved_display",
     "state_pension_start_age",
+    "state_pension_adjustment_rate",
 )
 
 
