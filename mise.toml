@@ -51,6 +51,13 @@ run = "uv run python -m finev.app"
 description = "Install project dependencies"
 run = "uv sync"
 
+[tasks.install-browsers]
+description = "Download the Playwright Chromium browser used by browser-based tests/verification"
+# The pip package ships no browser binary; this fetches Chromium into the
+# Playwright cache. On a host with sudo (e.g. CI), append `--with-deps` to also
+# install the system libraries; locally those must already be present.
+run = "uv run playwright install chromium"
+
 [tasks.version]
 description = "Print the current project version"
 run = "uv version --short"

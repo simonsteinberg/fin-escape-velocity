@@ -21,9 +21,11 @@ finev-app = "finev.app:main"
 [dependency-groups]
 dev = [
   "mypy>=1.11",
+  "playwright>=1.60",
   "pre-commit>=4.6.0",
   "pytest>=9.0.3",
   "pytest-cov>=5.0",
+  "pytest-playwright>=0.7.1",
   "ruff>=0.15.16",
 ]
 

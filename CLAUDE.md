@@ -78,6 +78,7 @@ When asked to work in a git worktree, create it under `.worktree/<worktree-name>
 | Task | Purpose |
 |------|---------|
 | `mise run sync` | Install / update dependencies |
+| `mise run install-browsers` | Download the Playwright Chromium browser for browser-based tests/verification |
 | `mise run format` | Auto-format code |
 | `mise run format-check` | Check formatting without modifying files (CI gate) |
 | `mise run lint` | Run linter |

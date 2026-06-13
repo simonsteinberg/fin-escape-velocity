@@ -533,7 +533,18 @@ def test_tooltip_show_delay_is_configured() -> None:
 
     ui_module._apply_tooltip_delay()
 
-    assert ui_module._TOOLTIP_DELAY_MS == 1000
+    assert ui_module._TOOLTIP_DELAY_MS == 1500
     assert nicegui_ui.tooltip._default_props.get("delay") == str(
         ui_module._TOOLTIP_DELAY_MS
     )
+
+
+def test_help_tip_css_caps_width_with_important() -> None:
+    # Quasar's tooltip position engine writes its own inline ``max-width``, so
+    # the panel-help width cap only sticks if the stylesheet rule is
+    # ``!important`` and targets the help-tip class.
+    css = ui_module._help_tip_css()
+
+    assert f".{ui_module._HELP_TIP_CLASS}" in css
+    assert f"max-width: {ui_module._HELP_MAX_WIDTH_CH}ch" in css
+    assert "!important" in css
