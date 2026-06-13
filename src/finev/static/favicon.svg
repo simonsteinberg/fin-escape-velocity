@@ -6,8 +6,25 @@
     </linearGradient>
   </defs>
   <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#fev-bg)"/>
-  <g fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M28 92 L56 64 L72 78 L100 36"/>
-    <path d="M78 36 L100 36 L100 58"/>
+  <!-- Starfield -->
+  <g fill="#ffffff">
+    <circle cx="24" cy="32" r="2"/>
+    <circle cx="28" cy="66" r="1.5"/>
+    <circle cx="104" cy="44" r="2.4"/>
+    <circle cx="100" cy="78" r="1.6"/>
+    <path d="M98 18 L100 25 L107 27 L100 29 L98 36 L96 29 L89 27 L96 25 Z"/>
   </g>
+  <!-- Exhaust flame -->
+  <path d="M52 86 L64 112 L76 86 Z" fill="#fb923c"/>
+  <path d="M58 86 L64 103 L70 86 Z" fill="#fde68a"/>
+  <!-- Fins -->
+  <path d="M48 62 L32 94 L48 82 Z" fill="#f59e0b"/>
+  <path d="M80 62 L96 94 L80 82 Z" fill="#f59e0b"/>
+  <!-- Body -->
+  <path d="M64 14 C78 30 82 46 82 62 L82 86 L46 86 L46 62 C46 46 50 30 64 14 Z" fill="#ffffff"/>
+  <!-- Mid band -->
+  <rect x="46" y="73" width="36" height="6" fill="#f59e0b"/>
+  <!-- Porthole -->
+  <circle cx="64" cy="50" r="11" fill="#115e59"/>
+  <circle cx="60" cy="46" r="4" fill="#99f6e4"/>
 </svg>

@@ -63,8 +63,8 @@ def test_inline_logo_svg_scales_root_dimensions_to_container() -> None:
     assert 'height="128"' not in svg
     assert 'width="100%"' in svg
     assert 'height="100%"' in svg
-    # Inner drawing attributes (e.g. stroke-width) must be left untouched.
-    assert "stroke-width=" in svg
+    # Inner drawing attributes (e.g. the gradient stops) must be left untouched.
+    assert "stop-color=" in svg
     assert svg.lstrip().startswith("<svg")
 
 
