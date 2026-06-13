@@ -10,6 +10,11 @@ version is retired.
 
 ## [Unreleased]
 
+### Changed
+
+- Redesigned the app favicon/logo from the abstract growth-chart arrow to a
+  detailed rocket on a starfield (the "escape velocity" motif).
+
 ## [0.3.0] - 2026-06-13
 
 ### Added
