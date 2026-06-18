@@ -10,6 +10,14 @@ version is retired.
 
 ## [Unreleased]
 
+### Added
+
+- End-to-end tests (`tests/finev/test_e2e.py`, `mise run test-e2e`) that launch
+  the two runnable entry points as real subprocesses — `python -m finev.cli`
+  (mirroring `mise run run`) and `python -m finev.app` (mirroring `mise run app`)
+  — asserting the CLI prints the forecast and the app server boots and serves the
+  page.
+
 ### Fixed
 
 - Editing a text or number input no longer "throws" the cursor out of the field.

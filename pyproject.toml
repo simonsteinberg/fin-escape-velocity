@@ -31,6 +31,9 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "e2e: end-to-end tests that launch the CLI/app entry points as subprocesses",
+]
 
 [tool.coverage.run]
 source = ["finev"]

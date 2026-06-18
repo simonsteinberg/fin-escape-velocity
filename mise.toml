@@ -39,6 +39,10 @@ run = [
   "mise run test",
 ]
 
+[tasks.test-e2e]
+description = "Run end-to-end tests that launch the CLI/app entry points"
+run = "uv run pytest -m e2e"
+
 [tasks.run]
 description = "Run wealth forecast and print yearly totals"
 run = "uv run python -m finev.cli"

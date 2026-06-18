@@ -615,7 +615,11 @@ total, taxes, and net cashflow.
 
 Each criterion is exercised by the test suite under [`tests/finev/`](../tests/finev/)
 (notably `test_forecast.py`, `test_forecast_golden.py`, `test_validation.py`,
-`test_config.py`, `test_pension.py`, `test_ui_*.py`).
+`test_config.py`, `test_pension.py`, `test_ui_*.py`). `test_e2e.py` adds
+end-to-end coverage of the two runnable entry points — it launches
+`python -m finev.cli` (as `mise run run`) and `python -m finev.app` (as
+`mise run app`) as real subprocesses and asserts the CLI prints the forecast and
+the app server boots and serves the page (run on demand via `mise run test-e2e`).
 
 ---
 

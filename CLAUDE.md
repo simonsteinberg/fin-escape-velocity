@@ -85,6 +85,7 @@ When asked to work in a git worktree, create it under `.worktree/<worktree-name>
 | `mise run typecheck` | Run mypy static type checks (CI gate) |
 | `mise run check` | Run format-check + lint + typecheck + tests together |
 | `mise run test` | Run full test suite |
+| `mise run test-e2e` | Run only the end-to-end tests that launch the CLI/app entry points |
 | `mise run coverage` | Run tests with coverage report |
 | `mise run coverage-ci` | Run tests producing JUnit XML + HTML/XML coverage artifacts (CI) |
 | `mise run app` | Start the NiceGUI web app |
