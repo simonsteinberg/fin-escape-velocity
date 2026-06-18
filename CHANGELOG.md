@@ -10,6 +10,8 @@ version is retired.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-06-18
+
 ### Added
 
 - End-to-end tests (`tests/finev/test_e2e.py`, `mise run test-e2e`) that launch
@@ -135,7 +137,8 @@ version is retired.
   inheritance (Erbschaftsteuer), and German-specific taxation (Abgeltungssteuer
   and Soli).
 
-[Unreleased]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.1.4...v0.2.0
