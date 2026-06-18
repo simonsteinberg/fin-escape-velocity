@@ -72,13 +72,6 @@ def page(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> _WealthPage:
         ),
     )
     monkeypatch.setattr(
-        controller,
-        "schedule_forecast",
-        lambda rebuild_assets=False: recorder.calls.append(
-            ("schedule", rebuild_assets)
-        ),
-    )
-    monkeypatch.setattr(
         controller, "run_forecast", lambda: recorder.calls.append("forecast")
     )
     # Expose the recorder for assertions.
@@ -95,12 +88,14 @@ def test_loads_default_rows(page: _WealthPage) -> None:
     assert names == ["ETF MSCI World", "bAV", "Daily account"]
 
 
-def test_simple_field_edit_debounces_without_rerender(
+def test_simple_field_edit_reruns_without_rerender(
     page: _WealthPage,
 ) -> None:
+    # A committed text edit re-runs the forecast immediately (commits arrive on
+    # Enter/blur, so there is nothing to debounce) without rebuilding the rows.
     page.update_asset_row(0, "monthly_contribution", 999)
     assert page.asset_rows[0]["monthly_contribution"] == 999
-    assert _calls(page) == [("schedule", False)]
+    assert _calls(page) == [("immediate", False)]
 
 
 def test_current_value_edit_clamps_gains_and_rebuilds(
@@ -111,7 +106,44 @@ def test_current_value_edit_clamps_gains_and_rebuilds(
     assert page.asset_rows[0]["current_value"] == 5_000
     # Unrealized gains cannot exceed the new current value.
     assert page.asset_rows[0]["unrealized_gains"] == 5_000
-    assert _calls(page) == [("schedule", True)]
+    # current_value commit rebuilds the rows (to re-clamp the gains field).
+    assert _calls(page) == [("immediate", True)]
+
+
+class _OnWidget:
+    """Fake NiceGUI input recording ``.on`` registrations and exposing value."""
+
+    def __init__(self, value: Any = None) -> None:
+        self.value: Any = value
+        self.handlers: dict[str, Any] = {}
+
+    def on(self, event: str, handler: Any) -> _OnWidget:
+        self.handlers[event] = handler
+        return self
+
+
+def test_commit_on_enter_wires_enter_and_blur_to_current_value() -> None:
+    widget = _OnWidget(value=123)
+    committed: list[Any] = []
+
+    returned = ui_module._commit_on_enter(widget, committed.append)
+
+    # The widget is returned for chaining and both commit events are wired.
+    assert returned is widget
+    assert set(widget.handlers) == {"keydown.enter", "blur"}
+    # Firing either event commits the widget's value as read at fire time (the
+    # value is synced live, so the latest typed text is always picked up).
+    widget.value = 456
+    widget.handlers["keydown.enter"]()
+    widget.handlers["blur"]()
+    assert committed == [456, 456]
+
+
+def test_commit_profile_edit_reruns_immediately(page: _WealthPage) -> None:
+    # Committing a profile/withdrawal text field re-runs the forecast now,
+    # without rebuilding the asset rows.
+    page._commit_profile_edit("ignored")
+    assert _calls(page) == [("immediate", False)]
 
 
 def test_cycle_color_scheme_advances_persists_and_updates_widgets(
