@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from collections.abc import Callable
 from typing import Any
@@ -216,6 +215,31 @@ def _panel_header(title: str, help_text: str) -> None:
             )
 
 
+def _commit_on_enter(
+    widget: Any,
+    commit: Callable[[Any], None],
+) -> Any:
+    """Run ``commit`` when the user finishes editing a text field.
+
+    A live ``on_change`` handler fires on every keystroke; for an input that
+    triggers a re-render this destroys and recreates the very widget being typed
+    into, stealing focus — the user is "thrown out" of the box. Wiring the
+    refresh to Enter and blur instead defers it to a deliberate commit, so
+    typing never moves focus. The widget's value is still synced live, so any
+    other action (a button, a dropdown change) always sees the latest text.
+
+    Args:
+        widget: The NiceGUI input/number whose edits should be committed.
+        commit: Called with the widget's current value on Enter or blur.
+
+    Returns:
+        The widget, so the call can be chained at the construction site.
+    """
+    widget.on("keydown.enter", lambda: commit(widget.value))
+    widget.on("blur", lambda: commit(widget.value))
+    return widget
+
+
 def _render_asset_row(
     index: int,
     row: dict[str, Any],
@@ -250,19 +274,19 @@ def _render_asset_row(
                     not row.get("active", True),
                 ),
             ).props("dense flat")
-            ui.input(
-                label=t("asset.name"),
-                value=row["name"],
-                on_change=lambda e, i=index: on_field_change(
-                    i, "name", e.value
-                ),
-            ).classes("flex-1")
+            _commit_on_enter(
+                ui.input(
+                    label=t("asset.name"),
+                    value=row["name"],
+                ).classes("flex-1"),
+                lambda value: on_field_change(index, "name", value),
+            )
             ui.select(
                 options=[item.value for item in AssetType],
                 value=row["type"],
                 label=t("asset.type"),
                 on_change=lambda e, i=index: on_field_change(
-                    i, "type", e.value
+                    index, "type", e.value
                 ),
             ).classes("w-28")
             ui.button(
@@ -289,30 +313,30 @@ def _render_asset_row(
                 ),
             }
             with ui.grid(columns=2).classes("w-full gap-2"):
-                ui.number(
-                    label=t("asset.gross_amount"),
-                    value=row.get("inheritance_gross_amount") or 0,
-                    format="%.0f",
-                    min=0,
-                    step=10000,
-                    on_change=lambda e, i=index: on_field_change(
-                        i,
-                        "inheritance_gross_amount",
-                        e.value,
+                _commit_on_enter(
+                    ui.number(
+                        label=t("asset.gross_amount"),
+                        value=row.get("inheritance_gross_amount") or 0,
+                        format="%.0f",
+                        min=0,
+                        step=10000,
+                    ).classes("w-full"),
+                    lambda value: on_field_change(
+                        index, "inheritance_gross_amount", value
                     ),
-                ).classes("w-full")
-                ui.number(
-                    label=t("asset.age_at_receipt"),
-                    value=row.get("inheritance_age") or 67,
-                    format="%.0f",
-                    min=0,
-                    step=1,
-                    on_change=lambda e, i=index: on_field_change(
-                        i,
-                        "inheritance_age",
-                        e.value,
+                )
+                _commit_on_enter(
+                    ui.number(
+                        label=t("asset.age_at_receipt"),
+                        value=row.get("inheritance_age") or 67,
+                        format="%.0f",
+                        min=0,
+                        step=1,
+                    ).classes("w-full"),
+                    lambda value: on_field_change(
+                        index, "inheritance_age", value
                     ),
-                ).classes("w-full")
+                )
             ui.select(
                 options=_inheritance_relationship_labels,
                 value=row.get(
@@ -343,31 +367,31 @@ def _render_asset_row(
                     ),
                 ).classes("w-full")
                 if input_mode == "euro":
-                    ui.number(
-                        label=t("asset.vbl_monthly_pension"),
-                        value=row.get("vbl_monthly_pension") or 0,
-                        format="%.0f",
-                        min=0,
-                        step=50,
-                        on_change=lambda e, i=index: on_field_change(
-                            i,
-                            "vbl_monthly_pension",
-                            e.value,
+                    _commit_on_enter(
+                        ui.number(
+                            label=t("asset.vbl_monthly_pension"),
+                            value=row.get("vbl_monthly_pension") or 0,
+                            format="%.0f",
+                            min=0,
+                            step=50,
+                        ).classes("w-full"),
+                        lambda value: on_field_change(
+                            index, "vbl_monthly_pension", value
                         ),
-                    ).classes("w-full")
+                    )
                 else:
-                    ui.number(
-                        label=t("asset.vbl_points_label"),
-                        value=row.get("vbl_points") or 0,
-                        format="%.1f",
-                        min=0,
-                        step=1,
-                        on_change=lambda e, i=index: on_field_change(
-                            i,
-                            "vbl_points",
-                            e.value,
+                    _commit_on_enter(
+                        ui.number(
+                            label=t("asset.vbl_points_label"),
+                            value=row.get("vbl_points") or 0,
+                            format="%.1f",
+                            min=0,
+                            step=1,
+                        ).classes("w-full"),
+                        lambda value: on_field_change(
+                            index, "vbl_points", value
                         ),
-                    ).classes("w-full")
+                    )
                 with ui.row().classes("w-full gap-2 items-center"):
                     ui.checkbox(
                         t("asset.vbl_still_working"),
@@ -379,81 +403,81 @@ def _render_asset_row(
                         ),
                     )
                 with ui.row().classes("w-full gap-2"):
-                    ui.number(
-                        label=t("asset.vbl_start_age"),
-                        value=row.get("vbl_start_age") or 67,
-                        format="%.0f",
-                        min=0,
-                        step=1,
-                        on_change=lambda e, i=index: on_field_change(
-                            i,
-                            "vbl_start_age",
-                            e.value,
+                    _commit_on_enter(
+                        ui.number(
+                            label=t("asset.vbl_start_age"),
+                            value=row.get("vbl_start_age") or 67,
+                            format="%.0f",
+                            min=0,
+                            step=1,
+                        ).classes("w-40"),
+                        lambda value: on_field_change(
+                            index, "vbl_start_age", value
                         ),
-                    ).classes("w-40")
-                    ui.number(
-                        label=t("asset.vbl_tax_rate"),
-                        value=row.get("vbl_tax_rate_pct") or None,
-                        format="%.1f",
-                        min=0,
-                        max=100,
-                        step=1,
-                        on_change=lambda e, i=index: on_field_change(
-                            i,
-                            "vbl_tax_rate_pct",
-                            e.value,
+                    )
+                    _commit_on_enter(
+                        ui.number(
+                            label=t("asset.vbl_tax_rate"),
+                            value=row.get("vbl_tax_rate_pct") or None,
+                            format="%.1f",
+                            min=0,
+                            max=100,
+                            step=1,
+                        ).classes("w-40"),
+                        lambda value: on_field_change(
+                            index, "vbl_tax_rate_pct", value
                         ),
-                    ).classes("w-40")
+                    )
         else:
             with ui.grid(columns=2).classes("w-full gap-2"):
-                ui.number(
-                    label=t("asset.current_value"),
-                    value=row["current_value"],
-                    format="%.0f",
-                    min=0,
-                    step=10000,
-                    on_change=lambda e, i=index: on_field_change(
-                        i,
-                        "current_value",
-                        e.value,
+                _commit_on_enter(
+                    ui.number(
+                        label=t("asset.current_value"),
+                        value=row["current_value"],
+                        format="%.0f",
+                        min=0,
+                        step=10000,
+                    ).classes("w-full"),
+                    lambda value: on_field_change(
+                        index, "current_value", value
                     ),
-                ).classes("w-full")
-                ui.number(
-                    label=t("asset.unrealized_gains"),
-                    value=row.get("unrealized_gains") or 0,
-                    format="%.0f",
-                    min=0,
-                    max=current_value,
-                    step=10000,
-                    on_change=lambda e, i=index: on_field_change(
-                        i,
-                        "unrealized_gains",
-                        e.value,
+                )
+                _commit_on_enter(
+                    ui.number(
+                        label=t("asset.unrealized_gains"),
+                        value=row.get("unrealized_gains") or 0,
+                        format="%.0f",
+                        min=0,
+                        max=current_value,
+                        step=10000,
+                    ).classes("w-full"),
+                    lambda value: on_field_change(
+                        index, "unrealized_gains", value
                     ),
-                ).classes("w-full")
-                ui.number(
-                    label=t("asset.annual_gain"),
-                    value=row["annual_gain_rate_pct"],
-                    format="%.1f",
-                    step=0.1,
-                    on_change=lambda e, i=index: on_field_change(
-                        i,
-                        "annual_gain_rate_pct",
-                        e.value,
+                )
+                _commit_on_enter(
+                    ui.number(
+                        label=t("asset.annual_gain"),
+                        value=row["annual_gain_rate_pct"],
+                        format="%.1f",
+                        step=0.1,
+                    ).classes("w-full"),
+                    lambda value: on_field_change(
+                        index, "annual_gain_rate_pct", value
                     ),
-                ).classes("w-full")
-                ui.number(
-                    label=t("asset.monthly_contribution"),
-                    value=row["monthly_contribution"],
-                    format="%.0f",
-                    min=0,
-                    step=50,
-                    on_change=lambda e, i=index: on_field_change(
-                        i,
-                        "monthly_contribution",
-                        e.value,
+                )
+                _commit_on_enter(
+                    ui.number(
+                        label=t("asset.monthly_contribution"),
+                        value=row["monthly_contribution"],
+                        format="%.0f",
+                        min=0,
+                        step=50,
+                    ).classes("w-full"),
+                    lambda value: on_field_change(
+                        index, "monthly_contribution", value
                     ),
-                ).classes("w-full")
+                )
             if asset_type == AssetType.BAV:
                 with ui.column().classes("w-full gap-2"):
                     ui.select(
@@ -476,6 +500,39 @@ def _render_asset_row(
                     ).classes("w-full")
                     if row.get("bav_strategy") == (BAVStrategy.TRANSFER.value):
                         with ui.row().classes("w-full gap-2"):
+                            _commit_on_enter(
+                                ui.number(
+                                    label=t("asset.bav_retirement_age"),
+                                    value=row.get(
+                                        "bav_retirement_age",
+                                        67,
+                                    ),
+                                    format="%.0f",
+                                    min=0,
+                                    step=1,
+                                ).classes("w-32"),
+                                lambda value: on_field_change(
+                                    index, "bav_retirement_age", value
+                                ),
+                            )
+                            _commit_on_enter(
+                                ui.number(
+                                    label=t("asset.etf_share"),
+                                    value=row.get(
+                                        "bav_transfer_etf_ratio_pct",
+                                        50.0,
+                                    ),
+                                    format="%.0f",
+                                    min=0,
+                                    max=100,
+                                    step=5,
+                                ).classes("w-28"),
+                                lambda value: on_field_change(
+                                    index, "bav_transfer_etf_ratio_pct", value
+                                ),
+                            )
+                    elif row.get("bav_strategy") == (BAVStrategy.INCOME.value):
+                        _commit_on_enter(
                             ui.number(
                                 label=t("asset.bav_retirement_age"),
                                 value=row.get(
@@ -485,44 +542,11 @@ def _render_asset_row(
                                 format="%.0f",
                                 min=0,
                                 step=1,
-                                on_change=lambda e, i=index: on_field_change(
-                                    i,
-                                    "bav_retirement_age",
-                                    e.value,
-                                ),
-                            ).classes("w-32")
-                            ui.number(
-                                label=t("asset.etf_share"),
-                                value=row.get(
-                                    "bav_transfer_etf_ratio_pct",
-                                    50.0,
-                                ),
-                                format="%.0f",
-                                min=0,
-                                max=100,
-                                step=5,
-                                on_change=lambda e, i=index: on_field_change(
-                                    i,
-                                    "bav_transfer_etf_ratio_pct",
-                                    e.value,
-                                ),
-                            ).classes("w-28")
-                    elif row.get("bav_strategy") == (BAVStrategy.INCOME.value):
-                        ui.number(
-                            label=t("asset.bav_retirement_age"),
-                            value=row.get(
-                                "bav_retirement_age",
-                                67,
+                            ).classes("w-32"),
+                            lambda value: on_field_change(
+                                index, "bav_retirement_age", value
                             ),
-                            format="%.0f",
-                            min=0,
-                            step=1,
-                            on_change=lambda e, i=index: on_field_change(
-                                i,
-                                "bav_retirement_age",
-                                e.value,
-                            ),
-                        ).classes("w-32")
+                        )
 
 
 class _WealthPage:
@@ -578,9 +602,6 @@ class _WealthPage:
         self.default_profile_state = _default_profile_state()
         self.default_withdrawal_state = _default_withdrawal_state()
         self.suppress_cache_save = False
-        self.debounce_seconds = 0.5
-        self.pending_handle: asyncio.Handle | None = None
-        self.pending_rebuild = False
         self.profile_store: ProfileStore = _default_profile_store()
         self.ui_config: UiConfig = _get_ui_config()
         self.color_scheme: ColorScheme = _load_color_scheme(
@@ -588,32 +609,30 @@ class _WealthPage:
         )
         self.log_scale: bool = _load_log_scale(cached_state)
 
-    # ── Scheduling ──────────────────────────
-    def _run_scheduled(self) -> None:
-        self.pending_handle = None
-        if self.pending_rebuild:
-            self.pending_rebuild = False
-            self.render_asset_rows()
-        self.run_forecast()
-
-    def schedule_forecast(self, rebuild_assets: bool = False) -> None:
-        """Debounce a forecast run, optionally rebuilding the asset rows."""
-        self.pending_rebuild = self.pending_rebuild or rebuild_assets
-        if self.pending_handle is not None:
-            self.pending_handle.cancel()
-        self.pending_handle = asyncio.get_running_loop().call_later(
-            self.debounce_seconds, self._run_scheduled
-        )
-
+    # ── Forecast runs ───────────────────────
     def run_immediate(self, rebuild_assets: bool = False) -> None:
-        """Cancel any pending run and forecast now."""
-        if self.pending_handle is not None:
-            self.pending_handle.cancel()
-            self.pending_handle = None
+        """Re-run the forecast now, optionally rebuilding the asset rows.
+
+        Text inputs commit on Enter/blur (see :func:`_commit_on_enter`) and
+        other controls fire discrete events, so every refresh is a deliberate,
+        one-off action — there is nothing to debounce.
+
+        Args:
+            rebuild_assets: Re-render the asset rows before forecasting (needed
+                when a change alters which row widgets are shown).
+        """
         if rebuild_assets:
-            self.pending_rebuild = False
             self.render_asset_rows()
         self.run_forecast()
+
+    def _commit_profile_edit(self, _value: Any) -> None:
+        """Re-run the forecast when a profile/withdrawal text field commits.
+
+        The committed value is already synced onto the bound widget, and
+        :meth:`run_forecast` reads every widget, so the value argument exists
+        only to satisfy the :func:`_commit_on_enter` callback signature.
+        """
+        self.run_immediate()
 
     # ── Asset-row handlers ────────────────────
     def update_asset_row(self, index: int, field: str, value: Any) -> None:
@@ -646,9 +665,9 @@ class _WealthPage:
             self.run_immediate()
             return
         if field == "current_value":
-            self.schedule_forecast(rebuild_assets=True)
+            self.run_immediate(rebuild_assets=True)
             return
-        self.schedule_forecast()
+        self.run_immediate()
 
     def remove_asset_row(self, index: int) -> None:
         """Remove an asset row from the list."""
@@ -1284,62 +1303,82 @@ class _WealthPage:
                             self.t("panel.profile.help"),
                         )
                         with ui.grid(columns=2).classes("w-full gap-3"):
-                            self.current_age_years = ui.number(
-                                label=self.t("profile.current_age_years"),
-                                value=profile_state["current_age_years"],
-                                format="%.0f",
-                                on_change=lambda _: self.schedule_forecast(),
+                            self.current_age_years = _commit_on_enter(
+                                ui.number(
+                                    label=self.t("profile.current_age_years"),
+                                    value=profile_state["current_age_years"],
+                                    format="%.0f",
+                                ),
+                                self._commit_profile_edit,
                             )
-                            self.current_age_months = ui.number(
-                                label=self.t("profile.current_age_months"),
-                                value=profile_state["current_age_months"],
-                                format="%.0f",
-                                min=0,
-                                max=11,
-                                on_change=lambda _: self.schedule_forecast(),
+                            self.current_age_months = _commit_on_enter(
+                                ui.number(
+                                    label=self.t("profile.current_age_months"),
+                                    value=profile_state["current_age_months"],
+                                    format="%.0f",
+                                    min=0,
+                                    max=11,
+                                ),
+                                self._commit_profile_edit,
                             )
-                            self.retirement_age = ui.number(
-                                label=self.t("profile.retirement_age"),
-                                value=profile_state["retirement_age"],
-                                format="%.0f",
-                                on_change=lambda _: self.schedule_forecast(),
+                            self.retirement_age = _commit_on_enter(
+                                ui.number(
+                                    label=self.t("profile.retirement_age"),
+                                    value=profile_state["retirement_age"],
+                                    format="%.0f",
+                                ),
+                                self._commit_profile_edit,
                             )
-                            self.end_age = ui.number(
-                                label=self.t("profile.end_age"),
-                                value=profile_state["end_age"],
-                                format="%.0f",
-                                on_change=lambda _: self.schedule_forecast(),
+                            self.end_age = _commit_on_enter(
+                                ui.number(
+                                    label=self.t("profile.end_age"),
+                                    value=profile_state["end_age"],
+                                    format="%.0f",
+                                ),
+                                self._commit_profile_edit,
                             )
-                            self.currency = ui.input(
-                                label=self.t("profile.currency"),
-                                value=profile_state["currency"],
-                                on_change=lambda _: self.schedule_forecast(),
+                            self.currency = _commit_on_enter(
+                                ui.input(
+                                    label=self.t("profile.currency"),
+                                    value=profile_state["currency"],
+                                ),
+                                self._commit_profile_edit,
                             )
-                            self.average_inflation_rate = ui.number(
-                                label=self.t("profile.inflation"),
-                                value=profile_state[
-                                    "average_inflation_rate_pct"
-                                ],
-                                format="%.2f",
-                                min=-99.9,
-                                step=0.1,
-                                on_change=lambda _: self.schedule_forecast(),
+                            self.average_inflation_rate = _commit_on_enter(
+                                ui.number(
+                                    label=self.t("profile.inflation"),
+                                    value=profile_state[
+                                        "average_inflation_rate_pct"
+                                    ],
+                                    format="%.2f",
+                                    min=-99.9,
+                                    step=0.1,
+                                ),
+                                self._commit_profile_edit,
                             )
-                            self.debt_interest_rate = ui.number(
-                                label=self.t("profile.debt_interest"),
-                                value=profile_state["debt_interest_rate_pct"],
-                                format="%.2f",
-                                min=0,
-                                step=0.1,
-                                on_change=lambda _: self.schedule_forecast(),
+                            self.debt_interest_rate = _commit_on_enter(
+                                ui.number(
+                                    label=self.t("profile.debt_interest"),
+                                    value=profile_state[
+                                        "debt_interest_rate_pct"
+                                    ],
+                                    format="%.2f",
+                                    min=0,
+                                    step=0.1,
+                                ),
+                                self._commit_profile_edit,
                             )
-                            self.withdrawal_input = ui.number(
-                                label=self.t("profile.monthly_withdrawal"),
-                                value=withdrawal_state["monthly_withdrawal"],
-                                format="%.0f",
-                                min=0,
-                                step=50,
-                                on_change=lambda _: self.schedule_forecast(),
+                            self.withdrawal_input = _commit_on_enter(
+                                ui.number(
+                                    label=self.t("profile.monthly_withdrawal"),
+                                    value=withdrawal_state[
+                                        "monthly_withdrawal"
+                                    ],
+                                    format="%.0f",
+                                    min=0,
+                                    step=50,
+                                ),
+                                self._commit_profile_edit,
                             )
 
                     with ui.card().classes("w-full p-3"):
@@ -1348,17 +1387,19 @@ class _WealthPage:
                             self.t("panel.pension.help"),
                         )
                         with ui.grid(columns=2).classes("w-full gap-3"):
-                            self.annual_income = ui.number(
-                                label=self.t("pension.annual_income"),
-                                value=profile_state.get(
-                                    "annual_income", 50000.0
+                            self.annual_income = _commit_on_enter(
+                                ui.number(
+                                    label=self.t("pension.annual_income"),
+                                    value=profile_state.get(
+                                        "annual_income", 50000.0
+                                    ),
+                                    format="%.0f",
+                                    min=0,
+                                    step=1000,
                                 ),
-                                format="%.0f",
-                                min=0,
-                                step=1000,
-                                on_change=lambda _: self.schedule_forecast(),
+                                self._commit_profile_edit,
                             )
-                            self.state_pension_current_monthly_amount = (
+                            self.state_pension_current_monthly_amount = _commit_on_enter(
                                 ui.number(
                                     label=self.t("pension.now_monthly"),
                                     value=withdrawal_state[
@@ -1367,10 +1408,8 @@ class _WealthPage:
                                     format="%.0f",
                                     min=0,
                                     step=50,
-                                    on_change=lambda _: (
-                                        self.schedule_forecast()
-                                    ),
-                                )
+                                ),
+                                self._commit_profile_edit,
                             )
                             self.state_pension_growth_display = ui.label(
                                 _format_currency(
@@ -1385,26 +1424,34 @@ class _WealthPage:
                             self.state_pension_penalty_display = ui.label("")
                             # Read-only: total achieved monthly pension.
                             self.state_pension_achieved_display = ui.label("")
-                            self.state_pension_start_age = ui.number(
-                                label=self.t("pension.start_age"),
-                                value=withdrawal_state[
-                                    "state_pension_start_age"
-                                ],
-                                format="%.0f",
-                                min=63,
-                                max=67,
-                                step=1,
-                                on_change=lambda _: self.schedule_forecast(),
+                            self.state_pension_start_age = _commit_on_enter(
+                                ui.number(
+                                    label=self.t("pension.start_age"),
+                                    value=withdrawal_state[
+                                        "state_pension_start_age"
+                                    ],
+                                    format="%.0f",
+                                    min=63,
+                                    max=67,
+                                    step=1,
+                                ),
+                                self._commit_profile_edit,
                             )
-                            self.state_pension_adjustment_rate = ui.number(
-                                label=self.t("pension.adjustment_rate"),
-                                value=withdrawal_state[
-                                    "state_pension_adjustment_rate_pct"
-                                ],
-                                format="%.2f",
-                                min=-99.9,
-                                step=0.1,
-                                on_change=lambda _: self.schedule_forecast(),
+                            self.state_pension_adjustment_rate = (
+                                _commit_on_enter(
+                                    ui.number(
+                                        label=self.t(
+                                            "pension.adjustment_rate"
+                                        ),
+                                        value=withdrawal_state[
+                                            "state_pension_adjustment_rate_pct"
+                                        ],
+                                        format="%.2f",
+                                        min=-99.9,
+                                        step=0.1,
+                                    ),
+                                    self._commit_profile_edit,
+                                )
                             )
 
                     with ui.card().classes("w-full p-3"):

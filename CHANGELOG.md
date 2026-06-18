@@ -10,6 +10,15 @@ version is retired.
 
 ## [Unreleased]
 
+### Fixed
+
+- Editing a text or number input no longer "throws" the cursor out of the field.
+  The live per-keystroke auto-refresh re-rendered the inputs while typing, which
+  destroyed and recreated the widget being edited and stole focus. Text/number
+  inputs now commit on **Enter or blur** (leaving the field); non-text controls
+  (dropdowns, checkboxes, add/remove/reset) still update instantly. The old
+  ~0.5s keystroke debounce is removed, since commits are now discrete events.
+
 ## [0.4.0] - 2026-06-13
 
 ### Added

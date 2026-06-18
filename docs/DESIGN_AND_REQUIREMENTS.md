@@ -451,9 +451,13 @@ Independently, `ui_view.chart_series` **clamps** every value up to a 1 € minim
 log scale cannot represent values ≤ 0. Because the value floor (1 €) is far below
 the axis bottom (1000 €), a falling series descends past the 1000 € gridline and
 slides off the bottom of the chart on its own, instead of throwing on a
-non-positive value. Edits are debounced
-(~0.5s) before re-running the forecast; structural changes
-(type/strategy/active/relationship, add/remove, reset) re-render immediately.
+non-positive value. Text and number inputs commit on **Enter or blur** (leaving
+the field) before re-running the forecast — typing never re-renders the outputs,
+so the cursor is never thrown out of a field mid-edit (`ui._commit_on_enter`
+wires both events; the bound value stays synced live, so any other action still
+sees the latest text). Non-text controls
+(type/strategy/active/relationship selects and checkboxes, add/remove, reset)
+update immediately.
 
 The browser tab uses a bundled SVG favicon (`src/finev/static/favicon.svg`, a
 rising-trend arrow), loaded via `ui_view.favicon_svg()` and passed to `ui.run`.
