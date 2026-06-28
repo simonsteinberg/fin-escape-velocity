@@ -10,6 +10,13 @@ version is retired.
 
 ## [Unreleased]
 
+### Fixed
+
+- Release script (`mise run release`) now strips ANSI color codes from the
+  captured `uv version` output. Under `mise` (which forces color) the codes
+  leaked into the git tag name, which git rejected, and into the changelog
+  headers.
+
 ## [0.4.2] - 2026-06-28
 
 ### Fixed
