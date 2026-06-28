@@ -122,21 +122,24 @@ class _OnWidget:
         return self
 
 
-def test_commit_on_enter_wires_enter_and_blur_to_current_value() -> None:
+def test_commit_on_enter_wires_enter_blur_and_change_to_current_value() -> (
+    None
+):
     widget = _OnWidget(value=123)
     committed: list[Any] = []
 
     returned = ui_module._commit_on_enter(widget, committed.append)
 
-    # The widget is returned for chaining and both commit events are wired.
+    # The widget is returned for chaining and all three commit events are wired.
     assert returned is widget
-    assert set(widget.handlers) == {"keydown.enter", "blur"}
-    # Firing either event commits the widget's value as read at fire time (the
+    assert set(widget.handlers) == {"keydown.enter", "blur", "change"}
+    # Firing any event commits the widget's value as read at fire time (the
     # value is synced live, so the latest typed text is always picked up).
     widget.value = 456
     widget.handlers["keydown.enter"]()
     widget.handlers["blur"]()
-    assert committed == [456, 456]
+    widget.handlers["change"]()
+    assert committed == [456, 456, 456]
 
 
 def test_commit_profile_edit_reruns_immediately(page: _WealthPage) -> None:

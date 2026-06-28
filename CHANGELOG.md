@@ -10,6 +10,12 @@ version is retired.
 
 ## [Unreleased]
 
+### Fixed
+
+- Clicking a spinner arrow (increment/decrement button) on a number input now
+  refreshes the chart and data table immediately, without requiring an extra
+  Enter keypress or tab away.
+
 ## [0.4.1] - 2026-06-18
 
 ### Added
