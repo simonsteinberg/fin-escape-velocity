@@ -223,10 +223,15 @@ def _commit_on_enter(
 
     A live ``on_change`` handler fires on every keystroke; for an input that
     triggers a re-render this destroys and recreates the very widget being typed
-    into, stealing focus — the user is "thrown out" of the box. Wiring the
+    into, stealing focus -- the user is "thrown out" of the box. Wiring the
     refresh to Enter and blur instead defers it to a deliberate commit, so
     typing never moves focus. The widget's value is still synced live, so any
     other action (a button, a dropdown change) always sees the latest text.
+
+    The DOM ``change`` event is also wired so that spinner arrow clicks (which
+    do not fire ``keydown.enter`` or ``blur``) trigger an immediate refresh.
+    Double-firing with ``blur`` when both events follow a focus-loss is
+    harmless because committing the same value twice is idempotent.
 
     Args:
         widget: The NiceGUI input/number whose edits should be committed.
@@ -237,6 +242,7 @@ def _commit_on_enter(
     """
     widget.on("keydown.enter", lambda: commit(widget.value))
     widget.on("blur", lambda: commit(widget.value))
+    widget.on("change", lambda: commit(widget.value))
     return widget
 
 
