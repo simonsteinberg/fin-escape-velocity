@@ -46,9 +46,13 @@ fi
 mise run check
 
 # ── Bump ───────────────────────────────────────────────────────────
-prev="$(uv version --short)"
+# `mise` forces color (CLICOLOR_FORCE), so uv emits ANSI escape codes even when
+# its output is captured. Strip them, or the codes leak into the tag name (which
+# git then rejects) and the changelog headers.
+strip_ansi() { sed -E $'s/\x1b\\[[0-9;]*m//g'; }
+prev="$(uv version --short | strip_ansi)"
 uv version --bump "$part"
-new="$(uv version --short)"
+new="$(uv version --short | strip_ansi)"
 date="$(date +%F)"
 echo "Bumping v${prev} -> v${new}"
 
