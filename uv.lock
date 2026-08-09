@@ -459,7 +459,7 @@ wheels = [
 
 [[package]]
 name = "finev"
-version = "0.4.2"
+version = "0.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "nicegui" },
