@@ -10,6 +10,8 @@ version is retired.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-09
+
 ### Changed
 
 - New default scenario in both the web app and the CLI: a 30-year-old (was 40)
@@ -205,7 +207,8 @@ version is retired.
   inheritance (Erbschaftsteuer), and German-specific taxation (Abgeltungssteuer
   and Soli).
 
-[Unreleased]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/simonsteinberg/fin-escape-velocity/compare/v0.4.0...v0.4.1
