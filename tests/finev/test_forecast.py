@@ -1628,6 +1628,7 @@ def test_notgroschen_topup_holds_its_real_value() -> None:
         annual_gain_rate=0.0,
         monthly_contribution=0.0,
         notgroschen=True,
+        notgroschen_keep_inflation=True,
         notgroschen_inflation_rate=0.02,
     )
 
@@ -1647,8 +1648,8 @@ def test_notgroschen_topup_holds_its_real_value() -> None:
     assert result.loc[1, "total"] == pytest.approx(120_000.0)
 
 
-def test_notgroschen_topup_skipped_without_a_rate() -> None:
-    """Leave the buffer flat when no top-up rate is configured."""
+def test_notgroschen_topup_skipped_without_the_tick_box() -> None:
+    """Leave the buffer flat unless the adaption is explicitly kept on."""
     profile = UserProfile(
         current_age_years=67,
         retirement_age=67,
@@ -1669,6 +1670,8 @@ def test_notgroschen_topup_skipped_without_a_rate() -> None:
         annual_gain_rate=0.0,
         monthly_contribution=0.0,
         notgroschen=True,
+        # A rate is configured, but the adaption is not kept: nothing happens.
+        notgroschen_inflation_rate=0.02,
     )
 
     result = forecast_wealth(
@@ -1704,6 +1707,7 @@ def test_notgroschen_topup_skipped_when_unaffordable() -> None:
         annual_gain_rate=0.0,
         monthly_contribution=0.0,
         notgroschen=True,
+        notgroschen_keep_inflation=True,
         notgroschen_inflation_rate=0.02,
     )
 

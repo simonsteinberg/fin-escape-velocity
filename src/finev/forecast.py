@@ -1038,7 +1038,9 @@ def _apply_notgroschen_topup(
     """Top a Notgroschen up so it holds its real value in retirement.
 
     Contributions stop at retirement, so without this the buffer would erode
-    against inflation. For each active Notgroschen with a positive
+    against inflation. Whether it does is the user's choice: only a buffer with
+    ``notgroschen_keep_inflation`` set is topped up at all, and one without it
+    is simply left alone. For such a buffer with a positive
     ``notgroschen_inflation_rate``, enough is moved from the *other* assets that
     the buffer ends the month at ``balance * (1 + monthly inflation rate)``
     once
@@ -1051,6 +1053,8 @@ def _apply_notgroschen_topup(
     drives the forecast into debt.
     """
     for index, asset in params.notgroschen_indices:
+        if not asset.notgroschen_keep_inflation:
+            continue
         if asset.notgroschen_inflation_rate <= 0:
             continue
         balance = state.balances[index]

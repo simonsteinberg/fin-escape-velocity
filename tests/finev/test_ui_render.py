@@ -109,13 +109,26 @@ def test_investment_shows_loan_fields_only_when_financed() -> None:
     assert "Monthly repayment" in financed
 
 
-def test_notgroschen_box_is_cash_only_and_reveals_its_rate() -> None:
+def test_notgroschen_box_is_cash_only() -> None:
     cash = _rendered_labels(type=AssetType.CASH.value)
     etf = _rendered_labels(type=AssetType.ETF.value)
-    ticked = _rendered_labels(type=AssetType.CASH.value, notgroschen=True)
 
     assert "Emergency fund (Notgroschen)" in cash
     assert "Emergency fund (Notgroschen)" not in etf
-    # The rate input only appears once the buffer is actually enabled.
-    assert "Keep level in retirement (% p.a.)" not in cash
-    assert "Keep level in retirement (% p.a.)" in ticked
+
+
+def test_notgroschen_reveals_its_options_one_step_at_a_time() -> None:
+    plain = _rendered_labels(type=AssetType.CASH.value)
+    buffer_ = _rendered_labels(type=AssetType.CASH.value, notgroschen=True)
+    adapting = _rendered_labels(
+        type=AssetType.CASH.value,
+        notgroschen=True,
+        notgroschen_keep_inflation=True,
+    )
+
+    # The adaption choice appears only once the row is a buffer, and the rate
+    # only once that adaption is actually kept.
+    assert "Keep inflation adaption in retirement" not in plain
+    assert "Keep inflation adaption in retirement" in buffer_
+    assert "Retirement adaption (% p.a.)" not in buffer_
+    assert "Retirement adaption (% p.a.)" in adapting

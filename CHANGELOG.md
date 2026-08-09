@@ -15,12 +15,13 @@ version is retired.
 - Cash assets can be marked as a **Notgroschen** (emergency fund): a protected
   buffer the forecast never withdraws from and never allocates into, so it
   survives even when the other assets are exhausted and the withdrawal turns
-  into debt. Before retirement it takes contributions like any Cash account;
-  in retirement it is either left alone or, with an optional annual rate
-  (0.1% steps), kept level in real terms by a monthly top-up funded from the
-  other assets — skipped in any month they cannot cover it. The buffer's role
-  in a bear market (spending cash instead of selling ETFs) is deliberately not
-  simulated; only its existence and upkeep are.
+  into debt. Before retirement it takes contributions like any Cash account.
+  A second tick box chooses what happens in retirement: leave the buffer alone,
+  or keep its inflation adaption at a user-defined annual rate (0.1% steps),
+  topped up monthly from the other assets and skipped in any month they cannot
+  cover it. The buffer's role in a bear market (spending cash instead of
+  selling ETFs) is deliberately not simulated; only its existence and upkeep
+  are.
 
 - New `Investment` asset type for planned purchases, in two modes. A *one-time
   purchase* (e.g. a car at age 55) is paid out of the assets in that month; a

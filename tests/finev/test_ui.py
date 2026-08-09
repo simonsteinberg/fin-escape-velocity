@@ -376,11 +376,13 @@ def test_asset_from_row_maps_notgroschen_for_cash() -> None:
             "type": AssetType.CASH.value,
             "current_value": 20_000.0,
             "notgroschen": True,
+            "notgroschen_keep_inflation": True,
             "notgroschen_inflation_rate_pct": 2.0,
         }
     )
 
     assert asset.notgroschen is True
+    assert asset.notgroschen_keep_inflation is True
     assert asset.notgroschen_inflation_rate == pytest.approx(0.02)
 
 
@@ -393,9 +395,11 @@ def test_asset_from_row_drops_notgroschen_for_non_cash() -> None:
             "type": AssetType.ETF.value,
             "current_value": 20_000.0,
             "notgroschen": True,
+            "notgroschen_keep_inflation": True,
             "notgroschen_inflation_rate_pct": 2.0,
         }
     )
 
     assert asset.notgroschen is False
+    assert asset.notgroschen_keep_inflation is False
     assert asset.notgroschen_inflation_rate == pytest.approx(0.0)

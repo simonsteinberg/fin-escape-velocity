@@ -30,6 +30,11 @@ from finev.ui_config import ColorScheme
 #: engine rejects any rate at or below -100%, so the UI clamps just above it.
 MIN_ANNUAL_RATE_PCT = -99.9
 
+#: Pre-filled rate for keeping a Notgroschen level in retirement, matching the
+#: default inflation assumption in the profile panel, so ticking the box does
+#: something sensible without further typing.
+DEFAULT_NOTGROSCHEN_INFLATION_PCT = 2.0
+
 #: Pre-filled loan terms for a new financed investment row: a typical German
 #: mortgage rate and a round monthly payment, so the row is a starting point
 #: rather than an immediately invalid plan.
@@ -59,7 +64,10 @@ def default_asset_rows() -> list[dict[str, Any]]:
             "monthly_contribution_growth_pct": 0.0,
             "active": True,
             "notgroschen": False,
-            "notgroschen_inflation_rate_pct": 0.0,
+            "notgroschen_keep_inflation": False,
+            "notgroschen_inflation_rate_pct": (
+                DEFAULT_NOTGROSCHEN_INFLATION_PCT
+            ),
             "bav_strategy": BAVStrategy.TRANSFER.value,
             "bav_retirement_age": 67,
             "bav_transfer_etf_ratio_pct": 50.0,
@@ -74,7 +82,10 @@ def default_asset_rows() -> list[dict[str, Any]]:
             "monthly_contribution_growth_pct": 0.0,
             "active": True,
             "notgroschen": False,
-            "notgroschen_inflation_rate_pct": 0.0,
+            "notgroschen_keep_inflation": False,
+            "notgroschen_inflation_rate_pct": (
+                DEFAULT_NOTGROSCHEN_INFLATION_PCT
+            ),
             "bav_strategy": BAVStrategy.TRANSFER.value,
             "bav_retirement_age": 67,
             "bav_transfer_etf_ratio_pct": 50.0,
@@ -89,7 +100,10 @@ def default_asset_rows() -> list[dict[str, Any]]:
             "monthly_contribution_growth_pct": 0.0,
             "active": True,
             "notgroschen": False,
-            "notgroschen_inflation_rate_pct": 0.0,
+            "notgroschen_keep_inflation": False,
+            "notgroschen_inflation_rate_pct": (
+                DEFAULT_NOTGROSCHEN_INFLATION_PCT
+            ),
             "bav_strategy": BAVStrategy.TRANSFER.value,
             "bav_retirement_age": 67,
             "bav_transfer_etf_ratio_pct": 50.0,
@@ -109,7 +123,8 @@ def new_asset_row() -> dict[str, Any]:
         "monthly_contribution_growth_pct": 0.0,
         "active": True,
         "notgroschen": False,
-        "notgroschen_inflation_rate_pct": 0.0,
+        "notgroschen_keep_inflation": False,
+        "notgroschen_inflation_rate_pct": DEFAULT_NOTGROSCHEN_INFLATION_PCT,
         "bav_strategy": BAVStrategy.TRANSFER.value,
         "bav_retirement_age": 67,
         "bav_transfer_etf_ratio_pct": 50.0,
@@ -359,9 +374,23 @@ def normalize_asset_row(row: dict[str, Any]) -> dict[str, Any]:
         )
     else:
         notgroschen = False
+    keep_inflation_raw = row.get("notgroschen_keep_inflation")
+    if isinstance(keep_inflation_raw, bool):
+        notgroschen_keep_inflation = keep_inflation_raw
+    elif isinstance(keep_inflation_raw, (int, float)):
+        notgroschen_keep_inflation = bool(keep_inflation_raw)
+    elif isinstance(keep_inflation_raw, str):
+        notgroschen_keep_inflation = keep_inflation_raw.strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "y",
+        )
+    else:
+        notgroschen_keep_inflation = False
     notgroschen_rate_raw = row.get("notgroschen_inflation_rate_pct")
     if notgroschen_rate_raw in (None, ""):
-        notgroschen_inflation_rate_pct = 0.0
+        notgroschen_inflation_rate_pct = DEFAULT_NOTGROSCHEN_INFLATION_PCT
     else:
         notgroschen_inflation_rate_pct = max(
             coerce_float(
@@ -504,6 +533,7 @@ def normalize_asset_row(row: dict[str, Any]) -> dict[str, Any]:
         "monthly_contribution_growth_pct": monthly_contribution_growth_pct,
         "active": active,
         "notgroschen": notgroschen,
+        "notgroschen_keep_inflation": notgroschen_keep_inflation,
         "notgroschen_inflation_rate_pct": notgroschen_inflation_rate_pct,
         "bav_strategy": bav_strategy,
         "bav_retirement_age": bav_retirement_age,
@@ -767,6 +797,8 @@ def asset_from_row(row: dict[str, Any]) -> Asset:
         # Only a Cash row can be a buffer; a stale flag left on a row whose
         # type was switched is dropped rather than rejected by the engine.
         notgroschen=is_cash and bool(row.get("notgroschen", False)),
+        notgroschen_keep_inflation=is_cash
+        and bool(row.get("notgroschen_keep_inflation", False)),
         notgroschen_inflation_rate=(
             float(row.get("notgroschen_inflation_rate_pct") or 0) / 100
             if is_cash
@@ -806,8 +838,12 @@ def apply_type_change_defaults(
             row["monthly_contribution_growth_pct"] = 0.0
         if row.get("notgroschen") is None:
             row["notgroschen"] = False
+        if row.get("notgroschen_keep_inflation") is None:
+            row["notgroschen_keep_inflation"] = False
         if row.get("notgroschen_inflation_rate_pct") in (None, ""):
-            row["notgroschen_inflation_rate_pct"] = 0.0
+            row["notgroschen_inflation_rate_pct"] = (
+                DEFAULT_NOTGROSCHEN_INFLATION_PCT
+            )
         if row.get("bav_strategy") in (None, ""):
             row["bav_strategy"] = BAVStrategy.TRANSFER.value
         if row.get("bav_retirement_age") in (None, ""):
@@ -871,7 +907,7 @@ def coerce_asset_field(row: dict[str, Any], field: str, value: Any) -> Any:
         return max(float(value or 0), 0.0)
     if field == "inheritance_age":
         return max(int(value or 0), 0)
-    if field == "notgroschen":
+    if field in ("notgroschen", "notgroschen_keep_inflation"):
         return bool(value)
     if field == "notgroschen_inflation_rate_pct":
         return max(float(value or 0), 0.0)

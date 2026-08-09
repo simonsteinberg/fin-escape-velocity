@@ -176,8 +176,9 @@ also carry *unrealized gains* in the UI, which is converted to an
 `initial_cost_basis = current_value − unrealized_gains`.
 
 **Cash-specific fields:** `notgroschen` (marks the account as a protected
-emergency buffer) and `notgroschen_inflation_rate` (the annual rate at which
-that buffer is kept level after retirement). See §7.13.
+emergency buffer), `notgroschen_keep_inflation` (whether that buffer keeps its
+inflation adaption once contributions stop) and `notgroschen_inflation_rate`
+(the annual rate used when it does). See §7.13.
 
 **bAV-specific fields:** `bav_strategy` (`transfer`/`income`),
 `bav_retirement_age`, `bav_transfer_etf_ratio` (share to ETF; remainder to
@@ -487,9 +488,11 @@ extra ETF return is assumed from having it.
   regular Cash asset and fails loudly without one.
 - **Pre-retirement** it behaves like any Cash asset: it takes its monthly
   contribution and adaption (§7.3).
-- **In retirement** contributions stop. With `notgroschen_inflation_rate = 0`
-  the buffer is simply left alone (nominal, so it slowly loses real value). With
-  a positive rate, `_apply_notgroschen_topup` moves enough from the other assets
+- **In retirement** contributions stop, and the user picks one of two
+  behaviours with `notgroschen_keep_inflation`. Unset (the default), the buffer
+  is simply left alone: nominal, so it slowly loses real value. Set, with a
+  positive `notgroschen_inflation_rate`, `_apply_notgroschen_topup` moves enough
+  from the other assets
   each month that the buffer ends the month at
   `balance × (1 + monthly rate)` after its own growth — i.e. the top-up is
   `balance × ((1 + monthly_rate) / (1 + monthly_gain_rate) − 1)`, floored at
@@ -685,7 +688,7 @@ total, taxes, and net cashflow.
 | FR16 | The web UI can be displayed in English (default) or German via a navbar language toggle. All user-facing text is resolved through the `finev.i18n` catalog with English→key fallback; the chosen language is persisted in the autosave cache and restored on reload. |
 | FR17 | Per-asset annual contribution adaption (default 0%, may be negative, entered in 0.1% steps in the UI): the monthly contribution steps once per forecast year and is floored at zero, so a pre-retirement contribution is never negative. |
 | FR18 | Investment assets: a planned purchase at a configurable age, either paid in one go or financed by a loan at a configurable interest rate and fixed monthly repayment. Purchases and repayments are raised from the assets like a withdrawal (tax and borrowing included); outstanding loans reduce total wealth; unrepayable loan terms are rejected. |
-| FR19 | A Cash asset can be marked as a Notgroschen: never withdrawn from, never an allocation target, contributed to normally before retirement, and optionally kept level in retirement at a user-defined annual rate funded from the other assets (skipped when they cannot cover it). |
+| FR19 | A Cash asset can be marked as a Notgroschen: never withdrawn from, never an allocation target, and contributed to normally before retirement. A second toggle chooses what happens in retirement: leave the buffer alone, or keep its inflation adaption at a user-defined annual rate funded from the other assets (skipped in months they cannot cover it). |
 
 ---
 
@@ -714,7 +717,7 @@ total, taxes, and net cashflow.
 | AC18 | The navbar offers an English/German toggle; English is the default with no cache. `i18n.translate` returns the language-specific string, falling back to English and then to the raw key for missing entries. Selecting a language persists it to the cache (`language` key) and reloads; an unchanged selection is a no-op. |
 | AC19 | A configured contribution adaption steps the monthly contribution at each anniversary of the forecast start and nowhere in between; a rate of 0% leaves contributions flat; a negative rate shrinks them without ever producing a negative contribution; rates at or below −100% are rejected by the engine and clamped by the UI. |
 | AC20 | A one-time investment reduces the assets by its amount in exactly the month of `investment_age` and in no other month, borrowing anything the assets cannot cover. A financed investment lowers total wealth by the loan when taken on, transfers each payment from assets to loan (leaving the total unchanged apart from interest), stops when the loan is repaid, and continues across the retirement boundary. Inactive investments are ignored, and investments produce no value column. |
-| AC21 | A Notgroschen keeps its balance through retirement withdrawals (the need becomes debt once the other assets are exhausted), is refused as a bAV transfer target, still accepts pre-retirement contributions, stays flat with a 0% rate, grows at exactly the configured rate when funded from the other assets, and is left untouched in months those assets cannot fund the top-up. |
+| AC21 | A Notgroschen keeps its balance through retirement withdrawals (the need becomes debt once the other assets are exhausted), is refused as a bAV transfer target, still accepts pre-retirement contributions, stays flat while its retirement adaption is switched off (even with a rate configured), grows at exactly the configured rate once it is switched on and the other assets fund it, and is left untouched in months they cannot. |
 
 Each criterion is exercised by the test suite under [`tests/finev/`](../tests/finev/)
 (notably `test_forecast.py`, `test_forecast_golden.py`, `test_validation.py`,

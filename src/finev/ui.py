@@ -587,6 +587,21 @@ def _render_asset_row(
                         ),
                     )
                 if row.get("notgroschen", False):
+                    with ui.row().classes("w-full gap-2 items-center"):
+                        ui.checkbox(
+                            t("asset.notgroschen_keep_inflation"),
+                            value=bool(
+                                row.get("notgroschen_keep_inflation", False)
+                            ),
+                            on_change=lambda e, i=index: on_field_change(
+                                i,
+                                "notgroschen_keep_inflation",
+                                e.value,
+                            ),
+                        )
+                if row.get("notgroschen", False) and row.get(
+                    "notgroschen_keep_inflation", False
+                ):
                     _commit_on_enter(
                         ui.number(
                             label=t("asset.notgroschen_inflation"),
@@ -782,6 +797,7 @@ class _WealthPage:
             "inheritance_relationship",
             "investment_kind",
             "notgroschen",
+            "notgroschen_keep_inflation",
             "vbl_input_mode",
             "vbl_still_working",
         }:
