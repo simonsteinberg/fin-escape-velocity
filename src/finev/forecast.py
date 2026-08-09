@@ -1066,6 +1066,12 @@ def _apply_notgroschen_topup(
         if needed > available:
             continue
         _draw_from_assets(params, state, needed, age_months)
+        # The draw books its amount as money leaving the portfolio, but a
+        # top-up only moves it between the user's own assets, so that entry is
+        # reversed: net cashflow must show the month's actual spending, not the
+        # internal transfer. Any tax the draw incurred stays in ``taxes``, the
+        # same split the bAV transfer uses.
+        state.net_cashflow += needed
         state.balances[index] += needed
         state.cost_bases[index] += needed
 

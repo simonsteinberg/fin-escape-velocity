@@ -10,6 +10,14 @@ version is retired.
 
 ## [Unreleased]
 
+### Fixed
+
+- The Notgroschen retirement top-up no longer counts as spending. It is drawn
+  from the other assets on top of the monthly withdrawal (unchanged, and it can
+  still trigger ETF capital-gains tax), but the money stays in the portfolio,
+  so "Net Cashflow p.m." reported it as an outflow it never was: a 1,000 EUR
+  withdrawal with a 24.77 EUR top-up read as -1,024.77 instead of -1,000.
+
 ## [0.5.1] - 2026-08-09
 
 ### Changed

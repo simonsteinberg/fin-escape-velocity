@@ -1777,3 +1777,89 @@ def test_notgroschen_is_not_a_bav_transfer_target() -> None:
         ValueError, match="bAV transfer requires at least one Cash asset"
     ):
         forecast_wealth(profile=profile, assets=[etf, bav, buffer_])
+
+
+def test_notgroschen_topup_is_not_counted_as_spending() -> None:
+    """Book the buffer top-up as a transfer, not as money spent."""
+    profile = UserProfile(
+        current_age_years=67,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
+    etf = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        current_value=500_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    buffer_ = Asset(
+        name="Notgroschen",
+        asset_type=AssetType.CASH,
+        current_value=15_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+        notgroschen=True,
+        notgroschen_keep_inflation=True,
+        notgroschen_inflation_rate=0.02,
+    )
+
+    result = forecast_wealth(
+        profile=profile,
+        assets=[etf, buffer_],
+        withdrawal=WithdrawalPlan(monthly_withdrawal=1_000.0),
+    )
+
+    top_up = result.loc[1, "Notgroschen"] - 15_000.0
+    assert top_up > 0
+    # The ETF funds the spending *and* the top-up ...
+    assert result.loc[1, "ETF"] == pytest.approx(500_000.0 - 1_000.0 - top_up)
+    # ... but only the spending left the portfolio, so that is all the net
+    # cashflow reports, and total wealth falls by that alone.
+    assert result.loc[1, "net_cashflow"] == pytest.approx(-1_000.0)
+    assert result.loc[1, "total"] == pytest.approx(514_000.0)
+
+
+def test_notgroschen_topup_reports_only_its_tax_as_a_cost() -> None:
+    """Charge ETF capital-gains tax on the top-up draw, and nothing else."""
+    profile = UserProfile(
+        current_age_years=67,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
+    etf = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        # Fully unrealized gains, so every euro drawn is taxable.
+        current_value=500_000.0,
+        initial_cost_basis=0.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    buffer_ = Asset(
+        name="Notgroschen",
+        asset_type=AssetType.CASH,
+        current_value=15_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+        notgroschen=True,
+        notgroschen_keep_inflation=True,
+        notgroschen_inflation_rate=0.02,
+    )
+
+    result = forecast_wealth(
+        profile=profile,
+        assets=[etf, buffer_],
+        withdrawal=WithdrawalPlan(monthly_withdrawal=1_000.0),
+    )
+
+    # Month 1's gains still fit inside the annual allowance; by month 3 the
+    # draw is taxed. Spending stays the only cashflow either way, while the tax
+    # shows up in the tax column and in a total that falls by more than the
+    # spending.
+    assert result.loc[1, "taxes"] == pytest.approx(0.0)
+    assert result.loc[3, "taxes"] > 0
+    assert result.loc[3, "net_cashflow"] == pytest.approx(-1_000.0)
+    assert result.loc[3, "total"] < 500_000.0 + 15_000.0 - 3 * 1_000.0

@@ -499,6 +499,12 @@ extra ETF return is assumed from having it.
   zero, so a buffer already out-earning the requested rate needs nothing. The
   top-up is **discretionary**: it is skipped in any month the remaining
   withdrawable assets cannot cover it, so buffer upkeep never creates debt.
+- **Accounting.** The top-up is an *extra* draw on top of the month's
+  withdrawal, so keeping the buffer level really does cost capital and can
+  trigger ETF capital-gains tax. It is not spending, though: the money moves
+  between the user's own assets, so `net_cashflow` reports the withdrawal alone
+  and only the tax the draw incurred lands in `taxes` (the same split
+  §7.7's bAV transfer uses).
 
 ---
 
@@ -747,6 +753,7 @@ arrives tax-free until the user changes it.
 | AC19 | A configured contribution adaption steps the monthly contribution at each anniversary of the forecast start and nowhere in between; a rate of 0% leaves contributions flat; a negative rate shrinks them without ever producing a negative contribution; rates at or below −100% are rejected by the engine and clamped by the UI. |
 | AC20 | A one-time investment reduces the assets by its amount in exactly the month of `investment_age` and in no other month, borrowing anything the assets cannot cover. A financed investment lowers total wealth by the loan when taken on, transfers each payment from assets to loan (leaving the total unchanged apart from interest), stops when the loan is repaid, and continues across the retirement boundary. Inactive investments are ignored, and investments produce no value column. |
 | AC21 | A Notgroschen keeps its balance through retirement withdrawals (the need becomes debt once the other assets are exhausted), is refused as a bAV transfer target, still accepts pre-retirement contributions, stays flat while its retirement adaption is switched off (even with a rate configured), grows at exactly the configured rate once it is switched on and the other assets fund it, and is left untouched in months they cannot. |
+| AC22 | The Notgroschen top-up is drawn from the other assets on top of the withdrawal, but is reported as a transfer: `net_cashflow` shows only the month's withdrawal, while any capital-gains tax the draw triggered is counted in `taxes`. |
 
 Each criterion is exercised by the test suite under [`tests/finev/`](../tests/finev/)
 (notably `test_forecast.py`, `test_forecast_golden.py`, `test_validation.py`,
