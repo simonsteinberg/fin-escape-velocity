@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -15,6 +15,7 @@ from finev.models import (
     AssetType,
     BAVStrategy,
     InheritanceRelationship,
+    InvestmentKind,
     StatePension,
     UserProfile,
     WithdrawalPlan,
@@ -26,8 +27,11 @@ if TYPE_CHECKING:
 # Asset types that carry no running balance: they never appear as a balance
 # column, take no contributions, and are skipped by growth/withdrawal. Their
 # effect on the forecast is event- or income-based instead (an inheritance
-# credit, or a VBLklassik pension that offsets withdrawals).
-_NON_BALANCE_TYPES = frozenset({AssetType.INHERITANCE, AssetType.VBL_KLASSIK})
+# credit, a VBLklassik pension that offsets withdrawals, or an investment that
+# draws money out of the portfolio).
+_NON_BALANCE_TYPES = frozenset(
+    {AssetType.INHERITANCE, AssetType.VBL_KLASSIK, AssetType.INVESTMENT}
+)
 
 
 @dataclass(frozen=True)
@@ -138,6 +142,56 @@ def _validate_profile(profile: UserProfile) -> ForecastMetadata:
     )
 
 
+def _validate_investment(asset: Asset) -> None:
+    """Validate one planned purchase (``AssetType.INVESTMENT``).
+
+    Args:
+        asset: The investment asset to check.
+
+    Raises:
+        ValueError: If the kind is unknown, the amount or age is negative, or a
+            financed purchase carries loan terms that never repay it.
+    """
+    try:
+        kind = InvestmentKind(asset.investment_kind)
+    except ValueError as exc:
+        valid = ", ".join(item.value for item in InvestmentKind)
+        raise ValueError(
+            f"Asset '{asset.name}' investment kind must be one of: {valid}"
+        ) from exc
+    if asset.investment_amount < 0:
+        raise ValueError(
+            f"Asset '{asset.name}' investment amount must be non-negative"
+        )
+    if asset.investment_age < 0:
+        raise ValueError(
+            f"Asset '{asset.name}' investment age must be non-negative"
+        )
+    if kind != InvestmentKind.LONG_TERM or asset.investment_amount <= 0:
+        return
+    if asset.investment_interest_rate < 0:
+        raise ValueError(
+            f"Asset '{asset.name}' investment interest rate must be "
+            "non-negative"
+        )
+    if asset.investment_monthly_payment <= 0:
+        raise ValueError(
+            f"Asset '{asset.name}' investment monthly payment must be positive"
+        )
+    # A payment that does not even cover the first month's interest leaves the
+    # loan growing forever, so the plan is rejected rather than projected.
+    first_interest = asset.investment_amount * _annual_to_monthly_rate(
+        asset.investment_interest_rate
+    )
+    if asset.investment_monthly_payment <= first_interest:
+        raise ValueError(
+            f"Asset '{asset.name}' investment monthly payment "
+            f"({asset.investment_monthly_payment:.2f}) must exceed the first "
+            f"month's interest ({first_interest:.2f}); the loan would never "
+            "be repaid"
+        )
+
+
 def _validate_assets(assets: Iterable[Asset]) -> list[Asset]:
     """Validate asset inputs and normalize into a list.
 
@@ -204,6 +258,10 @@ def _validate_assets(assets: Iterable[Asset]) -> list[Asset]:
                 raise ValueError(
                     f"Asset '{asset.name}' VBL tax rate must be between 0 and 1"
                 )
+            continue
+
+        if asset.asset_type == AssetType.INVESTMENT:
+            _validate_investment(asset)
             continue
 
         if asset.current_value < 0:
@@ -384,6 +442,23 @@ def _net_vbl_pension_for_month(
 
 
 @dataclass(frozen=True)
+class _InvestmentPlan:
+    """An active planned purchase and, when financed, its loan terms.
+
+    Attributes:
+        index: Position of the asset in the run's asset list; also the key
+            under which the outstanding loan is tracked in the monthly state.
+        asset: The INVESTMENT asset itself.
+        monthly_interest_rate: Effective monthly rate derived from the asset's
+            annual loan interest rate (zero for one-time investments).
+    """
+
+    index: int
+    asset: Asset
+    monthly_interest_rate: float
+
+
+@dataclass(frozen=True)
 class _EngineParams:
     """Immutable per-run context shared by every monthly step.
 
@@ -407,6 +482,8 @@ class _EngineParams:
     inheritance_events: list[tuple[int, float, InheritanceRelationship]]
     # Active VBLklassik assets paying lifelong pension income.
     vbl_assets: list[Asset]
+    # Active planned purchases with their (pre-computed) loan interest rate.
+    investment_plans: list[_InvestmentPlan]
     etf_tax_rate: float
     etf_taxable_share: float
     etf_annual_allowance: float
@@ -431,6 +508,10 @@ class _MonthlyState:
     balances: list[float]
     cost_bases: list[float]
     remaining_etf_allowance: float
+    # Outstanding balance of each financed investment's loan, keyed by asset
+    # index; entries appear in the purchase month and are dropped to zero once
+    # the loan is repaid.
+    loan_balances: dict[int, float] = field(default_factory=dict)
     debt: float = 0.0
     taxes: float = 0.0
     net_cashflow: float = 0.0
@@ -482,6 +563,19 @@ def _build_engine_params(
         for asset in assets_list
         if asset.asset_type == AssetType.VBL_KLASSIK and asset.active
     ]
+    investment_plans = [
+        _InvestmentPlan(
+            index=index,
+            asset=asset,
+            monthly_interest_rate=_annual_to_monthly_rate(
+                asset.investment_interest_rate
+            ),
+        )
+        for index, asset in enumerate(assets_list)
+        if asset.asset_type == AssetType.INVESTMENT
+        and asset.active
+        and asset.investment_amount > 0
+    ]
     if transfer_assets:
         if (
             any(asset.bav_transfer_etf_ratio > 0 for asset in transfer_assets)
@@ -523,6 +617,7 @@ def _build_engine_params(
         pension_target_index=pension_target_index,
         inheritance_events=inheritance_events,
         vbl_assets=vbl_assets,
+        investment_plans=investment_plans,
         etf_tax_rate=config.capital_gains_tax_rate,
         etf_taxable_share=config.etf.taxable_share,
         etf_annual_allowance=config.etf.steuerfreibetrag_euro,
@@ -748,8 +843,8 @@ def _apply_withdrawal(
     """Withdraw the inflated net target proportionally across assets, after tax.
 
     The net monthly target is inflated to the current month and reduced by the
-    net state pension, grossed up for ETF tax, then allocated by balance weight
-    across the withdrawable assets.
+    net state and VBLklassik pensions; whatever remains is drawn from the
+    withdrawable assets by :func:`_draw_from_assets`.
     """
     months_since_start = age_months - params.metadata.start_age_months
     inflation_multiplier = _compound_growth_multiplier(
@@ -772,7 +867,70 @@ def _apply_withdrawal(
     withdrawal_target = max(withdrawal_target - net_pension, 0.0)
     if withdrawal_target <= 0:
         return
+    _draw_from_assets(params, state, withdrawal_target, age_months)
 
+
+def _apply_investments(
+    params: _EngineParams,
+    state: _MonthlyState,
+    age_months: int,
+) -> None:
+    """Pay for planned purchases due this month and service their loans.
+
+    A one-time investment is drawn from the assets in full in its purchase
+    month. A long-term (financed) investment takes on a loan of the purchase
+    price in that month; from the next month on, the outstanding balance
+    accrues interest and the fixed monthly payment is drawn from the assets
+    until the loan is repaid. Both run in pre- and post-retirement months alike
+    (see :func:`_draw_from_assets` for how the money is raised).
+    """
+    for plan in params.investment_plans:
+        start_months = plan.asset.investment_age * 12
+        if age_months < start_months:
+            continue
+        if plan.asset.investment_kind == InvestmentKind.ONE_TIME:
+            if age_months == start_months:
+                _draw_from_assets(
+                    params, state, plan.asset.investment_amount, age_months
+                )
+            continue
+        if age_months == start_months:
+            # The loan is drawn to pay the seller: no money passes through the
+            # portfolio, only the liability appears.
+            state.loan_balances[plan.index] = float(
+                plan.asset.investment_amount
+            )
+            continue
+        outstanding = state.loan_balances.get(plan.index, 0.0)
+        if outstanding <= 0:
+            continue
+        outstanding *= 1 + plan.monthly_interest_rate
+        payment = min(plan.asset.investment_monthly_payment, outstanding)
+        state.loan_balances[plan.index] = outstanding - payment
+        _draw_from_assets(params, state, payment, age_months)
+
+
+def _draw_from_assets(
+    params: _EngineParams,
+    state: _MonthlyState,
+    net_target: float,
+    age_months: int,
+) -> None:
+    """Fund a net cash need from the withdrawable assets, after tax.
+
+    The single place where money leaves the portfolio: it grosses the net target
+    up for ETF capital-gains tax, allocates it by balance weight across the
+    withdrawable assets, reduces their cost bases proportionally, and borrows any
+    remainder the assets could not cover. Used both for the post-retirement
+    withdrawal (§7.4) and for investment purchases and loan payments (§7.12),
+    which can also fall in pre-retirement months.
+
+    Args:
+        params: Immutable per-run context.
+        state: Mutable monthly state (balances, cost bases, debt, tax counters).
+        net_target: The net amount that must actually be paid out, > 0.
+        age_months: Age in months for the current forecast month.
+    """
     withdrawable_indices = _withdrawable_indices(params, age_months)
     total_balance = (
         float(sum(state.balances[i] for i in withdrawable_indices))
@@ -786,14 +944,14 @@ def _apply_withdrawal(
             params,
             state,
             withdrawable_indices,
-            withdrawal_target,
+            net_target,
             total_balance,
         )
-        actual_withdrawn = min(gross_target, total_balance)
+        drawn = min(gross_target, total_balance)
         new_balances: list[float] = []
         new_cost_bases: list[float] = []
         etf_taxable_gains = 0.0
-        # Allocate withdrawals proportionally across withdrawable assets only.
+        # Allocate the draw proportionally across withdrawable assets only.
         for i, (asset, balance, cost_basis) in enumerate(
             zip(
                 params.assets_list,
@@ -808,18 +966,16 @@ def _apply_withdrawal(
                 new_cost_bases.append(max(cost_basis, 0.0))
                 continue
 
-            asset_withdrawal = actual_withdrawn * (balance / total_balance)
-            withdrawal_ratio = (
-                asset_withdrawal / balance if balance > 0 else 0.0
-            )
-            new_balance = max(balance - asset_withdrawal, 0.0)
-            cost_basis_reduction = cost_basis * withdrawal_ratio
+            asset_draw = drawn * (balance / total_balance)
+            draw_ratio = asset_draw / balance if balance > 0 else 0.0
+            new_balance = max(balance - asset_draw, 0.0)
+            cost_basis_reduction = cost_basis * draw_ratio
             new_cost_basis = max(cost_basis - cost_basis_reduction, 0.0)
 
             if asset.asset_type == AssetType.ETF:
                 gains = balance - cost_basis
                 if gains > 0:
-                    gains_portion = asset_withdrawal * (gains / balance)
+                    gains_portion = asset_draw * (gains / balance)
                     etf_taxable_gains += (
                         gains_portion * params.etf_taxable_share
                     )
@@ -831,16 +987,16 @@ def _apply_withdrawal(
         state.cost_bases = new_cost_bases
         allowance_used = min(state.remaining_etf_allowance, etf_taxable_gains)
         taxable_after_allowance = etf_taxable_gains - allowance_used
-        withdrawal_taxes = taxable_after_allowance * params.etf_tax_rate
+        draw_taxes = taxable_after_allowance * params.etf_tax_rate
         state.remaining_etf_allowance -= allowance_used
-        state.taxes += withdrawal_taxes
-        net_from_assets = actual_withdrawn - withdrawal_taxes
-        state.net_cashflow += -actual_withdrawn + withdrawal_taxes
+        state.taxes += draw_taxes
+        net_from_assets = drawn - draw_taxes
+        state.net_cashflow += -drawn + draw_taxes
 
     # Fund any net target the assets could not cover by borrowing. The shortfall
     # becomes debt (total wealth is allowed to go negative); a tiny epsilon
     # avoids booking floating-point noise as debt when assets fully cover it.
-    shortfall = withdrawal_target - net_from_assets
+    shortfall = net_target - net_from_assets
     if shortfall > 1e-9:
         state.debt += shortfall
         state.net_cashflow -= shortfall
@@ -955,9 +1111,11 @@ def _apply_insolvency_floor(
 ) -> None:
     """Cap debt at the Privatinsolvenz floor so total wealth cannot pass it.
 
-    Total wealth is ``asset_total - debt``; capping the debt at
-    ``asset_total + insolvency_floor`` floors that total at
-    ``-insolvency_floor``. Because the cap is applied to the carried-over state
+    Capping the debt at ``asset_total + insolvency_floor`` floors
+    ``asset_total - debt`` at ``-insolvency_floor``. Outstanding investment
+    loans are deliberately left out: a serviced loan is secured borrowing
+    against something the user bought, not the unsecured overdraft this floor
+    models, so a reported total may sit below the floor while such a loan runs. Because the cap is applied to the carried-over state
     (not just the output), the capped debt stops compounding, so a later
     inheritance that repays it can lift the forecast back out of insolvency.
     """
@@ -992,8 +1150,9 @@ def _build_row(
     for asset, balance in zip(params.assets_list, state.balances, strict=True):
         if asset.asset_type not in _NON_BALANCE_TYPES:
             row[asset.name] = float(balance)
-    # Total wealth nets outstanding debt against the asset balances, so it may
-    # be negative once withdrawals have exhausted the assets.
+    # Total wealth nets outstanding debt and any unpaid investment loans
+    # against the asset balances, so it may be negative once withdrawals have
+    # exhausted the assets or while a financed purchase is still being repaid.
     row["total"] = float(
         sum(
             balance
@@ -1003,6 +1162,7 @@ def _build_row(
             if asset.asset_type not in _NON_BALANCE_TYPES
         )
         - state.debt
+        - sum(state.loan_balances.values())
     )
     return row
 
@@ -1058,6 +1218,7 @@ def forecast_wealth(
                 _apply_pre_retirement_pension(params, state, age_months)
             else:
                 _apply_withdrawal(params, state, age_months)
+            _apply_investments(params, state, age_months)
             _apply_bav_transfer(params, state, age_months)
             frozen_indices = (
                 _apply_bav_income(params, state, age_months)

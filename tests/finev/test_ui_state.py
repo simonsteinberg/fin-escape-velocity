@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from finev.models import AssetType, BAVStrategy, InheritanceRelationship
+from finev.models import (
+    AssetType,
+    BAVStrategy,
+    InheritanceRelationship,
+    InvestmentKind,
+)
 from finev.ui_config import ColorScheme
 from finev.ui_state import (
     MIN_ANNUAL_RATE_PCT,
@@ -177,4 +182,39 @@ def test_coerce_contribution_growth_accepts_negative_above_floor() -> None:
     assert (
         coerce_asset_field({}, "monthly_contribution_growth_pct", -250)
         == MIN_ANNUAL_RATE_PCT
+    )
+
+
+def test_new_asset_row_includes_investment_defaults() -> None:
+    row = new_asset_row()
+    assert row["investment_kind"] == InvestmentKind.ONE_TIME.value
+    assert row["investment_amount"] == 0.0
+    assert row["investment_age"] == 67
+
+
+def test_type_change_seeds_investment_defaults() -> None:
+    row = {"type": AssetType.ETF.value}
+    apply_type_change_defaults(row, AssetType.INVESTMENT)
+    assert row["investment_kind"] == InvestmentKind.ONE_TIME.value
+    assert row["investment_amount"] == 0.0
+    assert row["investment_age"] == 67
+    assert row["investment_interest_rate_pct"] > 0
+    assert row["investment_monthly_payment"] > 0
+
+
+def test_coerce_investment_fields() -> None:
+    row: dict[str, object] = {}
+    assert (
+        coerce_asset_field(row, "investment_kind", "bogus")
+        == InvestmentKind.ONE_TIME.value
+    )
+    assert (
+        coerce_asset_field(row, "investment_kind", "long_term")
+        == InvestmentKind.LONG_TERM.value
+    )
+    assert coerce_asset_field(row, "investment_amount", -5) == 0.0
+    assert coerce_asset_field(row, "investment_age", "55") == 55
+    assert coerce_asset_field(row, "investment_interest_rate_pct", -1) == 0.0
+    assert (
+        coerce_asset_field(row, "investment_monthly_payment", "800") == 800.0
     )

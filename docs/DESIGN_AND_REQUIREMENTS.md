@@ -116,9 +116,15 @@ functions over a shared mutable `_MonthlyState`, parameterised by an immutable
 
 1. `_apply_inheritance` — credit net inheritance proceeds due this month.
 2. `_apply_contributions` *(pre-retirement)* **or** `_apply_withdrawal` *(post-retirement)*.
-3. `_apply_bav_transfer` — move an in-window slice of each TRANSFER bAV to ETF/Cash.
-4. `_apply_bav_income` — pay out monthly gains from INCOME bAV (freezes its principal).
-5. `_apply_growth` — compound each balance by its monthly rate (skipping frozen assets).
+3. `_apply_investments` — pay for a purchase due this month and service any financed-investment loan.
+4. `_apply_bav_transfer` — move an in-window slice of each TRANSFER bAV to ETF/Cash.
+5. `_apply_bav_income` — pay out monthly gains from INCOME bAV (freezes its principal).
+6. `_apply_growth` — compound each balance by its monthly rate (skipping frozen assets).
+
+`_apply_withdrawal` and `_apply_investments` both raise money through the same
+helper, `_draw_from_assets` (gross-up → proportional allocation → tax →
+borrow the shortfall), so a purchase costs exactly what a withdrawal of the same
+size costs.
 
 This shape realises the design intent that new per-month adjustments and asset
 types slot in as additional steps/handlers rather than edits to a monolithic loop.
@@ -162,7 +168,7 @@ the gross pension by the engine (see §7.6).
 ### 5.3 Assets (`Asset`)
 
 Each asset row carries a name, a type (`ETF`, `bAV`, `Cash`, `Inheritance`,
-`VBLklassik`), a current value, an optional annual gain-rate override, a monthly
+`VBLklassik`, `Investment`), a current value, an optional annual gain-rate override, a monthly
 contribution, an annual **contribution adaption**
 (`monthly_contribution_growth_rate`, §7.3), and an `active` toggle. ETF/Cash/bAV
 also carry *unrealized gains* in the UI, which is converted to an
@@ -186,6 +192,15 @@ that offsets withdrawals (§7.9). In the UI the user enters either Versorgungspu
 (× `VBL_RENTE_PRO_PUNKT_EURO`) or a direct euro amount, and a "still in public
 service" checkbox toggles the per-working-year accrual.
 
+**Investment-specific fields:** `investment_kind` (`one_time`/`long_term`),
+`investment_amount` (the purchase price, i.e. the loan principal when
+financed), `investment_age` (the age at which the purchase happens), and — for
+`long_term` only — `investment_interest_rate` (annual, on the outstanding loan)
+and `investment_monthly_payment`. An investment holds **no running balance**: it
+is a planned purchase, not a holding, so it has no balance column and takes no
+contributions. What it costs is modelled (§7.12); what it is worth afterwards is
+not.
+
 #### Default annual gain rates (`models.DEFAULT_ANNUAL_GAIN_RATES`)
 
 | Asset type | Default annual gain rate |
@@ -195,6 +210,7 @@ service" checkbox toggles the per-working-year accrual.
 | Cash | 0.5% |
 | Inheritance | 0.0% (no running balance) |
 | VBLklassik | 0.0% (no running balance; income annuity) |
+| Investment | 0.0% (no running balance; a purchase, not a holding) |
 
 Defaults are configurable per-asset in the UI; the type default is used when no
 override is given.
@@ -417,6 +433,35 @@ back into the green. A forecast may therefore enter Privatinsolvenz, escape via
 an inheritance, and re-enter it later; the total stays at the floor for any span
 where no rescue follows, including permanently once none can.
 
+### 7.12 Investments (planned purchases)
+
+An `Investment` asset is something the user plans to buy, not something they
+hold. Active investments with a positive amount are handled by
+`_apply_investments` in **both** the pre- and post-retirement phase:
+
+- **One-time** (`one_time`): in the month the user reaches `investment_age`, the
+  full `investment_amount` is raised from the assets via `_draw_from_assets` —
+  the same gross-up, proportional allocation and ETF capital-gains tax as a
+  withdrawal — and any part the assets cannot cover is borrowed as debt (§7.11).
+- **Financed** (`long_term`): in that month the purchase is paid by a **loan** of
+  `investment_amount`; no money moves through the portfolio, only the liability
+  appears. From the next month on the outstanding balance accrues interest at
+  the monthly equivalent of `investment_interest_rate`, and
+  `investment_monthly_payment` (or the remaining balance, whichever is smaller)
+  is raised from the assets and applied to it. Payments stop the month the loan
+  reaches zero.
+
+Outstanding loans are subtracted from `total` alongside debt, so taking on a
+loan lowers total wealth at once and each payment is wealth-neutral except for
+the interest — the true cost of financing. Loan terms that cannot repay the loan
+(a payment at or below the first month's interest) are **rejected** by
+`_validate_assets` rather than projected forever; an inactive investment is
+zeroed by the UI conversion so a hidden what-if row can never block a forecast.
+
+**What is not modelled:** the value of the thing bought. Neither kind creates an
+asset, appreciates, or depreciates — the forecast answers "what does this
+purchase cost me?", not "what is my net worth including the house?".
+
 ---
 
 ## 8. Outputs
@@ -429,8 +474,8 @@ where no rescue follows, including permanently once none can.
 | `age_years`, `age_months` | User age at that row. |
 | `net_cashflow` | Net received (−)/contributed (+) that month, after taxes. |
 | `taxes` | Total tax deducted that month (ETF + bAV + inheritance). VBL/state pension tax is reflected via the reduced net withdrawal, not this column. |
-| *per-asset* | Balance for each balance-holding asset (column = asset name); inheritance and VBLklassik hold no balance and have no column. |
-| `total` | Sum of all balance-holding asset balances, minus any outstanding debt; may be negative but never below the Privatinsolvenz floor (§7.11). |
+| *per-asset* | Balance for each balance-holding asset (column = asset name); inheritance, VBLklassik and investments hold no balance and have no column. |
+| `total` | Sum of all balance-holding asset balances, minus any outstanding debt and any unpaid investment loan (§7.12). The debt part is floored at the Privatinsolvenz threshold (§7.11); a running investment loan can take the reported total below it. |
 
 Presentation layers derive a **yearly** view (`ui_view.yearly_display_frame`,
 every 12th month; `cli.summarize_yearly`, aggregated per age-year) for the chart,
@@ -589,7 +634,6 @@ total, taxes, and net cashflow.
 |---|---|
 | FR1 | Monthly forecast of each asset balance and the portfolio total from current age to end age, using type-default gain rates where no override is given. |
 | FR2 | Pre-retirement monthly contributions per asset, applied (contribution then growth) until the retirement month. |
-| FR17 | Per-asset annual contribution adaption (default 0%, may be negative, entered in 0.1% steps in the UI): the monthly contribution steps once per forecast year and is floored at zero, so a pre-retirement contribution is never negative. |
 | FR3 | Post-retirement net withdrawal target deducted proportionally across withdrawable assets; individual balances floor at zero, while any unmet need is borrowed so total wealth may go negative. |
 | FR4 | German ETF capital-gains tax (26.25% on 70% of gains) with the €1,000 annual allowance; net cashflow reflects tax; withdrawals are grossed up to the net target. |
 | FR5 | Configurable default gain rates with per-asset overrides. |
@@ -600,10 +644,12 @@ total, taxes, and net cashflow.
 | FR10 | Per-asset activation toggle for what-if scenarios; deactivated assets excluded from calculations but preserved and persisted. |
 | FR11 | Inputs validated at the boundary (`forecast.py` validators, `config.py` on load, `ui_state` coercion); invalid inputs fail loudly. |
 | FR12 | When withdrawals exhaust the assets, the unmet need is borrowed so total wealth can go negative; the debt compounds monthly at the configured annual debt interest rate and is repaid by net inheritance proceeds. |
-| FR13 | Total wealth is floored at the configured Privatinsolvenz threshold (`-PRIVATINSOLVENZ_SCHWELLE_EURO`); the capped debt stops compounding, so a later inheritance can repay it and lift the forecast back out of insolvency, and the total stays at the floor for any span without such a rescue. |
+| FR13 | Total wealth (excluding any outstanding investment loan, which is secured borrowing rather than an overdraft) is floored at the configured Privatinsolvenz threshold (`-PRIVATINSOLVENZ_SCHWELLE_EURO`); the capped debt stops compounding, so a later inheritance can repay it and lift the forecast back out of insolvency, and the total stays at the floor for any span without such a rescue. |
 | FR14 | The user can save the current settings as a named profile, list saved profiles, load one back into the UI, and delete one. Profiles are persisted through the swappable `ProfileStore` abstraction (local disk by default); names are normalized to a safe slug. |
 | FR15 | VBLklassik occupational pension as a lifelong, income-taxed annuity from a configurable start age that offsets withdrawals; entered as Versorgungspunkte (× `VBL_RENTE_PRO_PUNKT_EURO`) or a direct euro amount, with an optional "still in public service" accrual of one point per working year. The VBL pension is not inflation-compensated and holds no balance column. |
 | FR16 | The web UI can be displayed in English (default) or German via a navbar language toggle. All user-facing text is resolved through the `finev.i18n` catalog with English→key fallback; the chosen language is persisted in the autosave cache and restored on reload. |
+| FR17 | Per-asset annual contribution adaption (default 0%, may be negative, entered in 0.1% steps in the UI): the monthly contribution steps once per forecast year and is floored at zero, so a pre-retirement contribution is never negative. |
+| FR18 | Investment assets: a planned purchase at a configurable age, either paid in one go or financed by a loan at a configurable interest rate and fixed monthly repayment. Purchases and repayments are raised from the assets like a withdrawal (tax and borrowing included); outstanding loans reduce total wealth; unrepayable loan terms are rejected. |
 
 ---
 
@@ -613,9 +659,8 @@ total, taxes, and net cashflow.
 |---|---|
 | AC1 | Forecast covers every month from current to end age inclusive, with per-asset and total values per row. |
 | AC2 | Contributions applied in order (contribution then growth) for all pre-retirement months; stop at retirement. |
-| AC19 | A configured contribution adaption steps the monthly contribution at each anniversary of the forecast start and nowhere in between; a rate of 0% leaves contributions flat; a negative rate shrinks them without ever producing a negative contribution; rates at or below −100% are rejected by the engine and clamped by the UI. |
 | AC3 | Withdrawals begin at the retirement month; individual asset balances floor at zero, and any unmet need accrues as debt that drives total wealth negative and compounds at the debt interest rate, but never below the Privatinsolvenz floor. |
-| AC12 | Total wealth never drops below `-PRIVATINSOLVENZ_SCHWELLE_EURO`; a forecast can enter the floor, escape via a later inheritance that repays the capped debt, and re-enter it, staying pinned at the floor whenever no rescue follows. |
+| AC12 | Total wealth, excluding any outstanding investment loan, never drops below `-PRIVATINSOLVENZ_SCHWELLE_EURO`; a forecast can enter the floor, escape via a later inheritance that repays the capped debt, and re-enter it, staying pinned at the floor whenever no rescue follows. |
 | AC4 | ETF withdrawal tax matches §7.5 (allowance before tax); net cashflow reflects the deduction. |
 | AC5 | Gross withdrawal is computed so net cashflow equals the user's net target (subject to available balance). |
 | AC6 | Cost basis updates correctly on contribution and proportionally on withdrawal. |
@@ -631,6 +676,8 @@ total, taxes, and net cashflow.
 | AC16 | Saving a named profile persists the current snapshot and lists it; loading it restores the inputs and re-runs; deleting it removes it. Profile names are slugified (rejecting empty names and neutralizing path traversal), and the local backend round-trips the stored state. |
 | AC17 | A VBLklassik asset reduces the post-retirement withdrawal target by its net (income-taxed) monthly pension from `vbl_start_age` onward, stays nominal under inflation, accrues one point per working year when "still in public service" is set, and produces no balance column; points convert to euros at `VBL_RENTE_PRO_PUNKT_EURO`. |
 | AC18 | The navbar offers an English/German toggle; English is the default with no cache. `i18n.translate` returns the language-specific string, falling back to English and then to the raw key for missing entries. Selecting a language persists it to the cache (`language` key) and reloads; an unchanged selection is a no-op. |
+| AC19 | A configured contribution adaption steps the monthly contribution at each anniversary of the forecast start and nowhere in between; a rate of 0% leaves contributions flat; a negative rate shrinks them without ever producing a negative contribution; rates at or below −100% are rejected by the engine and clamped by the UI. |
+| AC20 | A one-time investment reduces the assets by its amount in exactly the month of `investment_age` and in no other month, borrowing anything the assets cannot cover. A financed investment lowers total wealth by the loan when taken on, transfers each payment from assets to loan (leaving the total unchanged apart from interest), stops when the loan is repaid, and continues across the retirement boundary. Inactive investments are ignored, and investments produce no value column. |
 
 Each criterion is exercised by the test suite under [`tests/finev/`](../tests/finev/)
 (notably `test_forecast.py`, `test_forecast_golden.py`, `test_validation.py`,

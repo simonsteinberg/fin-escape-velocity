@@ -10,6 +10,7 @@ from finev.models import (
     Asset,
     AssetType,
     BAVStrategy,
+    InvestmentKind,
     StatePension,
     UserProfile,
     WithdrawalPlan,
@@ -360,3 +361,73 @@ def test_validate_assets_rejects_contribution_growth_at_minus_100_pct() -> (
         ValueError, match="contribution growth rate must be greater than -100%"
     ):
         _validate_assets([asset])
+
+
+def _investment_asset(**overrides: object) -> Asset:
+    data: dict[str, object] = {
+        "name": "House",
+        "asset_type": AssetType.INVESTMENT,
+        "current_value": 0.0,
+        "investment_kind": InvestmentKind.LONG_TERM,
+        "investment_amount": 100_000.0,
+        "investment_age": 55,
+        "investment_interest_rate": 0.03,
+        "investment_monthly_payment": 1_000.0,
+    }
+    data.update(overrides)
+    return Asset(**data)  # type: ignore[arg-type]
+
+
+def test_validate_assets_accepts_serviceable_loan() -> None:
+    assert _validate_assets([_investment_asset()]) == [_investment_asset()]
+
+
+def test_validate_assets_rejects_negative_investment_amount() -> None:
+    asset = _investment_asset(investment_amount=-1.0)
+
+    with pytest.raises(
+        ValueError, match="investment amount must be non-negative"
+    ):
+        _validate_assets([asset])
+
+
+def test_validate_assets_rejects_negative_investment_age() -> None:
+    asset = _investment_asset(investment_age=-1)
+
+    with pytest.raises(
+        ValueError, match="investment age must be non-negative"
+    ):
+        _validate_assets([asset])
+
+
+def test_validate_assets_rejects_loan_without_payment() -> None:
+    asset = _investment_asset(investment_monthly_payment=0.0)
+
+    with pytest.raises(
+        ValueError, match="investment monthly payment must be positive"
+    ):
+        _validate_assets([asset])
+
+
+def test_validate_assets_rejects_payment_below_first_interest() -> None:
+    # 500k at 3% costs ~1 233 in interest in month one, so 1 000 a month never
+    # repays the loan.
+    asset = _investment_asset(
+        investment_amount=500_000.0,
+        investment_interest_rate=0.03,
+        investment_monthly_payment=1_000.0,
+    )
+
+    with pytest.raises(
+        ValueError, match="must exceed the first month's interest"
+    ):
+        _validate_assets([asset])
+
+
+def test_validate_assets_ignores_loan_terms_for_one_time_purchase() -> None:
+    asset = _investment_asset(
+        investment_kind=InvestmentKind.ONE_TIME,
+        investment_monthly_payment=0.0,
+    )
+
+    assert _validate_assets([asset]) == [asset]

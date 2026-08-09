@@ -27,6 +27,7 @@ from finev.models import (
     AssetType,
     BAVStrategy,
     InheritanceRelationship,
+    InvestmentKind,
     StatePension,
     UserProfile,
     WithdrawalPlan,
@@ -359,6 +360,80 @@ def _render_asset_row(
                     e.value,
                 ),
             ).classes("w-full")
+        elif asset_type == AssetType.INVESTMENT:
+            investment_kind = str(
+                row.get("investment_kind", InvestmentKind.ONE_TIME.value)
+            )
+            with ui.column().classes("w-full gap-2"):
+                ui.select(
+                    options={
+                        InvestmentKind.ONE_TIME.value: t(
+                            "asset.investment_one_time"
+                        ),
+                        InvestmentKind.LONG_TERM.value: t(
+                            "asset.investment_long_term"
+                        ),
+                    },
+                    value=investment_kind,
+                    label=t("asset.investment_kind"),
+                    on_change=lambda e, i=index: on_field_change(
+                        i,
+                        "investment_kind",
+                        e.value,
+                    ),
+                ).classes("w-full")
+                with ui.grid(columns=2).classes("w-full gap-2"):
+                    _commit_on_enter(
+                        ui.number(
+                            label=t("asset.investment_amount"),
+                            value=row.get("investment_amount") or 0,
+                            format="%.0f",
+                            min=0,
+                            step=1000,
+                        ).classes("w-full"),
+                        lambda value: on_field_change(
+                            index, "investment_amount", value
+                        ),
+                    )
+                    _commit_on_enter(
+                        ui.number(
+                            label=t("asset.investment_age"),
+                            value=row.get("investment_age") or 67,
+                            format="%.0f",
+                            min=0,
+                            step=1,
+                        ).classes("w-full"),
+                        lambda value: on_field_change(
+                            index, "investment_age", value
+                        ),
+                    )
+                    if investment_kind == InvestmentKind.LONG_TERM.value:
+                        _commit_on_enter(
+                            ui.number(
+                                label=t("asset.investment_interest"),
+                                value=row.get("investment_interest_rate_pct")
+                                or 0,
+                                format="%.1f",
+                                min=0,
+                                step=0.1,
+                            ).classes("w-full"),
+                            lambda value: on_field_change(
+                                index, "investment_interest_rate_pct", value
+                            ),
+                        )
+                        _commit_on_enter(
+                            ui.number(
+                                label=t("asset.investment_monthly_payment"),
+                                value=row.get("investment_monthly_payment")
+                                or 0,
+                                format="%.0f",
+                                min=0,
+                                step=50,
+                            ).classes("w-full"),
+                            lambda value: on_field_change(
+                                index, "investment_monthly_payment", value
+                            ),
+                        )
         elif asset_type == AssetType.VBL_KLASSIK:
             input_mode = str(row.get("vbl_input_mode", "points"))
             with ui.column().classes("w-full gap-2"):
@@ -680,6 +755,7 @@ class _WealthPage:
             "bav_strategy",
             "active",
             "inheritance_relationship",
+            "investment_kind",
             "vbl_input_mode",
             "vbl_still_working",
         }:

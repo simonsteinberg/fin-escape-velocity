@@ -8,6 +8,7 @@ from finev.models import (
     AssetType,
     BAVStrategy,
     InheritanceRelationship,
+    InvestmentKind,
     StatePension,
     UserProfile,
     WithdrawalPlan,
@@ -1334,3 +1335,200 @@ def test_contribution_adaption_stops_at_retirement() -> None:
     # adaption never turns into a post-retirement cashflow.
     assert result.loc[12, "ETF"] == pytest.approx(1_100.0)
     assert result.loc[24, "ETF"] == pytest.approx(1_100.0)
+
+
+def test_one_time_investment_draws_from_assets_once() -> None:
+    """Pay a one-time purchase from the assets in its month only."""
+    profile = UserProfile(current_age_years=50, retirement_age=60, end_age=61)
+    cash = Asset(
+        name="Cash",
+        asset_type=AssetType.CASH,
+        current_value=50_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    car = Asset(
+        name="Car",
+        asset_type=AssetType.INVESTMENT,
+        current_value=0.0,
+        investment_kind=InvestmentKind.ONE_TIME,
+        investment_amount=10_000.0,
+        investment_age=55,
+    )
+
+    result = forecast_wealth(profile=profile, assets=[cash, car])
+
+    purchase_month = (55 - 50) * 12
+    assert result.loc[purchase_month - 1, "Cash"] == pytest.approx(50_000.0)
+    assert result.loc[purchase_month, "Cash"] == pytest.approx(40_000.0)
+    assert result.loc[purchase_month, "net_cashflow"] == pytest.approx(
+        -10_000.0
+    )
+    assert result.loc[purchase_month + 1, "Cash"] == pytest.approx(40_000.0)
+    # The purchase holds no balance of its own, so it gets no column.
+    assert "Car" not in result.columns
+
+
+def test_one_time_investment_beyond_assets_becomes_debt() -> None:
+    """Borrow the part of a purchase the assets cannot cover."""
+    profile = UserProfile(
+        current_age_years=50,
+        retirement_age=60,
+        end_age=61,
+        debt_interest_rate=0.0,
+    )
+    cash = Asset(
+        name="Cash",
+        asset_type=AssetType.CASH,
+        current_value=1_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    boat = Asset(
+        name="Boat",
+        asset_type=AssetType.INVESTMENT,
+        current_value=0.0,
+        investment_amount=5_000.0,
+        investment_age=51,
+    )
+
+    result = forecast_wealth(profile=profile, assets=[cash, boat])
+
+    purchase_month = 12
+    assert result.loc[purchase_month, "Cash"] == pytest.approx(0.0)
+    assert result.loc[purchase_month, "total"] == pytest.approx(-4_000.0)
+
+
+def test_financed_investment_amortizes_and_stops() -> None:
+    """Draw the loan, service it monthly, and stop once it is repaid."""
+    profile = UserProfile(current_age_years=50, retirement_age=60, end_age=61)
+    cash = Asset(
+        name="Cash",
+        asset_type=AssetType.CASH,
+        current_value=100_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    house = Asset(
+        name="House",
+        asset_type=AssetType.INVESTMENT,
+        current_value=0.0,
+        investment_kind=InvestmentKind.LONG_TERM,
+        investment_amount=10_000.0,
+        investment_age=51,
+        investment_interest_rate=0.0,
+        investment_monthly_payment=1_000.0,
+    )
+
+    result = forecast_wealth(profile=profile, assets=[cash, house])
+
+    purchase_month = 12
+    # Taking on the loan costs wealth immediately; no cash moves that month.
+    assert result.loc[purchase_month, "Cash"] == pytest.approx(100_000.0)
+    assert result.loc[purchase_month, "total"] == pytest.approx(90_000.0)
+    # Interest-free: each payment moves 1 000 from cash into the loan, so the
+    # total is flat while the loan runs down.
+    assert result.loc[purchase_month + 1, "Cash"] == pytest.approx(99_000.0)
+    assert result.loc[purchase_month + 1, "total"] == pytest.approx(90_000.0)
+    # Ten payments repay the loan; nothing is drawn afterwards.
+    assert result.loc[purchase_month + 10, "Cash"] == pytest.approx(90_000.0)
+    assert result.loc[purchase_month + 10, "total"] == pytest.approx(90_000.0)
+    assert result.loc[purchase_month + 20, "Cash"] == pytest.approx(90_000.0)
+
+
+def test_financed_investment_interest_costs_wealth() -> None:
+    """Charge interest on the outstanding loan balance."""
+    profile = UserProfile(current_age_years=50, retirement_age=60, end_age=61)
+    cash = Asset(
+        name="Cash",
+        asset_type=AssetType.CASH,
+        current_value=100_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    house = Asset(
+        name="House",
+        asset_type=AssetType.INVESTMENT,
+        current_value=0.0,
+        investment_kind=InvestmentKind.LONG_TERM,
+        investment_amount=10_000.0,
+        investment_age=51,
+        investment_interest_rate=0.03,
+        investment_monthly_payment=1_000.0,
+    )
+
+    result = forecast_wealth(profile=profile, assets=[cash, house])
+
+    purchase_month = 12
+    monthly_rate = (1.03) ** (1 / 12) - 1
+    outstanding = 10_000.0 * (1 + monthly_rate) - 1_000.0
+    # Wealth after the first payment is cash minus the outstanding loan: the
+    # interest is the real cost of financing.
+    assert result.loc[purchase_month + 1, "total"] == pytest.approx(
+        99_000.0 - outstanding
+    )
+    assert (
+        result.loc[purchase_month + 1, "total"]
+        < result.loc[purchase_month, "total"]
+    )
+
+
+def test_investment_ignored_when_inactive() -> None:
+    """Skip a deactivated purchase entirely."""
+    profile = UserProfile(current_age_years=50, retirement_age=60, end_age=61)
+    cash = Asset(
+        name="Cash",
+        asset_type=AssetType.CASH,
+        current_value=50_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    car = Asset(
+        name="Car",
+        asset_type=AssetType.INVESTMENT,
+        current_value=0.0,
+        investment_amount=10_000.0,
+        investment_age=55,
+        active=False,
+    )
+
+    result = forecast_wealth(profile=profile, assets=[cash, car])
+
+    assert result.loc[(55 - 50) * 12, "Cash"] == pytest.approx(50_000.0)
+
+
+def test_financed_investment_payment_continues_after_retirement() -> None:
+    """Keep servicing a loan that outlives the retirement date."""
+    profile = UserProfile(current_age_years=60, retirement_age=62, end_age=63)
+    cash = Asset(
+        name="Cash",
+        asset_type=AssetType.CASH,
+        current_value=100_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    house = Asset(
+        name="House",
+        asset_type=AssetType.INVESTMENT,
+        current_value=0.0,
+        investment_kind=InvestmentKind.LONG_TERM,
+        investment_amount=12_000.0,
+        investment_age=61,
+        investment_interest_rate=0.0,
+        investment_monthly_payment=500.0,
+    )
+
+    result = forecast_wealth(
+        profile=profile,
+        assets=[cash, house],
+        withdrawal=WithdrawalPlan(monthly_withdrawal=0.0),
+    )
+
+    retirement_month = 24
+    # Twelve payments before retirement, and the rest drawn afterwards.
+    assert result.loc[retirement_month, "Cash"] == pytest.approx(
+        100_000.0 - 12 * 500.0
+    )
+    assert result.loc[retirement_month + 12, "Cash"] == pytest.approx(
+        100_000.0 - 24 * 500.0
+    )

@@ -22,12 +22,19 @@ from finev.models import (
     AssetType,
     BAVStrategy,
     InheritanceRelationship,
+    InvestmentKind,
 )
 from finev.ui_config import ColorScheme
 
 #: Lower bound (in percent) for an annual rate entered on an asset row. The
 #: engine rejects any rate at or below -100%, so the UI clamps just above it.
 MIN_ANNUAL_RATE_PCT = -99.9
+
+#: Pre-filled loan terms for a new financed investment row: a typical German
+#: mortgage rate and a round monthly payment, so the row is a starting point
+#: rather than an immediately invalid plan.
+DEFAULT_INVESTMENT_INTEREST_PCT = 3.0
+DEFAULT_INVESTMENT_MONTHLY_PAYMENT = 1_000.0
 
 
 def default_gain_pct(asset_type: AssetType) -> float:
@@ -107,6 +114,11 @@ def new_asset_row() -> dict[str, Any]:
         "vbl_still_working": False,
         "vbl_start_age": 67,
         "vbl_tax_rate_pct": "",
+        "investment_kind": InvestmentKind.ONE_TIME.value,
+        "investment_amount": 0.0,
+        "investment_age": 67,
+        "investment_interest_rate_pct": DEFAULT_INVESTMENT_INTEREST_PCT,
+        "investment_monthly_payment": DEFAULT_INVESTMENT_MONTHLY_PAYMENT,
     }
 
 
@@ -406,6 +418,50 @@ def normalize_asset_row(row: dict[str, Any]) -> dict[str, Any]:
             min(coerce_float(vbl_tax_raw, "assets.vbl_tax_rate_pct"), 100.0),
             0.0,
         )
+    investment_kind_raw = row.get(
+        "investment_kind", InvestmentKind.ONE_TIME.value
+    )
+    try:
+        investment_kind = InvestmentKind(str(investment_kind_raw)).value
+    except ValueError:
+        investment_kind = InvestmentKind.ONE_TIME.value
+    investment_amount_raw = row.get("investment_amount")
+    investment_amount = (
+        0.0
+        if investment_amount_raw in (None, "")
+        else max(
+            coerce_float(investment_amount_raw, "assets.investment_amount"),
+            0.0,
+        )
+    )
+    investment_age_raw = row.get("investment_age")
+    investment_age = (
+        67
+        if investment_age_raw in (None, "")
+        else max(coerce_int(investment_age_raw, "assets.investment_age"), 0)
+    )
+    investment_interest_raw = row.get("investment_interest_rate_pct")
+    investment_interest_rate_pct = (
+        DEFAULT_INVESTMENT_INTEREST_PCT
+        if investment_interest_raw in (None, "")
+        else max(
+            coerce_float(
+                investment_interest_raw, "assets.investment_interest_rate_pct"
+            ),
+            0.0,
+        )
+    )
+    investment_payment_raw = row.get("investment_monthly_payment")
+    investment_monthly_payment = (
+        DEFAULT_INVESTMENT_MONTHLY_PAYMENT
+        if investment_payment_raw in (None, "")
+        else max(
+            coerce_float(
+                investment_payment_raw, "assets.investment_monthly_payment"
+            ),
+            0.0,
+        )
+    )
     return {
         "name": name,
         "type": asset_type.value,
@@ -427,6 +483,11 @@ def normalize_asset_row(row: dict[str, Any]) -> dict[str, Any]:
         "vbl_still_working": vbl_still_working,
         "vbl_start_age": vbl_start_age,
         "vbl_tax_rate_pct": vbl_tax_rate_pct,
+        "investment_kind": investment_kind,
+        "investment_amount": investment_amount,
+        "investment_age": investment_age,
+        "investment_interest_rate_pct": investment_interest_rate_pct,
+        "investment_monthly_payment": investment_monthly_payment,
     }
 
 
@@ -579,6 +640,34 @@ def asset_from_row(row: dict[str, Any]) -> Asset:
             inheritance_relationship=relationship,
         )
 
+    if asset_type == AssetType.INVESTMENT:
+        try:
+            kind = InvestmentKind(
+                str(row.get("investment_kind", InvestmentKind.ONE_TIME.value))
+            )
+        except ValueError:
+            kind = InvestmentKind.ONE_TIME
+        return Asset(
+            name=name,
+            asset_type=asset_type,
+            current_value=0.0,
+            active=active,
+            investment_kind=kind,
+            # An inactive purchase is zeroed rather than validated away, so a
+            # hidden what-if row can never block the forecast.
+            investment_amount=float(row.get("investment_amount") or 0)
+            if active
+            else 0.0,
+            investment_age=int(row.get("investment_age") or 67),
+            investment_interest_rate=float(
+                row.get("investment_interest_rate_pct") or 0
+            )
+            / 100,
+            investment_monthly_payment=float(
+                row.get("investment_monthly_payment") or 0
+            ),
+        )
+
     if asset_type == AssetType.VBL_KLASSIK:
         point_value = get_config().vbl.rente_pro_punkt_euro
         input_mode = str(row.get("vbl_input_mode", "points")).strip().lower()
@@ -696,6 +785,16 @@ def apply_type_change_defaults(
         row["vbl_start_age"] = 67
     if "vbl_tax_rate_pct" not in row:
         row["vbl_tax_rate_pct"] = ""
+    if row.get("investment_kind") in (None, ""):
+        row["investment_kind"] = InvestmentKind.ONE_TIME.value
+    if row.get("investment_amount") in (None, ""):
+        row["investment_amount"] = 0.0
+    if row.get("investment_age") in (None, ""):
+        row["investment_age"] = 67
+    if row.get("investment_interest_rate_pct") in (None, ""):
+        row["investment_interest_rate_pct"] = DEFAULT_INVESTMENT_INTEREST_PCT
+    if row.get("investment_monthly_payment") in (None, ""):
+        row["investment_monthly_payment"] = DEFAULT_INVESTMENT_MONTHLY_PAYMENT
 
 
 def coerce_asset_field(row: dict[str, Any], field: str, value: Any) -> Any:
@@ -741,6 +840,19 @@ def coerce_asset_field(row: dict[str, Any], field: str, value: Any) -> Any:
     if field == "vbl_still_working":
         return bool(value)
     if field == "vbl_start_age":
+        return max(int(value or 0), 0)
+    if field == "investment_kind":
+        try:
+            return InvestmentKind(str(value)).value
+        except ValueError:
+            return InvestmentKind.ONE_TIME.value
+    if field in (
+        "investment_amount",
+        "investment_interest_rate_pct",
+        "investment_monthly_payment",
+    ):
+        return max(float(value or 0), 0.0)
+    if field == "investment_age":
         return max(int(value or 0), 0)
     if field == "vbl_tax_rate_pct":
         if value in (None, ""):

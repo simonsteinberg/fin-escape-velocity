@@ -1,7 +1,12 @@
 import pandas as pd
 import pytest
 
-from finev.models import DEFAULT_ANNUAL_GAIN_RATES, AssetType, BAVStrategy
+from finev.models import (
+    DEFAULT_ANNUAL_GAIN_RATES,
+    AssetType,
+    BAVStrategy,
+    InvestmentKind,
+)
 from finev.ui_state import (
     asset_from_row as _asset_from_row,
 )
@@ -19,6 +24,9 @@ from finev.ui_state import (
 )
 from finev.ui_state import (
     save_cached_state as _save_cached_state,
+)
+from finev.ui_view import (
+    asset_value_columns as _asset_value_columns,
 )
 from finev.ui_view import (
     build_chart_options as _build_chart_options,
@@ -300,3 +308,62 @@ def test_normalize_asset_row_defaults_contribution_growth_to_zero() -> None:
     )
 
     assert normalized["monthly_contribution_growth_pct"] == pytest.approx(0.0)
+
+
+def test_asset_from_row_maps_investment_fields() -> None:
+    asset = _asset_from_row(
+        {
+            "name": "House",
+            "type": AssetType.INVESTMENT.value,
+            "investment_kind": "long_term",
+            "investment_amount": 400_000.0,
+            "investment_age": 45,
+            "investment_interest_rate_pct": 3.5,
+            "investment_monthly_payment": 1_800.0,
+        }
+    )
+
+    assert asset.investment_kind is InvestmentKind.LONG_TERM
+    assert asset.investment_amount == pytest.approx(400_000.0)
+    assert asset.investment_age == 45
+    assert asset.investment_interest_rate == pytest.approx(0.035)
+    assert asset.investment_monthly_payment == pytest.approx(1_800.0)
+    # A purchase holds no balance of its own.
+    assert asset.current_value == pytest.approx(0.0)
+
+
+def test_asset_from_row_zeroes_inactive_investment() -> None:
+    asset = _asset_from_row(
+        {
+            "name": "House",
+            "type": AssetType.INVESTMENT.value,
+            "investment_kind": "long_term",
+            "investment_amount": 400_000.0,
+            "investment_monthly_payment": 1.0,
+            "active": False,
+        }
+    )
+
+    # Hidden rows must never block the forecast with an unserviceable loan.
+    assert asset.investment_amount == pytest.approx(0.0)
+
+
+def test_investment_has_no_value_column() -> None:
+    assets = [
+        _asset_from_row(
+            {
+                "name": "Cash",
+                "type": AssetType.CASH.value,
+                "current_value": 1_000.0,
+            }
+        ),
+        _asset_from_row(
+            {
+                "name": "Car",
+                "type": AssetType.INVESTMENT.value,
+                "investment_amount": 10_000.0,
+            }
+        ),
+    ]
+
+    assert _asset_value_columns(assets) == ["Cash", "total"]

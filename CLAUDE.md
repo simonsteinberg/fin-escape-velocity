@@ -31,7 +31,7 @@ they stay unit-testable without rendering a page.
 
 | Module | Role |
 |--------|------|
-| `models.py` | Domain types: `UserProfile`, `Asset`, `StatePension`, `WithdrawalPlan`; enums for `AssetType` (ETF/bAV/Cash/Inheritance), `BAVStrategy`, `AllocationStrategy`, `InheritanceRelationship` |
+| `models.py` | Domain types: `UserProfile`, `Asset`, `StatePension`, `WithdrawalPlan`; enums for `AssetType` (ETF/bAV/Cash/Inheritance/VBLklassik/Investment), `BAVStrategy`, `AllocationStrategy`, `InheritanceRelationship`, `InvestmentKind` |
 | `config.py` | Loads and validates `config.json` — static German tax parameters (Abgeltungssteuer, Soli, Erbschaftsteuer brackets by heir class, DRV constants) |
 | `forecast.py` | Core calculation engine — deterministic monthly projection using the above models; returns a pandas DataFrame |
 | `pension.py` | Pure DRV state-pension estimate helpers (display-only figures); no I/O, no UI |

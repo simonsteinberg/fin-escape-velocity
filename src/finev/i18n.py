@@ -84,6 +84,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "asset.vbl_still_working": "Still in public service (1 point/year)",
         "asset.vbl_start_age": "Pension start age",
         "asset.vbl_tax_rate": "Tax rate (%, optional)",
+        "asset.investment_kind": "Investment kind",
+        "asset.investment_one_time": "One-time purchase",
+        "asset.investment_long_term": "Financed purchase (loan)",
+        "asset.investment_amount": "Purchase price",
+        "asset.investment_age": "Age at purchase",
+        "asset.investment_interest": "Loan interest (% p.a.)",
+        "asset.investment_monthly_payment": "Monthly repayment",
         # Inheritance relationship options
         "inheritance.rel.ehegatte": "Spouse / partner (I, €500k)",
         "inheritance.rel.kind": "Child / stepchild (I, €400k)",
@@ -171,8 +178,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "panel.assets.help": (
             "Your wealth building blocks. Add ETF, bAV (occupational pension), "
-            "Cash, Inheritance, or VBLklassik entries; each type shows only the "
-            "fields relevant to it. Use the eye icon to include or exclude an "
+            "Cash, Inheritance, VBLklassik or Investment entries; each type "
+            "shows only the fields relevant to it. An investment is a planned "
+            "purchase at a given age, paid in one go or financed by a loan you "
+            "repay monthly; it is paid out of your assets, and what you buy is "
+            "not tracked as wealth. Use the eye icon to include or exclude an "
             "asset for what-if scenarios. The annual contribution change "
             "adapts the monthly contribution once per forecast year (e.g. to "
             "keep pace with inflation); it may be negative, but a contribution "
@@ -231,6 +241,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "asset.vbl_start_age": "Rentenbeginn-Alter",
         "asset.vbl_tax_rate": "Steuersatz (%, optional)",
+        "asset.investment_kind": "Art der Anschaffung",
+        "asset.investment_one_time": "Einmalige Anschaffung",
+        "asset.investment_long_term": "Finanzierte Anschaffung (Kredit)",
+        "asset.investment_amount": "Kaufpreis",
+        "asset.investment_age": "Alter beim Kauf",
+        "asset.investment_interest": "Kreditzins (% p. a.)",
+        "asset.investment_monthly_payment": "Monatliche Rate",
         # Inheritance relationship options
         "inheritance.rel.ehegatte": ("Ehegatte / Lebenspartner (I, 500 K€)"),
         "inheritance.rel.kind": "Kind / Stiefkind (I, 400 K€)",
@@ -328,8 +345,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "ergebende erreichte Monatsrente."
         ),
         "panel.assets.help": (
-            "Deine Vermögensbausteine. Füge ETF, bAV, Cash, Erbschaft oder "
-            "VBLklassik hinzu; jeder Typ zeigt nur die relevanten Felder. Mit "
+            "Deine Vermögensbausteine. Füge ETF, bAV, Cash, Erbschaft, "
+            "VBLklassik oder Anschaffungen hinzu; jeder Typ zeigt nur die "
+            "relevanten Felder. Eine Anschaffung ist ein geplanter Kauf in "
+            "einem bestimmten Alter, auf einmal bezahlt oder über einen "
+            "Kredit finanziert, den du monatlich tilgst; sie wird aus deinem "
+            "Vermögen bezahlt, das Gekaufte zählt nicht als Vermögen. Mit "
             "dem Augen-Symbol kannst du einen Vermögenswert für Was-wäre-wenn-"
             "Szenarien ein- oder ausblenden. Die jährliche Beitragsanpassung "
             "verändert den monatlichen Beitrag einmal pro Prognosejahr (z. B. "

@@ -14,6 +14,7 @@ class AssetType(StrEnum):
     CASH = "Cash"
     INHERITANCE = "Inheritance"
     VBL_KLASSIK = "VBLklassik"
+    INVESTMENT = "Investment"
 
 
 class BAVStrategy(StrEnum):
@@ -21,6 +22,20 @@ class BAVStrategy(StrEnum):
 
     TRANSFER = "transfer"
     INCOME = "income"
+
+
+class InvestmentKind(StrEnum):
+    """How a planned purchase (``AssetType.INVESTMENT``) is paid for.
+
+    Attributes:
+        ONE_TIME: Paid in full in the month it happens (e.g. buying a car).
+        LONG_TERM: Financed by a loan drawn in that month and repaid with a
+            fixed monthly payment until the outstanding balance reaches zero
+            (e.g. buying a house on a mortgage).
+    """
+
+    ONE_TIME = "one_time"
+    LONG_TERM = "long_term"
 
 
 class AllocationStrategy(StrEnum):
@@ -58,6 +73,10 @@ DEFAULT_ANNUAL_GAIN_RATES: dict[AssetType, float] = {
     # this rate is never compounded; it exists only to satisfy the per-asset
     # lookup the engine performs for every asset type.
     AssetType.VBL_KLASSIK: 0.0,
+    # Investments hold no running balance either (they are planned purchases,
+    # not holdings); the forecast tracks what they cost, not what they are
+    # worth. Same reason as above for the placeholder rate.
+    AssetType.INVESTMENT: 0.0,
 }
 
 
@@ -119,6 +138,19 @@ class Asset:
         vbl_start_age: Age (years) at which the VBL pension begins (VBL_KLASSIK only).
         vbl_tax_rate: Optional flat tax rate on the gross VBL pension; the
             configured default is used when omitted (VBL_KLASSIK only).
+        investment_kind: Whether the purchase is paid at once or financed
+            (INVESTMENT only).
+        investment_amount: Purchase price, i.e. the amount paid in one go for a
+            ONE_TIME investment or the loan principal for a LONG_TERM one
+            (INVESTMENT only).
+        investment_age: Age (years) at which the purchase happens (INVESTMENT
+            only).
+        investment_interest_rate: Annual interest rate on the outstanding loan
+            as a decimal (LONG_TERM investments only).
+        investment_monthly_payment: Fixed monthly repayment on the loan, paid
+            until the outstanding balance reaches zero (LONG_TERM investments
+            only). Must exceed the first month's interest, otherwise the loan
+            would never be repaid.
     """
 
     name: str
@@ -141,6 +173,11 @@ class Asset:
     vbl_monthly_growth_per_working_year: float = 0.0
     vbl_start_age: int = 67
     vbl_tax_rate: float | None = None
+    investment_kind: InvestmentKind = InvestmentKind.ONE_TIME
+    investment_amount: float = 0.0
+    investment_age: int = 67
+    investment_interest_rate: float = 0.0
+    investment_monthly_payment: float = 0.0
 
     def effective_cost_basis(self) -> float:
         """Return the starting cost basis for this asset.

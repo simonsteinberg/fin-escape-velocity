@@ -12,6 +12,17 @@ version is retired.
 
 ### Added
 
+- New `Investment` asset type for planned purchases, in two modes. A *one-time
+  purchase* (e.g. a car at age 55) is paid out of the assets in that month; a
+  *financed purchase* (e.g. a house on a mortgage) takes on a loan at a given
+  annual interest rate and repays it with a fixed monthly amount until it
+  reaches zero. Purchases and repayments are raised from the assets exactly
+  like a withdrawal (ETF capital-gains tax and borrowing included), and an
+  outstanding loan reduces total wealth, so financing costs show up as the
+  interest paid. Loan terms that never repay the loan (a payment at or below
+  the first month's interest) are rejected with an explanatory error. What is
+  bought is not tracked as wealth.
+
 - Per-asset annual contribution adaption: every asset with a monthly
   contribution (ETF, bAV and Cash alike, so the daily account can now save a
   monthly amount too) gained an "Annual contribution change (%)" input in 0.1%
