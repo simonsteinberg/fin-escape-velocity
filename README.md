@@ -24,10 +24,13 @@ The task runs `python -m finev.app` through uv, so it does not depend on a pre-i
 
 ## Defaults
 
-The console forecast and UI start with:
-- Current age 40, retirement age 67, end age 100
-- ETF MSCI World, bAV, and Daily account assets
-- Monthly contributions (500 / 100 / 0)
+The console forecast and UI start with the same example scenario, a 30-year-old
+saving into an ETF:
+- Current age 30, retirement age 67, end age 100
+- ETF MSCI World, 100,000 EUR, 500 EUR/month
+- Notgroschen (protected cash buffer), 15,000 EUR
+- Inheritance of 100,000 EUR at age 70
+- One-time purchase (car) of 50,000 EUR at age 40
 - Monthly withdrawal after retirement: 3000 EUR
 
 ETF withdrawals apply taxes at 26.25% on 70% of the gains portion. The

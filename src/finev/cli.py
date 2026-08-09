@@ -8,9 +8,10 @@ import pandas as pd
 
 from finev.forecast import forecast_wealth
 from finev.models import (
+    NON_BALANCE_ASSET_TYPES,
     Asset,
     AssetType,
-    BAVStrategy,
+    InvestmentKind,
     UserProfile,
     WithdrawalPlan,
 )
@@ -23,7 +24,7 @@ def build_default_profile() -> UserProfile:
         Default user profile.
     """
     return UserProfile(
-        current_age_years=40,
+        current_age_years=30,
         current_age_months=0,
         retirement_age=67,
         end_age=100,
@@ -34,6 +35,9 @@ def build_default_profile() -> UserProfile:
 
 def build_default_assets() -> list[Asset]:
     """Build the default asset list used by the CLI task.
+
+    Mirrors the web app's starting scenario (``ui_state.default_asset_rows``)
+    so both entry points demonstrate the same example.
 
     Returns:
         List of default assets.
@@ -46,20 +50,46 @@ def build_default_assets() -> list[Asset]:
             monthly_contribution=500.0,
         ),
         Asset(
-            name="bAV",
-            asset_type=AssetType.BAV,
-            current_value=20_000.0,
-            monthly_contribution=100.0,
-            bav_strategy=BAVStrategy.TRANSFER,
-            bav_retirement_age=67,
-            bav_transfer_etf_ratio=0.5,
+            name="Notgroschen",
+            asset_type=AssetType.CASH,
+            current_value=15_000.0,
+            monthly_contribution=0.0,
+            notgroschen=True,
         ),
         Asset(
-            name="Daily account",
-            asset_type=AssetType.CASH,
-            current_value=50_000.0,
-            monthly_contribution=0.0,
+            name="Inheritance",
+            asset_type=AssetType.INHERITANCE,
+            current_value=0.0,
+            inheritance_gross_amount=100_000.0,
+            inheritance_age=70,
         ),
+        Asset(
+            name="Car",
+            asset_type=AssetType.INVESTMENT,
+            current_value=0.0,
+            investment_kind=InvestmentKind.ONE_TIME,
+            investment_amount=50_000.0,
+            investment_age=40,
+        ),
+    ]
+
+
+def balance_asset_names(assets: Iterable[Asset]) -> list[str]:
+    """Return the names of the assets that carry a printable balance.
+
+    Inheritance, VBLklassik and investment assets hold no running balance and
+    therefore no forecast column, so they are left out of the summary table.
+
+    Args:
+        assets: Assets in the scenario.
+
+    Returns:
+        The names of the balance-holding assets, in input order.
+    """
+    return [
+        asset.name
+        for asset in assets
+        if asset.asset_type not in NON_BALANCE_ASSET_TYPES
     ]
 
 
@@ -106,7 +136,7 @@ def print_yearly_summary(
         assets: Assets to include in the output.
         currency: Currency string to display.
     """
-    asset_names = [asset.name for asset in assets]
+    asset_names = balance_asset_names(assets)
     summary_columns = ["total", "taxes", "net_cashflow"]
     columns = ["Age", *asset_names, *summary_columns]
     widths = {"Age": 6}
@@ -143,8 +173,9 @@ def run() -> None:
     forecast = forecast_wealth(
         profile=profile, assets=assets, withdrawal=withdrawal
     )
-    asset_names = [asset.name for asset in assets]
-    yearly = summarize_yearly(forecast, asset_names=asset_names)
+    yearly = summarize_yearly(
+        forecast, asset_names=balance_asset_names(assets)
+    )
     print_yearly_summary(yearly, assets=assets, currency=profile.currency)
 
 

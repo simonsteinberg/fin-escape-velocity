@@ -85,7 +85,7 @@ def _calls(page: _WealthPage) -> list[Any]:
 
 def test_loads_default_rows(page: _WealthPage) -> None:
     names = [row["name"] for row in page.asset_rows]
-    assert names == ["ETF MSCI World", "bAV", "Daily account"]
+    assert names == ["ETF MSCI World", "Notgroschen", "Inheritance", "Car"]
 
 
 def test_simple_field_edit_reruns_without_rerender(
@@ -242,7 +242,8 @@ def test_remove_asset_row_drops_and_refreshes(page: _WealthPage) -> None:
     assert len(page.asset_rows) == before - 1
     assert [row["name"] for row in page.asset_rows] == [
         "ETF MSCI World",
-        "Daily account",
+        "Inheritance",
+        "Car",
     ]
     assert _calls(page) == ["render", ("immediate", False)]
 
@@ -301,12 +302,13 @@ def test_reset_state_restores_defaults_and_clears_cache(
 
     assert [row["name"] for row in page.asset_rows] == [
         "ETF MSCI World",
-        "bAV",
-        "Daily account",
+        "Notgroschen",
+        "Inheritance",
+        "Car",
     ]
     assert page.suppress_cache_save is False
     assert cleared == [True]
-    assert page.current_age_years.value == 40
+    assert page.current_age_years.value == 30
 
 
 _WIDGET_NAMES = (
@@ -396,8 +398,9 @@ def test_load_profile_applies_saved_state(
     # re-renders and re-runs immediately.
     assert [row["name"] for row in page.asset_rows] == [
         "ETF MSCI World",
-        "bAV",
-        "Daily account",
+        "Notgroschen",
+        "Inheritance",
+        "Car",
     ]
     assert "render" in _calls(page)
     assert ("immediate", False) in _calls(page)
@@ -496,9 +499,12 @@ def test_export_forecast_csv_downloads_detailed_csv(
     # Detailed export: monthly granularity columns plus every asset and total.
     assert "month_index" in header
     assert "total" in header
-    for name in ("ETF MSCI World", "bAV", "Daily account"):
+    # Inheritance and the car purchase hold no balance, so they get no column.
+    for name in ("ETF MSCI World", "Notgroschen"):
         assert name in header
-    # Full monthly detail (age 40→100 inclusive) far exceeds the yearly view.
+    assert "Inheritance" not in header
+    # Full monthly detail (the helper wires age 40→100) far exceeds the
+    # yearly view.
     assert len(content.strip().splitlines()) > 12 * 60
 
 
@@ -607,9 +613,9 @@ def test_investment_kind_change_rerenders_row(page: _WealthPage) -> None:
 
 
 def test_notgroschen_toggle_rerenders_row(page: _WealthPage) -> None:
-    # The daily-account row (index 2) is the Cash asset in the defaults.
-    page.update_asset_row(2, "notgroschen", True)
-    assert page.asset_rows[2]["notgroschen"] is True
+    # Row 1 is the Cash buffer in the default scenario.
+    page.update_asset_row(1, "notgroschen", True)
+    assert page.asset_rows[1]["notgroschen"] is True
     assert _calls(page) == ["render", ("immediate", False)]
 
 

@@ -10,6 +10,15 @@ version is retired.
 
 ## [Unreleased]
 
+### Changed
+
+- New default scenario in both the web app and the CLI: a 30-year-old (was 40)
+  with a 100,000 EUR ETF savings plan at 500 EUR/month, a 15,000 EUR
+  Notgroschen, a 100,000 EUR inheritance at age 70, and a 50,000 EUR car
+  purchase at age 40. The old bAV and plain daily-account rows are gone from
+  the defaults, so the starting example now shows one of every kind of entry.
+  Saved profiles and any existing autosaved state are untouched.
+
 ### Fixed
 
 - Chart and data table now sample the forecast on birthdays instead of every

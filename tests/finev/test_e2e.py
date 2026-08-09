@@ -69,9 +69,9 @@ def test_cli_entrypoint_prints_forecast(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     # The default scenario's assets and the summary columns are all printed.
-    for token in ("ETF MSCI World", "bAV", "Daily account", "total", "EUR"):
+    for token in ("ETF MSCI World", "Notgroschen", "total", "EUR"):
         assert token in result.stdout
-    # The header plus one row per age-year (40→100 inclusive) is a lot of rows.
+    # The header plus one row per age-year (30→100 inclusive) is a lot of rows.
     assert len(result.stdout.strip().splitlines()) > 60
 
 

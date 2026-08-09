@@ -138,7 +138,7 @@ types slot in as additional steps/handlers rather than edits to a monolithic loo
 
 | Field | Default | Notes |
 |---|---|---|
-| Current age (years) | — (40 in UI) | Required; whole years. |
+| Current age (years) | — (30 in UI) | Required; whole years. |
 | Current age (months) | 0 | 0–11; fractional start offset. |
 | Retirement age | 67 | Contributions stop / withdrawals begin. |
 | End age | 100 | Must be ≥ retirement age and > current age. |
@@ -668,9 +668,30 @@ inputs surface as a negative notification and emit no download.
 
 ### 9.2 CLI
 
-`mise run run` runs `cli.run()`: a default scenario (age 40→100, ETF/bAV/Cash,
-€3,000/mo withdrawal) printed as a yearly summary table of per-asset balances,
-total, taxes, and net cashflow.
+`mise run run` runs `cli.run()`: the same default scenario the web app starts
+with (see §9.3), printed as a yearly summary table of per-asset balances, total,
+taxes, and net cashflow. Only balance-holding assets get a column
+(`cli.balance_asset_names`), so the inheritance and the planned purchase show up
+through their effect on the totals rather than as columns of their own.
+
+### 9.3 Default scenario
+
+With no cached state, both entry points start from the same example
+(`ui_state.default_asset_rows` / `cli.build_default_assets`): a 30-year-old
+retiring at 67 with the forecast running to 100, holding
+
+| Row | Type | Values |
+|---|---|---|
+| ETF MSCI World | ETF | 100,000 €, 500 €/month, 6% p.a. |
+| Notgroschen | Cash (Notgroschen) | 15,000 €, no contribution, 0.5% p.a. |
+| Inheritance | Inheritance | 100,000 € gross at age 70, Klasse I (child) |
+| Car | Investment (one-time) | 50,000 € at age 40 |
+
+plus a €3,000/month withdrawal from retirement. The scenario is chosen so a
+first-time user sees a working example of every kind of entry — a savings plan,
+a protected buffer, a windfall and a planned purchase — instead of an empty
+form. The inheritance sits well inside the 400,000 € Klasse-I Freibetrag, so it
+arrives tax-free until the user changes it.
 
 ---
 

@@ -41,6 +41,11 @@ DEFAULT_NOTGROSCHEN_INFLATION_PCT = 2.0
 DEFAULT_INVESTMENT_INTEREST_PCT = 3.0
 DEFAULT_INVESTMENT_MONTHLY_PAYMENT = 1_000.0
 
+#: Gross amount of the inheritance in the default scenario. Well inside the
+#: 400 000 € Klasse-I Freibetrag for a child, so the starting example is
+#: tax-free and the user sees the untaxed case before changing anything.
+DEFAULT_INHERITANCE_AMOUNT = 100_000.0
+
 
 def default_gain_pct(asset_type: AssetType) -> float:
     """Return the default annual gain percentage for an asset type."""
@@ -48,66 +53,49 @@ def default_gain_pct(asset_type: AssetType) -> float:
 
 
 def default_asset_rows() -> list[dict[str, Any]]:
-    """Return default asset input rows for the UI.
+    """Return the default asset input rows for the UI.
+
+    The starting scenario is a 30-year-old with an ETF savings plan, a
+    protected cash buffer, an inheritance expected late in life, and one
+    planned purchase, so a first-time user sees a working example of every
+    kind of entry rather than an empty form.
 
     Returns:
-        List of asset row dictionaries.
+        List of asset row dictionaries, each carrying the full row shape.
     """
+
+    def row(**overrides: Any) -> dict[str, Any]:
+        """Build one default row from the blank-row shape."""
+        base = new_asset_row()
+        base.update(overrides)
+        return base
+
     return [
-        {
-            "name": "ETF MSCI World",
-            "type": AssetType.ETF.value,
-            "current_value": 100_000.0,
-            "unrealized_gains": 0.0,
-            "annual_gain_rate_pct": default_gain_pct(AssetType.ETF),
-            "monthly_contribution": 500.0,
-            "monthly_contribution_growth_pct": 0.0,
-            "active": True,
-            "notgroschen": False,
-            "notgroschen_keep_inflation": False,
-            "notgroschen_inflation_rate_pct": (
-                DEFAULT_NOTGROSCHEN_INFLATION_PCT
-            ),
-            "bav_strategy": BAVStrategy.TRANSFER.value,
-            "bav_retirement_age": 67,
-            "bav_transfer_etf_ratio_pct": 50.0,
-        },
-        {
-            "name": "bAV",
-            "type": AssetType.BAV.value,
-            "current_value": 20_000.0,
-            "unrealized_gains": 0.0,
-            "annual_gain_rate_pct": default_gain_pct(AssetType.BAV),
-            "monthly_contribution": 100.0,
-            "monthly_contribution_growth_pct": 0.0,
-            "active": True,
-            "notgroschen": False,
-            "notgroschen_keep_inflation": False,
-            "notgroschen_inflation_rate_pct": (
-                DEFAULT_NOTGROSCHEN_INFLATION_PCT
-            ),
-            "bav_strategy": BAVStrategy.TRANSFER.value,
-            "bav_retirement_age": 67,
-            "bav_transfer_etf_ratio_pct": 50.0,
-        },
-        {
-            "name": "Daily account",
-            "type": AssetType.CASH.value,
-            "current_value": 50_000.0,
-            "unrealized_gains": 0.0,
-            "annual_gain_rate_pct": default_gain_pct(AssetType.CASH),
-            "monthly_contribution": 0.0,
-            "monthly_contribution_growth_pct": 0.0,
-            "active": True,
-            "notgroschen": False,
-            "notgroschen_keep_inflation": False,
-            "notgroschen_inflation_rate_pct": (
-                DEFAULT_NOTGROSCHEN_INFLATION_PCT
-            ),
-            "bav_strategy": BAVStrategy.TRANSFER.value,
-            "bav_retirement_age": 67,
-            "bav_transfer_etf_ratio_pct": 50.0,
-        },
+        row(
+            name="ETF MSCI World",
+            type=AssetType.ETF.value,
+            current_value=100_000.0,
+            monthly_contribution=500.0,
+        ),
+        row(
+            name="Notgroschen",
+            type=AssetType.CASH.value,
+            current_value=15_000.0,
+            annual_gain_rate_pct=default_gain_pct(AssetType.CASH),
+            notgroschen=True,
+        ),
+        row(
+            name="Inheritance",
+            type=AssetType.INHERITANCE.value,
+            inheritance_gross_amount=DEFAULT_INHERITANCE_AMOUNT,
+            inheritance_age=70,
+        ),
+        row(
+            name="Car",
+            type=AssetType.INVESTMENT.value,
+            investment_amount=50_000.0,
+            investment_age=40,
+        ),
     ]
 
 
@@ -250,7 +238,7 @@ def load_log_scale(cached_state: dict[str, Any] | None) -> bool:
 def default_profile_state() -> dict[str, Any]:
     """Return default profile values for UI inputs."""
     return {
-        "current_age_years": 40,
+        "current_age_years": 30,
         "current_age_months": 0,
         "retirement_age": 67,
         "end_age": 100,

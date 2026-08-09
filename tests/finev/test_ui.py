@@ -17,10 +17,16 @@ from finev.ui_state import (
     default_asset_rows as _default_asset_rows,
 )
 from finev.ui_state import (
+    default_profile_state as _default_profile_state,
+)
+from finev.ui_state import (
     default_withdrawal_state as _default_withdrawal_state,
 )
 from finev.ui_state import (
     load_cached_state as _load_cached_state,
+)
+from finev.ui_state import (
+    new_asset_row as _new_asset_row,
 )
 from finev.ui_state import (
     normalize_asset_row as _normalize_asset_row,
@@ -131,29 +137,68 @@ def test_default_asset_rows_match_expected_defaults() -> None:
 
     assert [row["name"] for row in rows] == [
         "ETF MSCI World",
-        "bAV",
-        "Daily account",
+        "Notgroschen",
+        "Inheritance",
+        "Car",
     ]
     assert [row["type"] for row in rows] == [
         AssetType.ETF.value,
-        AssetType.BAV.value,
         AssetType.CASH.value,
+        AssetType.INHERITANCE.value,
+        AssetType.INVESTMENT.value,
     ]
+    assert rows[0]["current_value"] == pytest.approx(100_000.0)
+    assert rows[0]["monthly_contribution"] == pytest.approx(500.0)
     assert rows[0]["annual_gain_rate_pct"] == pytest.approx(
         DEFAULT_ANNUAL_GAIN_RATES[AssetType.ETF] * 100
     )
+    assert rows[1]["current_value"] == pytest.approx(15_000.0)
+    assert rows[1]["notgroschen"] is True
     assert rows[1]["annual_gain_rate_pct"] == pytest.approx(
-        DEFAULT_ANNUAL_GAIN_RATES[AssetType.BAV] * 100
-    )
-    assert rows[2]["annual_gain_rate_pct"] == pytest.approx(
         DEFAULT_ANNUAL_GAIN_RATES[AssetType.CASH] * 100
     )
-    assert rows[0]["unrealized_gains"] == pytest.approx(0.0)
-    assert rows[1]["unrealized_gains"] == pytest.approx(0.0)
-    assert rows[2]["unrealized_gains"] == pytest.approx(0.0)
-    assert rows[1]["bav_strategy"] == BAVStrategy.TRANSFER.value
-    assert rows[1]["bav_retirement_age"] == 67
-    assert rows[1]["bav_transfer_etf_ratio_pct"] == pytest.approx(50.0)
+    assert rows[2]["inheritance_age"] == 70
+    assert rows[3]["investment_amount"] == pytest.approx(50_000.0)
+    assert rows[3]["investment_age"] == 40
+    # Nothing starts with unrealized gains, so cost basis == current value.
+    assert all(row["unrealized_gains"] == pytest.approx(0.0) for row in rows)
+
+
+def test_default_asset_rows_carry_the_full_row_shape() -> None:
+    # Every default row must hold every field, or a row editor reading a
+    # missing key would fall back to a different value than the cache does.
+    shape = set(_new_asset_row())
+
+    for row in _default_asset_rows():
+        assert set(row) == shape, row["name"]
+
+
+def test_default_scenario_forecasts_without_error() -> None:
+    # The shipped defaults must be a valid scenario end to end: a first run
+    # with no cache builds exactly these rows.
+    profile = _default_profile_state()
+    assets = [_asset_from_row(row) for row in _default_asset_rows()]
+
+    df = forecast_wealth(
+        profile=UserProfile(
+            current_age_years=profile["current_age_years"],
+            retirement_age=profile["retirement_age"],
+            end_age=profile["end_age"],
+        ),
+        assets=assets,
+    )
+
+    assert profile["current_age_years"] == 30
+    assert df["age_years"].iloc[0] == 30
+    # The purchase at 40 is paid out of the ETF, and the buffer is untouched.
+    purchase_month = (40 - 30) * 12
+    assert (
+        df.loc[purchase_month, "ETF MSCI World"]
+        < df.loc[purchase_month - 1, "ETF MSCI World"]
+    )
+    assert df.loc[purchase_month, "Notgroschen"] == pytest.approx(
+        df.loc[purchase_month - 1, "Notgroschen"], rel=1e-3
+    )
 
 
 def test_build_chart_options_has_expected_shape() -> None:
