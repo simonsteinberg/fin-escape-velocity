@@ -15,7 +15,7 @@ from typing import Any
 import pandas as pd
 
 from finev.greet import get_version
-from finev.models import Asset, AssetType
+from finev.models import NON_BALANCE_ASSET_TYPES, Asset
 
 
 def favicon_svg() -> str:
@@ -223,12 +223,7 @@ def asset_value_columns(assets: Iterable[Asset]) -> list[str]:
     return [
         asset.name
         for asset in assets
-        if asset.asset_type
-        not in (
-            AssetType.INHERITANCE,
-            AssetType.VBL_KLASSIK,
-            AssetType.INVESTMENT,
-        )
+        if asset.asset_type not in NON_BALANCE_ASSET_TYPES
     ] + ["total"]
 
 

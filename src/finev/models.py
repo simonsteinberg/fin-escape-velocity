@@ -64,6 +64,16 @@ class InheritanceRelationship(StrEnum):
     KLASSE_III = "klasse_iii"
 
 
+#: Asset types that carry no running balance. They never appear as a balance
+#: column, take no contributions and are skipped by growth and withdrawal;
+#: their effect on the forecast is event- or income-based instead (an
+#: inheritance credit, a VBLklassik pension, an investment that draws money out
+#: of the portfolio). The engine, the chart/table columns and the CLI all key
+#: off this one set.
+NON_BALANCE_ASSET_TYPES: frozenset[AssetType] = frozenset(
+    {AssetType.INHERITANCE, AssetType.VBL_KLASSIK, AssetType.INVESTMENT}
+)
+
 DEFAULT_ANNUAL_GAIN_RATES: dict[AssetType, float] = {
     AssetType.ETF: 0.06,
     AssetType.BAV: 0.02,

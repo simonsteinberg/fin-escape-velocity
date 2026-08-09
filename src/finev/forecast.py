@@ -10,6 +10,7 @@ import pandas as pd
 
 from finev.config import get_config
 from finev.models import (
+    NON_BALANCE_ASSET_TYPES,
     AllocationStrategy,
     Asset,
     AssetType,
@@ -23,15 +24,6 @@ from finev.models import (
 
 if TYPE_CHECKING:
     from finev.config import FinevConfig
-
-# Asset types that carry no running balance: they never appear as a balance
-# column, take no contributions, and are skipped by growth/withdrawal. Their
-# effect on the forecast is event- or income-based instead (an inheritance
-# credit, a VBLklassik pension that offsets withdrawals, or an investment that
-# draws money out of the portfolio).
-_NON_BALANCE_TYPES = frozenset(
-    {AssetType.INHERITANCE, AssetType.VBL_KLASSIK, AssetType.INVESTMENT}
-)
 
 
 @dataclass(frozen=True)
@@ -661,13 +653,13 @@ def _initial_state(
     """
     balances = [
         float(asset.current_value)
-        if asset.active and asset.asset_type not in _NON_BALANCE_TYPES
+        if asset.active and asset.asset_type not in NON_BALANCE_ASSET_TYPES
         else 0.0
         for asset in params.assets_list
     ]
     cost_bases = [
         float(asset.effective_cost_basis())
-        if asset.active and asset.asset_type not in _NON_BALANCE_TYPES
+        if asset.active and asset.asset_type not in NON_BALANCE_ASSET_TYPES
         else 0.0
         for asset in params.assets_list
     ]
@@ -727,7 +719,7 @@ def _apply_contributions(
     years_elapsed = (age_months - params.metadata.start_age_months) // 12
     contributions = [
         asset.monthly_contribution_at(years_elapsed)
-        if asset.active and asset.asset_type not in _NON_BALANCE_TYPES
+        if asset.active and asset.asset_type not in NON_BALANCE_ASSET_TYPES
         else 0.0
         for asset in params.assets_list
     ]
@@ -1200,7 +1192,7 @@ def _apply_insolvency_floor(
         for asset, balance in zip(
             params.assets_list, state.balances, strict=True
         )
-        if asset.asset_type not in _NON_BALANCE_TYPES
+        if asset.asset_type not in NON_BALANCE_ASSET_TYPES
     )
     max_debt = asset_total + params.insolvency_floor
     if state.debt > max_debt:
@@ -1224,7 +1216,7 @@ def _build_row(
     }
     # INHERITANCE assets always hold a zero balance — exclude from columns.
     for asset, balance in zip(params.assets_list, state.balances, strict=True):
-        if asset.asset_type not in _NON_BALANCE_TYPES:
+        if asset.asset_type not in NON_BALANCE_ASSET_TYPES:
             row[asset.name] = float(balance)
     # Total wealth nets outstanding debt and any unpaid investment loans
     # against the asset balances, so it may be negative once withdrawals have
@@ -1235,7 +1227,7 @@ def _build_row(
             for asset, balance in zip(
                 params.assets_list, state.balances, strict=True
             )
-            if asset.asset_type not in _NON_BALANCE_TYPES
+            if asset.asset_type not in NON_BALANCE_ASSET_TYPES
         )
         - state.debt
         - sum(state.loan_balances.values())
