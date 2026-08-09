@@ -585,3 +585,35 @@ def test_help_tip_css_caps_width_with_important() -> None:
     assert f".{ui_module._HELP_TIP_CLASS}" in css
     assert f"max-width: {ui_module._HELP_MAX_WIDTH_CH}ch" in css
     assert "!important" in css
+
+
+def test_change_to_investment_fills_defaults_and_rerenders(
+    page: _WealthPage,
+) -> None:
+    page.update_asset_row(0, "type", AssetType.INVESTMENT.value)
+    assert page.asset_rows[0]["type"] == AssetType.INVESTMENT.value
+    assert page.asset_rows[0]["investment_kind"] == "one_time"
+    assert page.asset_rows[0]["investment_age"] == 67
+    assert _calls(page) == ["render", ("immediate", False)]
+
+
+def test_investment_kind_change_rerenders_row(page: _WealthPage) -> None:
+    # Switching to a financed purchase reveals the loan fields, so the row
+    # must be rebuilt rather than only re-forecast.
+    page.update_asset_row(0, "type", AssetType.INVESTMENT.value)
+    page.update_asset_row(0, "investment_kind", "long_term")
+    assert page.asset_rows[0]["investment_kind"] == "long_term"
+    assert _calls(page)[-2:] == ["render", ("immediate", False)]
+
+
+def test_notgroschen_toggle_rerenders_row(page: _WealthPage) -> None:
+    # The daily-account row (index 2) is the Cash asset in the defaults.
+    page.update_asset_row(2, "notgroschen", True)
+    assert page.asset_rows[2]["notgroschen"] is True
+    assert _calls(page) == ["render", ("immediate", False)]
+
+
+def test_contribution_growth_edit_only_reforecasts(page: _WealthPage) -> None:
+    page.update_asset_row(0, "monthly_contribution_growth_pct", 2.5)
+    assert page.asset_rows[0]["monthly_contribution_growth_pct"] == 2.5
+    assert _calls(page) == [("immediate", False)]

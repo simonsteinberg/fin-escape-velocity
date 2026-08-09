@@ -116,15 +116,16 @@ functions over a shared mutable `_MonthlyState`, parameterised by an immutable
 
 1. `_apply_inheritance` — credit net inheritance proceeds due this month.
 2. `_apply_contributions` *(pre-retirement)* **or** `_apply_withdrawal` *(post-retirement)*.
-3. `_apply_investments` — pay for a purchase due this month and service any financed-investment loan.
-4. `_apply_bav_transfer` — move an in-window slice of each TRANSFER bAV to ETF/Cash.
-5. `_apply_bav_income` — pay out monthly gains from INCOME bAV (freezes its principal).
-6. `_apply_growth` — compound each balance by its monthly rate (skipping frozen assets).
+3. `_apply_notgroschen_topup` *(post-retirement)* — keep a protected Cash buffer level.
+4. `_apply_investments` — pay for a purchase due this month and service any financed-investment loan.
+5. `_apply_bav_transfer` — move an in-window slice of each TRANSFER bAV to ETF/Cash.
+6. `_apply_bav_income` — pay out monthly gains from INCOME bAV (freezes its principal).
+7. `_apply_growth` — compound each balance by its monthly rate (skipping frozen assets).
 
-`_apply_withdrawal` and `_apply_investments` both raise money through the same
-helper, `_draw_from_assets` (gross-up → proportional allocation → tax →
-borrow the shortfall), so a purchase costs exactly what a withdrawal of the same
-size costs.
+`_apply_withdrawal`, `_apply_investments` and `_apply_notgroschen_topup` all
+raise money through the same helper, `_draw_from_assets` (gross-up →
+proportional allocation → tax → borrow the shortfall), so a purchase costs
+exactly what a withdrawal of the same size costs.
 
 This shape realises the design intent that new per-month adjustments and asset
 types slot in as additional steps/handlers rather than edits to a monolithic loop.
@@ -173,6 +174,10 @@ contribution, an annual **contribution adaption**
 (`monthly_contribution_growth_rate`, §7.3), and an `active` toggle. ETF/Cash/bAV
 also carry *unrealized gains* in the UI, which is converted to an
 `initial_cost_basis = current_value − unrealized_gains`.
+
+**Cash-specific fields:** `notgroschen` (marks the account as a protected
+emergency buffer) and `notgroschen_inflation_rate` (the annual rate at which
+that buffer is kept level after retirement). See §7.13.
 
 **bAV-specific fields:** `bav_strategy` (`transfer`/`income`),
 `bav_retirement_age`, `bav_transfer_etf_ratio` (share to ETF; remainder to
@@ -314,7 +319,8 @@ twice.
    for the month; floor at 0.
 3. Determine **withdrawable** assets: ETF and Cash always; bAV only once its
    bAV retirement age is reached. (State and VBLklassik pensions are income, not
-   withdrawable balances.)
+   withdrawable balances; a Cash asset marked as a Notgroschen is excluded
+   entirely, §7.13.)
 4. **Gross up** the net target to cover ETF capital-gains tax on the taxable
    gains portion, accounting for any remaining annual allowance (`_gross_up_withdrawal`).
 5. Allocate the grossed-up amount **proportionally** by balance across
@@ -461,6 +467,35 @@ zeroed by the UI conversion so a hidden what-if row can never block a forecast.
 **What is not modelled:** the value of the thing bought. Neither kind creates an
 asset, appreciates, or depreciates — the forecast answers "what does this
 purchase cost me?", not "what is my net worth including the house?".
+
+### 7.13 Notgroschen (protected emergency buffer)
+
+A Cash asset can be marked as a **Notgroschen**: the safety buffer a user keeps
+so a long bear market can be ridden out by spending cash instead of selling ETFs
+at a loss. The forecast models the *existence and upkeep* of that buffer, not
+the bear-market strategy itself — no withdrawal is ever rerouted to it, and no
+extra ETF return is assumed from having it.
+
+- **Never withdrawn from.** A Notgroschen is excluded from
+  `_withdrawable_indices`, so neither the retirement withdrawal (§7.4) nor an
+  investment payment (§7.12) can touch it. A need it could have covered is
+  borrowed instead, so the buffer stays intact even while debt accrues.
+- **Not an allocation target.** It is excluded from the Cash target pool, so bAV
+  transfers, pre-retirement pension income and inheritance proceeds go to other
+  ETF/Cash assets — money routed into the buffer could never come out again. A
+  bAV transfer with `bav_transfer_etf_ratio < 1` therefore still requires a
+  regular Cash asset and fails loudly without one.
+- **Pre-retirement** it behaves like any Cash asset: it takes its monthly
+  contribution and adaption (§7.3).
+- **In retirement** contributions stop. With `notgroschen_inflation_rate = 0`
+  the buffer is simply left alone (nominal, so it slowly loses real value). With
+  a positive rate, `_apply_notgroschen_topup` moves enough from the other assets
+  each month that the buffer ends the month at
+  `balance × (1 + monthly rate)` after its own growth — i.e. the top-up is
+  `balance × ((1 + monthly_rate) / (1 + monthly_gain_rate) − 1)`, floored at
+  zero, so a buffer already out-earning the requested rate needs nothing. The
+  top-up is **discretionary**: it is skipped in any month the remaining
+  withdrawable assets cannot cover it, so buffer upkeep never creates debt.
 
 ---
 
@@ -650,6 +685,7 @@ total, taxes, and net cashflow.
 | FR16 | The web UI can be displayed in English (default) or German via a navbar language toggle. All user-facing text is resolved through the `finev.i18n` catalog with English→key fallback; the chosen language is persisted in the autosave cache and restored on reload. |
 | FR17 | Per-asset annual contribution adaption (default 0%, may be negative, entered in 0.1% steps in the UI): the monthly contribution steps once per forecast year and is floored at zero, so a pre-retirement contribution is never negative. |
 | FR18 | Investment assets: a planned purchase at a configurable age, either paid in one go or financed by a loan at a configurable interest rate and fixed monthly repayment. Purchases and repayments are raised from the assets like a withdrawal (tax and borrowing included); outstanding loans reduce total wealth; unrepayable loan terms are rejected. |
+| FR19 | A Cash asset can be marked as a Notgroschen: never withdrawn from, never an allocation target, contributed to normally before retirement, and optionally kept level in retirement at a user-defined annual rate funded from the other assets (skipped when they cannot cover it). |
 
 ---
 
@@ -678,6 +714,7 @@ total, taxes, and net cashflow.
 | AC18 | The navbar offers an English/German toggle; English is the default with no cache. `i18n.translate` returns the language-specific string, falling back to English and then to the raw key for missing entries. Selecting a language persists it to the cache (`language` key) and reloads; an unchanged selection is a no-op. |
 | AC19 | A configured contribution adaption steps the monthly contribution at each anniversary of the forecast start and nowhere in between; a rate of 0% leaves contributions flat; a negative rate shrinks them without ever producing a negative contribution; rates at or below −100% are rejected by the engine and clamped by the UI. |
 | AC20 | A one-time investment reduces the assets by its amount in exactly the month of `investment_age` and in no other month, borrowing anything the assets cannot cover. A financed investment lowers total wealth by the loan when taken on, transfers each payment from assets to loan (leaving the total unchanged apart from interest), stops when the loan is repaid, and continues across the retirement boundary. Inactive investments are ignored, and investments produce no value column. |
+| AC21 | A Notgroschen keeps its balance through retirement withdrawals (the need becomes debt once the other assets are exhausted), is refused as a bAV transfer target, still accepts pre-retirement contributions, stays flat with a 0% rate, grows at exactly the configured rate when funded from the other assets, and is left untouched in months those assets cannot fund the top-up. |
 
 Each criterion is exercised by the test suite under [`tests/finev/`](../tests/finev/)
 (notably `test_forecast.py`, `test_forecast_golden.py`, `test_validation.py`,

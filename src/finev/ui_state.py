@@ -58,6 +58,8 @@ def default_asset_rows() -> list[dict[str, Any]]:
             "monthly_contribution": 500.0,
             "monthly_contribution_growth_pct": 0.0,
             "active": True,
+            "notgroschen": False,
+            "notgroschen_inflation_rate_pct": 0.0,
             "bav_strategy": BAVStrategy.TRANSFER.value,
             "bav_retirement_age": 67,
             "bav_transfer_etf_ratio_pct": 50.0,
@@ -71,6 +73,8 @@ def default_asset_rows() -> list[dict[str, Any]]:
             "monthly_contribution": 100.0,
             "monthly_contribution_growth_pct": 0.0,
             "active": True,
+            "notgroschen": False,
+            "notgroschen_inflation_rate_pct": 0.0,
             "bav_strategy": BAVStrategy.TRANSFER.value,
             "bav_retirement_age": 67,
             "bav_transfer_etf_ratio_pct": 50.0,
@@ -84,6 +88,8 @@ def default_asset_rows() -> list[dict[str, Any]]:
             "monthly_contribution": 0.0,
             "monthly_contribution_growth_pct": 0.0,
             "active": True,
+            "notgroschen": False,
+            "notgroschen_inflation_rate_pct": 0.0,
             "bav_strategy": BAVStrategy.TRANSFER.value,
             "bav_retirement_age": 67,
             "bav_transfer_etf_ratio_pct": 50.0,
@@ -102,6 +108,8 @@ def new_asset_row() -> dict[str, Any]:
         "monthly_contribution": 0.0,
         "monthly_contribution_growth_pct": 0.0,
         "active": True,
+        "notgroschen": False,
+        "notgroschen_inflation_rate_pct": 0.0,
         "bav_strategy": BAVStrategy.TRANSFER.value,
         "bav_retirement_age": 67,
         "bav_transfer_etf_ratio_pct": 50.0,
@@ -337,6 +345,30 @@ def normalize_asset_row(row: dict[str, Any]) -> dict[str, Any]:
     bav_transfer_etf_ratio_pct = max(
         min(bav_transfer_etf_ratio_pct, 100.0), 0.0
     )
+    notgroschen_raw = row.get("notgroschen")
+    if isinstance(notgroschen_raw, bool):
+        notgroschen = notgroschen_raw
+    elif isinstance(notgroschen_raw, (int, float)):
+        notgroschen = bool(notgroschen_raw)
+    elif isinstance(notgroschen_raw, str):
+        notgroschen = notgroschen_raw.strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "y",
+        )
+    else:
+        notgroschen = False
+    notgroschen_rate_raw = row.get("notgroschen_inflation_rate_pct")
+    if notgroschen_rate_raw in (None, ""):
+        notgroschen_inflation_rate_pct = 0.0
+    else:
+        notgroschen_inflation_rate_pct = max(
+            coerce_float(
+                notgroschen_rate_raw, "assets.notgroschen_inflation_rate_pct"
+            ),
+            0.0,
+        )
     # active flag: accept booleans, numbers, or common strings
     active_raw = row.get("active")
     if isinstance(active_raw, bool):
@@ -471,6 +503,8 @@ def normalize_asset_row(row: dict[str, Any]) -> dict[str, Any]:
         "monthly_contribution": monthly_contribution,
         "monthly_contribution_growth_pct": monthly_contribution_growth_pct,
         "active": active,
+        "notgroschen": notgroschen,
+        "notgroschen_inflation_rate_pct": notgroschen_inflation_rate_pct,
         "bav_strategy": bav_strategy,
         "bav_retirement_age": bav_retirement_age,
         "bav_transfer_etf_ratio_pct": bav_transfer_etf_ratio_pct,
@@ -714,6 +748,7 @@ def asset_from_row(row: dict[str, Any]) -> Asset:
     bav_retirement_age = int(row.get("bav_retirement_age") or 67)
     ratio_pct = float(row.get("bav_transfer_etf_ratio_pct") or 50.0)
     bav_transfer_etf_ratio = min(max(ratio_pct / 100, 0.0), 1.0)
+    is_cash = asset_type == AssetType.CASH
     contribution_growth_pct = max(
         float(row.get("monthly_contribution_growth_pct") or 0),
         MIN_ANNUAL_RATE_PCT,
@@ -729,6 +764,14 @@ def asset_from_row(row: dict[str, Any]) -> Asset:
         else 0.0,
         monthly_contribution_growth_rate=contribution_growth_pct / 100,
         active=active,
+        # Only a Cash row can be a buffer; a stale flag left on a row whose
+        # type was switched is dropped rather than rejected by the engine.
+        notgroschen=is_cash and bool(row.get("notgroschen", False)),
+        notgroschen_inflation_rate=(
+            float(row.get("notgroschen_inflation_rate_pct") or 0) / 100
+            if is_cash
+            else 0.0
+        ),
         bav_strategy=bav_strategy,
         bav_retirement_age=bav_retirement_age,
         bav_transfer_etf_ratio=bav_transfer_etf_ratio,
@@ -761,6 +804,10 @@ def apply_type_change_defaults(
             row["unrealized_gains"] = 0.0
         if row.get("monthly_contribution_growth_pct") in (None, ""):
             row["monthly_contribution_growth_pct"] = 0.0
+        if row.get("notgroschen") is None:
+            row["notgroschen"] = False
+        if row.get("notgroschen_inflation_rate_pct") in (None, ""):
+            row["notgroschen_inflation_rate_pct"] = 0.0
         if row.get("bav_strategy") in (None, ""):
             row["bav_strategy"] = BAVStrategy.TRANSFER.value
         if row.get("bav_retirement_age") in (None, ""):
@@ -824,6 +871,10 @@ def coerce_asset_field(row: dict[str, Any], field: str, value: Any) -> Any:
         return max(float(value or 0), 0.0)
     if field == "inheritance_age":
         return max(int(value or 0), 0)
+    if field == "notgroschen":
+        return bool(value)
+    if field == "notgroschen_inflation_rate_pct":
+        return max(float(value or 0), 0.0)
     if field == "monthly_contribution_growth_pct":
         return max(float(value or 0), MIN_ANNUAL_RATE_PCT)
     if field == "unrealized_gains":

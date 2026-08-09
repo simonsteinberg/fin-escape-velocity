@@ -218,3 +218,12 @@ def test_coerce_investment_fields() -> None:
     assert (
         coerce_asset_field(row, "investment_monthly_payment", "800") == 800.0
     )
+
+
+def test_coerce_notgroschen_fields() -> None:
+    row: dict[str, object] = {}
+    assert coerce_asset_field(row, "notgroschen", 1) is True
+    assert coerce_asset_field(row, "notgroschen_inflation_rate_pct", -3) == 0.0
+    assert (
+        coerce_asset_field(row, "notgroschen_inflation_rate_pct", 2.5) == 2.5
+    )

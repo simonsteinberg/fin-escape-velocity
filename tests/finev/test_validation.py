@@ -431,3 +431,25 @@ def test_validate_assets_ignores_loan_terms_for_one_time_purchase() -> None:
     )
 
     assert _validate_assets([asset]) == [asset]
+
+
+def test_validate_assets_rejects_notgroschen_on_non_cash_asset() -> None:
+    asset = _valid_asset(notgroschen=True)
+
+    with pytest.raises(
+        ValueError, match="can only be a Notgroschen if it is a Cash asset"
+    ):
+        _validate_assets([asset])
+
+
+def test_validate_assets_rejects_notgroschen_rate_at_minus_100_pct() -> None:
+    asset = _valid_asset(
+        asset_type=AssetType.CASH,
+        notgroschen=True,
+        notgroschen_inflation_rate=-1.0,
+    )
+
+    with pytest.raises(
+        ValueError, match="Notgroschen inflation rate must be greater"
+    ):
+        _validate_assets([asset])

@@ -367,3 +367,35 @@ def test_investment_has_no_value_column() -> None:
     ]
 
     assert _asset_value_columns(assets) == ["Cash", "total"]
+
+
+def test_asset_from_row_maps_notgroschen_for_cash() -> None:
+    asset = _asset_from_row(
+        {
+            "name": "Daily account",
+            "type": AssetType.CASH.value,
+            "current_value": 20_000.0,
+            "notgroschen": True,
+            "notgroschen_inflation_rate_pct": 2.0,
+        }
+    )
+
+    assert asset.notgroschen is True
+    assert asset.notgroschen_inflation_rate == pytest.approx(0.02)
+
+
+def test_asset_from_row_drops_notgroschen_for_non_cash() -> None:
+    # A row switched from Cash to ETF keeps the stale flag; the conversion
+    # drops it so the engine never sees an invalid combination.
+    asset = _asset_from_row(
+        {
+            "name": "ETF",
+            "type": AssetType.ETF.value,
+            "current_value": 20_000.0,
+            "notgroschen": True,
+            "notgroschen_inflation_rate_pct": 2.0,
+        }
+    )
+
+    assert asset.notgroschen is False
+    assert asset.notgroschen_inflation_rate == pytest.approx(0.0)

@@ -71,6 +71,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "asset.annual_gain": "Annual gain (%)",
         "asset.monthly_contribution": "Monthly contribution",
         "asset.contribution_growth": "Annual contribution change (%)",
+        "asset.notgroschen": "Emergency fund (Notgroschen)",
+        "asset.notgroschen_inflation": "Keep level in retirement (% p.a.)",
         "asset.bav_mode": "bAV mode",
         "asset.bav_transfer": "Transfer to ETF/Cash",
         "asset.bav_income": "Monthly gains income",
@@ -186,7 +188,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "asset for what-if scenarios. The annual contribution change "
             "adapts the monthly contribution once per forecast year (e.g. to "
             "keep pace with inflation); it may be negative, but a contribution "
-            "never drops below zero."
+            "never drops below zero. A Cash asset marked as a "
+            "Notgroschen is a protected buffer: it is never withdrawn from, "
+            "and an optional rate keeps it level against inflation in "
+            "retirement out of your other assets."
         ),
     },
     "de": {
@@ -226,6 +231,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "asset.annual_gain": "Jährliche Rendite (%)",
         "asset.monthly_contribution": "Monatlicher Beitrag",
         "asset.contribution_growth": "Jährliche Beitragsanpassung (%)",
+        "asset.notgroschen": "Notgroschen (Sicherheitspuffer)",
+        "asset.notgroschen_inflation": "Im Ruhestand erhalten (% p. a.)",
         "asset.bav_mode": "bAV-Modus",
         "asset.bav_transfer": "Übertrag auf ETF/Cash",
         "asset.bav_income": "Monatliche Gewinnausschüttung",
@@ -355,7 +362,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Szenarien ein- oder ausblenden. Die jährliche Beitragsanpassung "
             "verändert den monatlichen Beitrag einmal pro Prognosejahr (z. B. "
             "als Inflationsausgleich); sie darf negativ sein, der Beitrag "
-            "wird jedoch nie kleiner als null."
+            "wird jedoch nie kleiner als null. Ein als Notgroschen "
+            "markiertes Cash-Konto ist ein geschützter Puffer: Es wird nie "
+            "entnommen, und eine optionale Rate hält es im Ruhestand aus dem "
+            "übrigen Vermögen inflationsstabil."
         ),
     },
 }

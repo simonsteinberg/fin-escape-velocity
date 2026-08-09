@@ -272,6 +272,16 @@ def _validate_assets(assets: Iterable[Asset]) -> list[Asset]:
             raise ValueError(
                 f"Asset '{asset.name}' monthly contribution must be non-negative"
             )
+        if asset.notgroschen and asset.asset_type != AssetType.CASH:
+            raise ValueError(
+                f"Asset '{asset.name}' can only be a Notgroschen if it is a "
+                "Cash asset"
+            )
+        if asset.notgroschen_inflation_rate <= -1:
+            raise ValueError(
+                f"Asset '{asset.name}' Notgroschen inflation rate must be "
+                "greater than -100%"
+            )
         if asset.monthly_contribution_growth_rate <= -1:
             raise ValueError(
                 f"Asset '{asset.name}' contribution growth rate must be "
@@ -482,6 +492,8 @@ class _EngineParams:
     inheritance_events: list[tuple[int, float, InheritanceRelationship]]
     # Active VBLklassik assets paying lifelong pension income.
     vbl_assets: list[Asset]
+    # Active Notgroschen buffers as (index, asset); never withdrawn from.
+    notgroschen_indices: list[tuple[int, Asset]]
     # Active planned purchases with their (pre-computed) loan interest rate.
     investment_plans: list[_InvestmentPlan]
     etf_tax_rate: float
@@ -535,10 +547,15 @@ def _build_engine_params(
         for index, asset in enumerate(assets_list)
         if asset.asset_type == AssetType.ETF and asset.active
     ]
+    # A Notgroschen is left out of the Cash target pool: money allocated into
+    # it (a bAV transfer, pension income, inheritance proceeds) could never be
+    # withdrawn again, which would lock it out of the forecast.
     cash_indices = [
         index
         for index, asset in enumerate(assets_list)
-        if asset.asset_type == AssetType.CASH and asset.active
+        if asset.asset_type == AssetType.CASH
+        and asset.active
+        and not asset.notgroschen
     ]
     transfer_assets = [
         asset
@@ -562,6 +579,13 @@ def _build_engine_params(
         asset
         for asset in assets_list
         if asset.asset_type == AssetType.VBL_KLASSIK and asset.active
+    ]
+    notgroschen_indices = [
+        (index, asset)
+        for index, asset in enumerate(assets_list)
+        if asset.asset_type == AssetType.CASH
+        and asset.active
+        and asset.notgroschen
     ]
     investment_plans = [
         _InvestmentPlan(
@@ -617,6 +641,7 @@ def _build_engine_params(
         pension_target_index=pension_target_index,
         inheritance_events=inheritance_events,
         vbl_assets=vbl_assets,
+        notgroschen_indices=notgroschen_indices,
         investment_plans=investment_plans,
         etf_tax_rate=config.capital_gains_tax_rate,
         etf_taxable_share=config.etf.taxable_share,
@@ -764,12 +789,15 @@ def _withdrawable_indices(
     """Return indices of assets withdrawable at this age.
 
     ETFs and Cash are always withdrawable; bAV becomes withdrawable once its
-    configured bAV retirement age has been reached.
+    configured bAV retirement age has been reached. A Cash asset marked as a
+    Notgroschen is never withdrawable — that is the whole point of the buffer
+    (§7.13) — so a need it could have covered is borrowed instead.
     """
     return [
         i
         for i, asset in enumerate(params.assets_list)
         if asset.active
+        and not asset.notgroschen
         and (
             asset.asset_type in (AssetType.ETF, AssetType.CASH)
             or (
@@ -1002,6 +1030,50 @@ def _draw_from_assets(
         state.net_cashflow -= shortfall
 
 
+def _apply_notgroschen_topup(
+    params: _EngineParams,
+    state: _MonthlyState,
+    age_months: int,
+) -> None:
+    """Top a Notgroschen up so it holds its real value in retirement.
+
+    Contributions stop at retirement, so without this the buffer would erode
+    against inflation. For each active Notgroschen with a positive
+    ``notgroschen_inflation_rate``, enough is moved from the *other* assets that
+    the buffer ends the month at ``balance * (1 + monthly inflation rate)``
+    once
+    its own growth (applied later by :func:`_apply_growth`) is taken into
+    account. A buffer whose own gain rate already outpaces the requested rate
+    needs nothing.
+
+    The top-up is discretionary: it is skipped in any month the remaining
+    withdrawable assets cannot cover it, so keeping the buffer level never
+    drives the forecast into debt.
+    """
+    for index, asset in params.notgroschen_indices:
+        if asset.notgroschen_inflation_rate <= 0:
+            continue
+        balance = state.balances[index]
+        if balance <= 0:
+            continue
+        monthly_inflation = _annual_to_monthly_rate(
+            asset.notgroschen_inflation_rate
+        )
+        monthly_gain = params.monthly_rates[index]
+        needed = balance * ((1 + monthly_inflation) / (1 + monthly_gain) - 1)
+        if needed <= 0:
+            continue
+        available = sum(
+            state.balances[i]
+            for i in _withdrawable_indices(params, age_months)
+        )
+        if needed > available:
+            continue
+        _draw_from_assets(params, state, needed, age_months)
+        state.balances[index] += needed
+        state.cost_bases[index] += needed
+
+
 def _apply_bav_transfer(
     params: _EngineParams,
     state: _MonthlyState,
@@ -1218,6 +1290,7 @@ def forecast_wealth(
                 _apply_pre_retirement_pension(params, state, age_months)
             else:
                 _apply_withdrawal(params, state, age_months)
+                _apply_notgroschen_topup(params, state, age_months)
             _apply_investments(params, state, age_months)
             _apply_bav_transfer(params, state, age_months)
             frozen_indices = (

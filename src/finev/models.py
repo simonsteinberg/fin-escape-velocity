@@ -122,6 +122,13 @@ class Asset:
             steps up once per completed forecast year; a negative rate shrinks
             it. Must be greater than -100%.
         active: Whether this asset is included in the forecast.
+        notgroschen: Whether this Cash asset is a protected emergency buffer
+            (CASH only). A Notgroschen is never withdrawn from and is not used
+            as an allocation target; see ``notgroschen_inflation_rate``.
+        notgroschen_inflation_rate: Annual rate at which a Notgroschen is kept
+            growing after retirement, as a decimal fraction (CASH only). 0
+            (the default) means it is simply left alone; a positive rate tops
+            it up each month out of the other assets so its real value holds.
         bav_strategy: Strategy for handling bAV assets.
         bav_retirement_age: Age (years) at which bAV retirement occurs (transfer
             year for the transfer strategy; payout start for the income strategy).
@@ -161,6 +168,8 @@ class Asset:
     monthly_contribution: float = 0.0
     monthly_contribution_growth_rate: float = 0.0
     active: bool = True
+    notgroschen: bool = False
+    notgroschen_inflation_rate: float = 0.0
     bav_strategy: BAVStrategy = BAVStrategy.TRANSFER
     bav_retirement_age: int = 67
     bav_transfer_etf_ratio: float = 0.5

@@ -1532,3 +1532,244 @@ def test_financed_investment_payment_continues_after_retirement() -> None:
     assert result.loc[retirement_month + 12, "Cash"] == pytest.approx(
         100_000.0 - 24 * 500.0
     )
+
+
+def test_notgroschen_is_never_withdrawn_from() -> None:
+    """Draw retirement withdrawals from the ETF and leave the buffer alone."""
+    profile = UserProfile(
+        current_age_years=67,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
+    etf = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        current_value=100_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    buffer_ = Asset(
+        name="Notgroschen",
+        asset_type=AssetType.CASH,
+        current_value=20_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+        notgroschen=True,
+    )
+
+    result = forecast_wealth(
+        profile=profile,
+        assets=[etf, buffer_],
+        withdrawal=WithdrawalPlan(monthly_withdrawal=1_000.0),
+    )
+
+    assert result.loc[1, "Notgroschen"] == pytest.approx(20_000.0)
+    assert result.loc[12, "Notgroschen"] == pytest.approx(20_000.0)
+    assert result.loc[1, "ETF"] == pytest.approx(99_000.0)
+
+
+def test_notgroschen_survives_exhausted_assets_as_debt() -> None:
+    """Borrow rather than raid the buffer once the other assets run out."""
+    profile = UserProfile(
+        current_age_years=67,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+        debt_interest_rate=0.0,
+    )
+    etf = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        current_value=1_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    buffer_ = Asset(
+        name="Notgroschen",
+        asset_type=AssetType.CASH,
+        current_value=20_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+        notgroschen=True,
+    )
+
+    result = forecast_wealth(
+        profile=profile,
+        assets=[etf, buffer_],
+        withdrawal=WithdrawalPlan(monthly_withdrawal=1_000.0),
+    )
+
+    assert result.loc[2, "ETF"] == pytest.approx(0.0)
+    assert result.loc[2, "Notgroschen"] == pytest.approx(20_000.0)
+    # The buffer is intact, so the second month's need turns into debt.
+    assert result.loc[2, "total"] == pytest.approx(19_000.0)
+
+
+def test_notgroschen_topup_holds_its_real_value() -> None:
+    """Top the buffer up out of the other assets at the configured rate."""
+    profile = UserProfile(
+        current_age_years=67,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
+    etf = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        current_value=100_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    buffer_ = Asset(
+        name="Notgroschen",
+        asset_type=AssetType.CASH,
+        current_value=20_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+        notgroschen=True,
+        notgroschen_inflation_rate=0.02,
+    )
+
+    result = forecast_wealth(
+        profile=profile,
+        assets=[etf, buffer_],
+        withdrawal=WithdrawalPlan(monthly_withdrawal=0.0),
+    )
+
+    monthly_inflation = 1.02 ** (1 / 12) - 1
+    expected = 20_000.0 * (1 + monthly_inflation)
+    assert result.loc[1, "Notgroschen"] == pytest.approx(expected)
+    # The top-up is funded from the ETF, not created out of nothing.
+    assert result.loc[1, "ETF"] == pytest.approx(
+        100_000.0 - (expected - 20_000.0)
+    )
+    assert result.loc[1, "total"] == pytest.approx(120_000.0)
+
+
+def test_notgroschen_topup_skipped_without_a_rate() -> None:
+    """Leave the buffer flat when no top-up rate is configured."""
+    profile = UserProfile(
+        current_age_years=67,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
+    etf = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        current_value=100_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    buffer_ = Asset(
+        name="Notgroschen",
+        asset_type=AssetType.CASH,
+        current_value=20_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+        notgroschen=True,
+    )
+
+    result = forecast_wealth(
+        profile=profile,
+        assets=[etf, buffer_],
+        withdrawal=WithdrawalPlan(monthly_withdrawal=0.0),
+    )
+
+    assert result.loc[1, "Notgroschen"] == pytest.approx(20_000.0)
+    assert result.loc[1, "ETF"] == pytest.approx(100_000.0)
+
+
+def test_notgroschen_topup_skipped_when_unaffordable() -> None:
+    """Never borrow to top the buffer up."""
+    profile = UserProfile(
+        current_age_years=67,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+        debt_interest_rate=0.0,
+    )
+    etf = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        current_value=0.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    buffer_ = Asset(
+        name="Notgroschen",
+        asset_type=AssetType.CASH,
+        current_value=20_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+        notgroschen=True,
+        notgroschen_inflation_rate=0.02,
+    )
+
+    result = forecast_wealth(
+        profile=profile,
+        assets=[etf, buffer_],
+        withdrawal=WithdrawalPlan(monthly_withdrawal=0.0),
+    )
+
+    assert result.loc[1, "Notgroschen"] == pytest.approx(20_000.0)
+    assert result.loc[1, "total"] == pytest.approx(20_000.0)
+
+
+def test_notgroschen_takes_contributions_before_retirement() -> None:
+    """Pay into the buffer normally while still working."""
+    profile = UserProfile(
+        current_age_years=60,
+        retirement_age=61,
+        end_age=62,
+        average_inflation_rate=0.0,
+    )
+    buffer_ = Asset(
+        name="Notgroschen",
+        asset_type=AssetType.CASH,
+        current_value=1_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=100.0,
+        notgroschen=True,
+    )
+
+    result = forecast_wealth(
+        profile=profile,
+        assets=[buffer_],
+        withdrawal=WithdrawalPlan(monthly_withdrawal=0.0),
+    )
+
+    assert result.loc[12, "Notgroschen"] == pytest.approx(1_000.0 + 11 * 100.0)
+
+
+def test_notgroschen_is_not_a_bav_transfer_target() -> None:
+    """Refuse to park a bAV transfer in the untouchable buffer."""
+    profile = UserProfile(current_age_years=60, retirement_age=67, end_age=68)
+    etf = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        current_value=1_000.0,
+        monthly_contribution=0.0,
+    )
+    bav = Asset(
+        name="bAV",
+        asset_type=AssetType.BAV,
+        current_value=10_000.0,
+        monthly_contribution=0.0,
+        bav_strategy=BAVStrategy.TRANSFER,
+        bav_retirement_age=67,
+        bav_transfer_etf_ratio=0.5,
+    )
+    buffer_ = Asset(
+        name="Notgroschen",
+        asset_type=AssetType.CASH,
+        current_value=5_000.0,
+        monthly_contribution=0.0,
+        notgroschen=True,
+    )
+
+    with pytest.raises(
+        ValueError, match="bAV transfer requires at least one Cash asset"
+    ):
+        forecast_wealth(profile=profile, assets=[etf, bav, buffer_])

@@ -575,6 +575,31 @@ def _render_asset_row(
                         index, "monthly_contribution_growth_pct", value
                     ),
                 )
+            if asset_type == AssetType.CASH:
+                with ui.row().classes("w-full gap-2 items-center"):
+                    ui.checkbox(
+                        t("asset.notgroschen"),
+                        value=bool(row.get("notgroschen", False)),
+                        on_change=lambda e, i=index: on_field_change(
+                            i,
+                            "notgroschen",
+                            e.value,
+                        ),
+                    )
+                if row.get("notgroschen", False):
+                    _commit_on_enter(
+                        ui.number(
+                            label=t("asset.notgroschen_inflation"),
+                            value=row.get("notgroschen_inflation_rate_pct")
+                            or 0.0,
+                            format="%.1f",
+                            min=0,
+                            step=0.1,
+                        ).classes("w-full"),
+                        lambda value: on_field_change(
+                            index, "notgroschen_inflation_rate_pct", value
+                        ),
+                    )
             if asset_type == AssetType.BAV:
                 with ui.column().classes("w-full gap-2"):
                     ui.select(
@@ -756,6 +781,7 @@ class _WealthPage:
             "active",
             "inheritance_relationship",
             "investment_kind",
+            "notgroschen",
             "vbl_input_mode",
             "vbl_still_working",
         }:
