@@ -1226,3 +1226,111 @@ def test_pre_retirement_vbl_pension_invested_in_highest_rate_etf() -> None:
     assert result.loc[gap_month, "net_cashflow"] == pytest.approx(1_000.0)
     assert result.loc[gap_month, "ETF_high"] > 0.0
     assert result.loc[gap_month, "ETF_low"] == pytest.approx(0.0)
+
+
+def test_contribution_adaption_steps_once_per_year() -> None:
+    """Adapt the monthly contribution at each forecast anniversary."""
+    profile = UserProfile(current_age_years=30, retirement_age=33, end_age=33)
+    asset = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        current_value=0.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=100.0,
+        monthly_contribution_growth_rate=0.10,
+    )
+
+    result = forecast_wealth(profile=profile, assets=[asset])
+
+    # The step lands on each anniversary of the forecast start (months 12, 24),
+    # like the birthday-aligned sampling of the yearly view.
+    assert result.loc[1, "net_cashflow"] == pytest.approx(100.0)
+    assert result.loc[11, "net_cashflow"] == pytest.approx(100.0)
+    assert result.loc[12, "net_cashflow"] == pytest.approx(110.0)
+    assert result.loc[23, "net_cashflow"] == pytest.approx(110.0)
+    assert result.loc[24, "net_cashflow"] == pytest.approx(121.0)
+    # Balance is the sum of the yearly tranches (no growth); month 36 is the
+    # retirement month, which pays no contribution.
+    expected = 11 * 100.0 + 12 * 110.0 + 12 * 121.0
+    assert result.loc[36, "ETF"] == pytest.approx(expected)
+
+
+def test_contribution_adaption_defaults_to_flat_contribution() -> None:
+    """Leave contributions unchanged when no adaption is configured."""
+    profile = UserProfile(current_age_years=30, retirement_age=32, end_age=32)
+    asset = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        current_value=0.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=100.0,
+    )
+
+    result = forecast_wealth(profile=profile, assets=[asset])
+
+    assert result.loc[13, "net_cashflow"] == pytest.approx(100.0)
+    # 23 contributions: month 24 is the retirement month.
+    assert result.loc[24, "ETF"] == pytest.approx(2_300.0)
+
+
+def test_negative_contribution_adaption_shrinks_contribution() -> None:
+    """Shrink the contribution yearly for a negative adaption rate."""
+    profile = UserProfile(current_age_years=30, retirement_age=32, end_age=32)
+    asset = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        current_value=0.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=100.0,
+        monthly_contribution_growth_rate=-0.25,
+    )
+
+    result = forecast_wealth(profile=profile, assets=[asset])
+
+    assert result.loc[1, "net_cashflow"] == pytest.approx(100.0)
+    assert result.loc[12, "net_cashflow"] == pytest.approx(75.0)
+
+
+def test_contribution_never_turns_negative_before_retirement() -> None:
+    """Never pay out of an asset via a shrinking contribution."""
+    profile = UserProfile(current_age_years=30, retirement_age=60, end_age=60)
+    asset = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        current_value=1_000.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=100.0,
+        # Just above the -100% floor: the contribution decays fast but the
+        # payment itself must stay a payment in every pre-retirement month.
+        monthly_contribution_growth_rate=-0.999,
+    )
+
+    result = forecast_wealth(profile=profile, assets=[asset])
+
+    pre_retirement = result[result["month_index"] > 0]
+    assert (pre_retirement["net_cashflow"] >= 0).all()
+    assert result["ETF"].is_monotonic_increasing
+
+
+def test_contribution_adaption_stops_at_retirement() -> None:
+    """Stop adapted contributions at retirement like flat ones."""
+    profile = UserProfile(current_age_years=30, retirement_age=31, end_age=32)
+    asset = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        current_value=0.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=100.0,
+        monthly_contribution_growth_rate=0.5,
+    )
+
+    result = forecast_wealth(
+        profile=profile,
+        assets=[asset],
+        withdrawal=WithdrawalPlan(monthly_withdrawal=0.0),
+    )
+
+    # 11 contributions at the base amount, then retirement stops them: the
+    # adaption never turns into a post-retirement cashflow.
+    assert result.loc[12, "ETF"] == pytest.approx(1_100.0)
+    assert result.loc[24, "ETF"] == pytest.approx(1_100.0)

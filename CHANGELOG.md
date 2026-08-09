@@ -10,6 +10,16 @@ version is retired.
 
 ## [Unreleased]
 
+### Added
+
+- Per-asset annual contribution adaption: every asset with a monthly
+  contribution (ETF, bAV and Cash alike, so the daily account can now save a
+  monthly amount too) gained an "Annual contribution change (%)" input in 0.1%
+  steps, default 0%. The contribution steps up (or down, for a negative rate)
+  on each anniversary of the forecast start, and is floored at zero so a
+  pre-retirement contribution never turns into a withdrawal. Rates at or below
+  -100% are rejected by the engine and clamped in the UI.
+
 ### Fixed
 
 - Release script (`mise run release`) now strips ANSI color codes from the

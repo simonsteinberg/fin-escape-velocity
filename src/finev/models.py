@@ -96,7 +96,12 @@ class Asset:
         current_value: Starting balance for the asset (unused for INHERITANCE).
         initial_cost_basis: Optional cost basis at forecast start.
         annual_gain_rate: Optional annual gain rate override.
-        monthly_contribution: Monthly contribution before retirement.
+        monthly_contribution: Monthly contribution before retirement, at the
+            forecast start.
+        monthly_contribution_growth_rate: Annual adaption of the monthly
+            contribution as a decimal fraction ("Dynamik"). The contribution
+            steps up once per completed forecast year; a negative rate shrinks
+            it. Must be greater than -100%.
         active: Whether this asset is included in the forecast.
         bav_strategy: Strategy for handling bAV assets.
         bav_retirement_age: Age (years) at which bAV retirement occurs (transfer
@@ -122,6 +127,7 @@ class Asset:
     initial_cost_basis: float | None = None
     annual_gain_rate: float | None = None
     monthly_contribution: float = 0.0
+    monthly_contribution_growth_rate: float = 0.0
     active: bool = True
     bav_strategy: BAVStrategy = BAVStrategy.TRANSFER
     bav_retirement_age: int = 67
@@ -157,6 +163,30 @@ class Asset:
         if self.annual_gain_rate is None:
             return DEFAULT_ANNUAL_GAIN_RATES[self.asset_type]
         return self.annual_gain_rate
+
+    def monthly_contribution_at(self, years_elapsed: int) -> float:
+        """Return the monthly contribution after annual adaption.
+
+        The contribution is adapted once per completed forecast year by
+        ``monthly_contribution_growth_rate`` (a savings-plan "Dynamik"), so the
+        payment stays constant within a year and steps on each anniversary of
+        the forecast start (months 12, 24, …).
+
+        The result is floored at zero: a shrinking savings plan may decay
+        towards nothing, but a contribution must never turn into a withdrawal.
+
+        Args:
+            years_elapsed: Completed years since the forecast start.
+
+        Returns:
+            The monthly contribution for that year, never negative.
+        """
+        if self.monthly_contribution_growth_rate == 0.0:
+            return max(self.monthly_contribution, 0.0)
+        multiplier = (
+            1 + self.monthly_contribution_growth_rate
+        ) ** years_elapsed
+        return max(self.monthly_contribution * multiplier, 0.0)
 
 
 @dataclass(frozen=True)

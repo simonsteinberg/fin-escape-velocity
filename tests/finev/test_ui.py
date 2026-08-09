@@ -272,3 +272,31 @@ def test_load_cached_state_missing_returns_none(
     monkeypatch.setenv("WEALTH_APP_STATE_PATH", str(cache_path))
 
     assert _load_cached_state() is None
+
+
+def test_asset_from_row_maps_contribution_growth_pct() -> None:
+    asset = _asset_from_row(
+        {
+            "name": "ETF",
+            "type": AssetType.ETF.value,
+            "current_value": 1_000.0,
+            "monthly_contribution": 500.0,
+            "monthly_contribution_growth_pct": 2.5,
+        }
+    )
+
+    assert asset.monthly_contribution_growth_rate == pytest.approx(0.025)
+
+
+def test_normalize_asset_row_defaults_contribution_growth_to_zero() -> None:
+    # A row cached before the field existed must load as a flat contribution.
+    normalized = _normalize_asset_row(
+        {
+            "name": "Daily account",
+            "type": AssetType.CASH.value,
+            "current_value": 50_000.0,
+            "monthly_contribution": 0.0,
+        }
+    )
+
+    assert normalized["monthly_contribution_growth_pct"] == pytest.approx(0.0)

@@ -62,6 +62,9 @@ from finev.ui_config import (
     scheme_to_dark_mode as _scheme_to_dark_mode,
 )
 from finev.ui_state import (
+    MIN_ANNUAL_RATE_PCT as _MIN_ANNUAL_RATE_PCT,
+)
+from finev.ui_state import (
     apply_type_change_defaults as _apply_type_change_defaults,
 )
 from finev.ui_state import (
@@ -482,6 +485,19 @@ def _render_asset_row(
                     ).classes("w-full"),
                     lambda value: on_field_change(
                         index, "monthly_contribution", value
+                    ),
+                )
+                _commit_on_enter(
+                    ui.number(
+                        label=t("asset.contribution_growth"),
+                        value=row.get("monthly_contribution_growth_pct")
+                        or 0.0,
+                        format="%.1f",
+                        min=_MIN_ANNUAL_RATE_PCT,
+                        step=0.1,
+                    ).classes("w-full"),
+                    lambda value: on_field_change(
+                        index, "monthly_contribution_growth_pct", value
                     ),
                 )
             if asset_type == AssetType.BAV:

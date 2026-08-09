@@ -163,8 +163,9 @@ the gross pension by the engine (see §7.6).
 
 Each asset row carries a name, a type (`ETF`, `bAV`, `Cash`, `Inheritance`,
 `VBLklassik`), a current value, an optional annual gain-rate override, a monthly
-contribution, and an `active` toggle. ETF/Cash/bAV also carry *unrealized gains*
-in the UI, which is converted to an
+contribution, an annual **contribution adaption**
+(`monthly_contribution_growth_rate`, §7.3), and an `active` toggle. ETF/Cash/bAV
+also carry *unrealized gains* in the UI, which is converted to an
 `initial_cost_basis = current_value − unrealized_gains`.
 
 **bAV-specific fields:** `bav_strategy` (`transfer`/`income`),
@@ -262,6 +263,22 @@ cashflow events so a contribution earns growth in the same month.
 
 Each active, non-inheritance asset receives its monthly contribution, added to
 both balance and cost basis; the sum is recorded as positive net cashflow.
+
+**Contribution adaption ("Dynamik").** Each asset carries an optional annual
+adaption rate (`monthly_contribution_growth_rate`, default 0 = flat) that
+adjusts its monthly contribution — typically to keep a savings plan level in
+real terms against inflation. The rate may be negative (a shrinking plan) but
+must be greater than −100%. The payment for a month is
+
+`monthly_contribution × (1 + rate)^years_elapsed`
+
+where `years_elapsed` is the number of completed years since the forecast start,
+so the payment is constant within a year and steps on each **anniversary of the
+forecast start** (months 12, 24, …), the same birthday alignment the yearly
+display uses. The adapted amount is **floored at zero**: a shrinking plan decays
+towards nothing but a contribution never turns into a withdrawal. Contributions
+only ever run pre-retirement, so this floor holds for every month in which the
+user is not yet retired.
 
 If the state pension's (§7.6) or a VBLklassik pension's (§7.9) start age falls
 **before** retirement, the user is still working yet already drawing that pension.
@@ -572,6 +589,7 @@ total, taxes, and net cashflow.
 |---|---|
 | FR1 | Monthly forecast of each asset balance and the portfolio total from current age to end age, using type-default gain rates where no override is given. |
 | FR2 | Pre-retirement monthly contributions per asset, applied (contribution then growth) until the retirement month. |
+| FR17 | Per-asset annual contribution adaption (default 0%, may be negative, entered in 0.1% steps in the UI): the monthly contribution steps once per forecast year and is floored at zero, so a pre-retirement contribution is never negative. |
 | FR3 | Post-retirement net withdrawal target deducted proportionally across withdrawable assets; individual balances floor at zero, while any unmet need is borrowed so total wealth may go negative. |
 | FR4 | German ETF capital-gains tax (26.25% on 70% of gains) with the €1,000 annual allowance; net cashflow reflects tax; withdrawals are grossed up to the net target. |
 | FR5 | Configurable default gain rates with per-asset overrides. |
@@ -595,6 +613,7 @@ total, taxes, and net cashflow.
 |---|---|
 | AC1 | Forecast covers every month from current to end age inclusive, with per-asset and total values per row. |
 | AC2 | Contributions applied in order (contribution then growth) for all pre-retirement months; stop at retirement. |
+| AC19 | A configured contribution adaption steps the monthly contribution at each anniversary of the forecast start and nowhere in between; a rate of 0% leaves contributions flat; a negative rate shrinks them without ever producing a negative contribution; rates at or below −100% are rejected by the engine and clamped by the UI. |
 | AC3 | Withdrawals begin at the retirement month; individual asset balances floor at zero, and any unmet need accrues as debt that drives total wealth negative and compounds at the debt interest rate, but never below the Privatinsolvenz floor. |
 | AC12 | Total wealth never drops below `-PRIVATINSOLVENZ_SCHWELLE_EURO`; a forecast can enter the floor, escape via a later inheritance that repays the capped debt, and re-enter it, staying pinned at the floor whenever no rescue follows. |
 | AC4 | ETF withdrawal tax matches §7.5 (allowance before tax); net cashflow reflects the deduction. |

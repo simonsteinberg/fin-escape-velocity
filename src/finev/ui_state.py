@@ -25,6 +25,10 @@ from finev.models import (
 )
 from finev.ui_config import ColorScheme
 
+#: Lower bound (in percent) for an annual rate entered on an asset row. The
+#: engine rejects any rate at or below -100%, so the UI clamps just above it.
+MIN_ANNUAL_RATE_PCT = -99.9
+
 
 def default_gain_pct(asset_type: AssetType) -> float:
     """Return the default annual gain percentage for an asset type."""
@@ -45,6 +49,7 @@ def default_asset_rows() -> list[dict[str, Any]]:
             "unrealized_gains": 0.0,
             "annual_gain_rate_pct": default_gain_pct(AssetType.ETF),
             "monthly_contribution": 500.0,
+            "monthly_contribution_growth_pct": 0.0,
             "active": True,
             "bav_strategy": BAVStrategy.TRANSFER.value,
             "bav_retirement_age": 67,
@@ -57,6 +62,7 @@ def default_asset_rows() -> list[dict[str, Any]]:
             "unrealized_gains": 0.0,
             "annual_gain_rate_pct": default_gain_pct(AssetType.BAV),
             "monthly_contribution": 100.0,
+            "monthly_contribution_growth_pct": 0.0,
             "active": True,
             "bav_strategy": BAVStrategy.TRANSFER.value,
             "bav_retirement_age": 67,
@@ -69,6 +75,7 @@ def default_asset_rows() -> list[dict[str, Any]]:
             "unrealized_gains": 0.0,
             "annual_gain_rate_pct": default_gain_pct(AssetType.CASH),
             "monthly_contribution": 0.0,
+            "monthly_contribution_growth_pct": 0.0,
             "active": True,
             "bav_strategy": BAVStrategy.TRANSFER.value,
             "bav_retirement_age": 67,
@@ -86,6 +93,7 @@ def new_asset_row() -> dict[str, Any]:
         "unrealized_gains": 0.0,
         "annual_gain_rate_pct": default_gain_pct(AssetType.ETF),
         "monthly_contribution": 0.0,
+        "monthly_contribution_growth_pct": 0.0,
         "active": True,
         "bav_strategy": BAVStrategy.TRANSFER.value,
         "bav_retirement_age": 67,
@@ -276,6 +284,17 @@ def normalize_asset_row(row: dict[str, Any]) -> dict[str, Any]:
         monthly_contribution = coerce_float(
             monthly_contribution_raw, "assets.monthly_contribution"
         )
+    contribution_growth_raw = row.get("monthly_contribution_growth_pct")
+    if contribution_growth_raw in (None, ""):
+        monthly_contribution_growth_pct = 0.0
+    else:
+        monthly_contribution_growth_pct = max(
+            coerce_float(
+                contribution_growth_raw,
+                "assets.monthly_contribution_growth_pct",
+            ),
+            MIN_ANNUAL_RATE_PCT,
+        )
     unrealized_gains_raw = row.get("unrealized_gains")
     if unrealized_gains_raw in (None, ""):
         unrealized_gains = 0.0
@@ -394,6 +413,7 @@ def normalize_asset_row(row: dict[str, Any]) -> dict[str, Any]:
         "unrealized_gains": unrealized_gains,
         "annual_gain_rate_pct": annual_gain_rate_pct,
         "monthly_contribution": monthly_contribution,
+        "monthly_contribution_growth_pct": monthly_contribution_growth_pct,
         "active": active,
         "bav_strategy": bav_strategy,
         "bav_retirement_age": bav_retirement_age,
@@ -605,6 +625,10 @@ def asset_from_row(row: dict[str, Any]) -> Asset:
     bav_retirement_age = int(row.get("bav_retirement_age") or 67)
     ratio_pct = float(row.get("bav_transfer_etf_ratio_pct") or 50.0)
     bav_transfer_etf_ratio = min(max(ratio_pct / 100, 0.0), 1.0)
+    contribution_growth_pct = max(
+        float(row.get("monthly_contribution_growth_pct") or 0),
+        MIN_ANNUAL_RATE_PCT,
+    )
     return Asset(
         name=name,
         asset_type=asset_type,
@@ -614,6 +638,7 @@ def asset_from_row(row: dict[str, Any]) -> Asset:
         monthly_contribution=float(row.get("monthly_contribution") or 0)
         if active
         else 0.0,
+        monthly_contribution_growth_rate=contribution_growth_pct / 100,
         active=active,
         bav_strategy=bav_strategy,
         bav_retirement_age=bav_retirement_age,
@@ -645,6 +670,8 @@ def apply_type_change_defaults(
             row["annual_gain_rate_pct"] = default_gain_pct(new_type)
         if row.get("unrealized_gains") in (None, ""):
             row["unrealized_gains"] = 0.0
+        if row.get("monthly_contribution_growth_pct") in (None, ""):
+            row["monthly_contribution_growth_pct"] = 0.0
         if row.get("bav_strategy") in (None, ""):
             row["bav_strategy"] = BAVStrategy.TRANSFER.value
         if row.get("bav_retirement_age") in (None, ""):
@@ -698,6 +725,8 @@ def coerce_asset_field(row: dict[str, Any], field: str, value: Any) -> Any:
         return max(float(value or 0), 0.0)
     if field == "inheritance_age":
         return max(int(value or 0), 0)
+    if field == "monthly_contribution_growth_pct":
+        return max(float(value or 0), MIN_ANNUAL_RATE_PCT)
     if field == "unrealized_gains":
         current_value = float(row.get("current_value") or 0)
         return max(min(float(value or 0), current_value), 0.0)

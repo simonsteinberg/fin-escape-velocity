@@ -214,6 +214,11 @@ def _validate_assets(assets: Iterable[Asset]) -> list[Asset]:
             raise ValueError(
                 f"Asset '{asset.name}' monthly contribution must be non-negative"
             )
+        if asset.monthly_contribution_growth_rate <= -1:
+            raise ValueError(
+                f"Asset '{asset.name}' contribution growth rate must be "
+                "greater than -100%"
+            )
         if asset.annual_gain_rate is not None and asset.annual_gain_rate <= -1:
             raise ValueError(
                 f"Asset '{asset.name}' annual gain rate must be greater than -100%"
@@ -589,10 +594,19 @@ def _apply_inheritance(
 def _apply_contributions(
     params: _EngineParams,
     state: _MonthlyState,
+    age_months: int,
 ) -> None:
-    """Add monthly contributions to each active, non-inheritance asset."""
+    """Add monthly contributions to each active, non-inheritance asset.
+
+    Each contribution is adapted for the completed forecast years so far (see
+    :meth:`~finev.models.Asset.monthly_contribution_at`), so a user-defined
+    annual adaption steps the payment up or down at every anniversary of the
+    forecast start. Contributions only ever run pre-retirement, and the adapted
+    amount is floored at zero, so a paying-in asset can never pay out here.
+    """
+    years_elapsed = (age_months - params.metadata.start_age_months) // 12
     contributions = [
-        float(asset.monthly_contribution)
+        asset.monthly_contribution_at(years_elapsed)
         if asset.active and asset.asset_type not in _NON_BALANCE_TYPES
         else 0.0
         for asset in params.assets_list
@@ -1040,7 +1054,7 @@ def forecast_wealth(
         if month_index > 0:
             _apply_inheritance(params, state, age_months)
             if age_months < metadata.retirement_age_months:
-                _apply_contributions(params, state)
+                _apply_contributions(params, state, age_months)
                 _apply_pre_retirement_pension(params, state, age_months)
             else:
                 _apply_withdrawal(params, state, age_months)

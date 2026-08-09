@@ -349,3 +349,14 @@ def test_forecast_handles_withdrawal_when_balances_are_zero() -> None:
     assert result.loc[1, "taxes"] == pytest.approx(0.0)
     assert result.loc[1, "net_cashflow"] == pytest.approx(-1_000.0)
     assert result.loc[1, "total"] < 0.0
+
+
+def test_validate_assets_rejects_contribution_growth_at_minus_100_pct() -> (
+    None
+):
+    asset = _valid_asset(monthly_contribution_growth_rate=-1.0)
+
+    with pytest.raises(
+        ValueError, match="contribution growth rate must be greater than -100%"
+    ):
+        _validate_assets([asset])

@@ -70,6 +70,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "asset.unrealized_gains": "Unrealized gains",
         "asset.annual_gain": "Annual gain (%)",
         "asset.monthly_contribution": "Monthly contribution",
+        "asset.contribution_growth": "Annual contribution change (%)",
         "asset.bav_mode": "bAV mode",
         "asset.bav_transfer": "Transfer to ETF/Cash",
         "asset.bav_income": "Monthly gains income",
@@ -172,7 +173,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Your wealth building blocks. Add ETF, bAV (occupational pension), "
             "Cash, Inheritance, or VBLklassik entries; each type shows only the "
             "fields relevant to it. Use the eye icon to include or exclude an "
-            "asset for what-if scenarios."
+            "asset for what-if scenarios. The annual contribution change "
+            "adapts the monthly contribution once per forecast year (e.g. to "
+            "keep pace with inflation); it may be negative, but a contribution "
+            "never drops below zero."
         ),
     },
     "de": {
@@ -211,6 +215,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "asset.unrealized_gains": "Nicht realisierte Gewinne",
         "asset.annual_gain": "Jährliche Rendite (%)",
         "asset.monthly_contribution": "Monatlicher Beitrag",
+        "asset.contribution_growth": "Jährliche Beitragsanpassung (%)",
         "asset.bav_mode": "bAV-Modus",
         "asset.bav_transfer": "Übertrag auf ETF/Cash",
         "asset.bav_income": "Monatliche Gewinnausschüttung",
@@ -326,7 +331,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Deine Vermögensbausteine. Füge ETF, bAV, Cash, Erbschaft oder "
             "VBLklassik hinzu; jeder Typ zeigt nur die relevanten Felder. Mit "
             "dem Augen-Symbol kannst du einen Vermögenswert für Was-wäre-wenn-"
-            "Szenarien ein- oder ausblenden."
+            "Szenarien ein- oder ausblenden. Die jährliche Beitragsanpassung "
+            "verändert den monatlichen Beitrag einmal pro Prognosejahr (z. B. "
+            "als Inflationsausgleich); sie darf negativ sein, der Beitrag "
+            "wird jedoch nie kleiner als null."
         ),
     },
 }

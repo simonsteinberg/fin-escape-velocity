@@ -5,6 +5,7 @@ from __future__ import annotations
 from finev.models import AssetType, BAVStrategy, InheritanceRelationship
 from finev.ui_config import ColorScheme
 from finev.ui_state import (
+    MIN_ANNUAL_RATE_PCT,
     apply_type_change_defaults,
     coerce_asset_field,
     default_gain_pct,
@@ -155,3 +156,25 @@ def test_coerce_invalid_enum_falls_back_to_default() -> None:
 
 def test_coerce_passes_through_unhandled_field() -> None:
     assert coerce_asset_field({}, "name", "My ETF") == "My ETF"
+
+
+def test_new_asset_row_has_flat_contribution_by_default() -> None:
+    assert new_asset_row()["monthly_contribution_growth_pct"] == 0.0
+
+
+def test_type_change_seeds_contribution_growth() -> None:
+    row = {"type": AssetType.ETF.value}
+    apply_type_change_defaults(row, AssetType.CASH)
+    assert row["monthly_contribution_growth_pct"] == 0.0
+
+
+def test_coerce_contribution_growth_accepts_negative_above_floor() -> None:
+    assert (
+        coerce_asset_field({}, "monthly_contribution_growth_pct", -2.5) == -2.5
+    )
+    assert coerce_asset_field({}, "monthly_contribution_growth_pct", "") == 0.0
+    # The engine rejects rates at or below -100%, so the UI clamps just above.
+    assert (
+        coerce_asset_field({}, "monthly_contribution_growth_pct", -250)
+        == MIN_ANNUAL_RATE_PCT
+    )
