@@ -31,6 +31,8 @@ saving into an ETF:
 - Notgroschen (protected cash buffer), 15,000 EUR
 - Inheritance of 100,000 EUR at age 70
 - One-time purchase (car) of 50,000 EUR at age 40
+- State pension: 350 EUR/month already earned, 40,000 EUR annual income,
+  0.5% average annual salary increase
 - Monthly withdrawal after retirement: 3000 EUR
 
 ETF withdrawals apply taxes at 26.25% on 70% of the gains portion. The

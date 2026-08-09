@@ -283,6 +283,7 @@ def test_reset_state_restores_defaults_and_clears_cache(
         "debt_interest_rate",
         "withdrawal_input",
         "annual_income",
+        "annual_salary_growth",
         "state_pension_current_monthly_amount",
         "state_pension_growth_display",
         "state_pension_penalty_display",
@@ -321,6 +322,7 @@ _WIDGET_NAMES = (
     "debt_interest_rate",
     "withdrawal_input",
     "annual_income",
+    "annual_salary_growth",
     "state_pension_current_monthly_amount",
     "state_pension_growth_display",
     "state_pension_penalty_display",
@@ -471,6 +473,7 @@ def _wire_valid_profile(page: _WealthPage) -> None:
     page.debt_interest_rate.value = 5.0
     page.withdrawal_input.value = 3000
     page.annual_income.value = 50000
+    page.annual_salary_growth.value = 0.5
     page.state_pension_current_monthly_amount.value = 0
     page.state_pension_start_age.value = 67
 
@@ -623,3 +626,28 @@ def test_contribution_growth_edit_only_reforecasts(page: _WealthPage) -> None:
     page.update_asset_row(0, "monthly_contribution_growth_pct", 2.5)
     assert page.asset_rows[0]["monthly_contribution_growth_pct"] == 2.5
     assert _calls(page) == [("immediate", False)]
+
+
+def test_salary_growth_reaches_the_state_pension(page: _WealthPage) -> None:
+    _wire_valid_profile(page)
+    page.annual_salary_growth.value = 1.5
+
+    _, _, withdrawal = page._build_forecast_inputs()
+
+    assert withdrawal.state_pension is not None
+    assert withdrawal.state_pension.salary_growth_rate == pytest.approx(0.015)
+
+
+def test_annual_income_drives_the_first_working_year(
+    page: _WealthPage,
+) -> None:
+    # Income sets what one working year is worth; the salary growth then
+    # compounds it. Both must reach the engine's state pension.
+    _wire_valid_profile(page)
+    page.annual_income.value = 40_000
+    page.annual_salary_growth.value = 0.0
+
+    _, _, withdrawal = page._build_forecast_inputs()
+
+    assert withdrawal.state_pension is not None
+    assert withdrawal.state_pension.monthly_growth_per_working_year > 0

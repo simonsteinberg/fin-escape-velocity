@@ -44,6 +44,41 @@ def estimate_monthly_growth_per_working_year(
     return points_per_year * drv.rente_pro_rentenpunkt_euro
 
 
+def accrued_pension_growth(
+    monthly_growth_per_working_year: float,
+    salary_growth_rate: float,
+    working_years: float,
+) -> float:
+    """Return the monthly pension accrued over a span of working years.
+
+    Each working year earns pension in proportion to that year's salary, so a
+    salary that grows at ``salary_growth_rate`` earns progressively more. The
+    accrual is therefore the geometric sum
+
+    ``growth * ((1 + g)^years - 1) / g``
+
+    which degenerates to the plain ``growth * years`` when *g* is zero (the
+    formula is undefined there, and a flat salary earns the same every year).
+
+    Args:
+        monthly_growth_per_working_year: Extra gross monthly pension earned in
+            the first working year (see
+            :func:`estimate_monthly_growth_per_working_year`).
+        salary_growth_rate: Average annual salary increase as a decimal
+            fraction. May be negative (a shrinking salary) but not at or below
+            -100%.
+        working_years: Working years accrued so far; may be fractional.
+
+    Returns:
+        The extra gross monthly pension accrued over that span, in euros.
+    """
+    years = max(working_years, 0.0)
+    if salary_growth_rate == 0.0:
+        return monthly_growth_per_working_year * years
+    factor = ((1 + salary_growth_rate) ** years - 1) / salary_growth_rate
+    return monthly_growth_per_working_year * factor
+
+
 def early_retirement_penalty_fraction(
     pension_start_age: int,
     drv: DrvConfig,
@@ -67,6 +102,7 @@ def estimate_pension_at_start(
     monthly_growth_per_working_year: float,
     years_until_retirement: int,
     penalty_fraction: float,
+    salary_growth_rate: float = 0.0,
 ) -> float:
     """Estimate the net monthly pension at the chosen start age (display-only).
 
@@ -79,12 +115,16 @@ def estimate_pension_at_start(
             retirement.
         penalty_fraction: Early-retirement reduction fraction (see
             :func:`early_retirement_penalty_fraction`).
+        salary_growth_rate: Average annual salary increase as a decimal
+            fraction; later working years then earn more pension than earlier
+            ones (see :func:`accrued_pension_growth`).
 
     Returns:
         Estimated net monthly pension at the start age, in euros.
     """
-    base_pension = (
-        current_monthly_amount
-        + monthly_growth_per_working_year * max(years_until_retirement, 0)
+    base_pension = current_monthly_amount + accrued_pension_growth(
+        monthly_growth_per_working_year,
+        salary_growth_rate,
+        max(years_until_retirement, 0),
     )
     return base_pension * (1 - penalty_fraction)

@@ -6,6 +6,7 @@ import pytest
 
 from finev.config import DrvConfig
 from finev.pension import (
+    accrued_pension_growth,
     early_retirement_penalty_fraction,
     estimate_monthly_growth_per_working_year,
     estimate_pension_at_start,
@@ -70,3 +71,40 @@ def test_pension_at_start_clamps_negative_years() -> None:
         penalty_fraction=0.0,
     )
     assert result == pytest.approx(1000.0)
+
+
+def test_accrued_pension_growth_is_linear_without_salary_growth() -> None:
+    assert accrued_pension_growth(30.0, 0.0, 10) == pytest.approx(300.0)
+    assert accrued_pension_growth(30.0, 0.0, 0) == pytest.approx(0.0)
+    # A negative span cannot subtract pension.
+    assert accrued_pension_growth(30.0, 0.05, -3) == pytest.approx(0.0)
+
+
+def test_accrued_pension_growth_compounds_with_the_salary() -> None:
+    # Each working year earns in proportion to that year's salary, so ten
+    # years at +2% a year are worth more than ten flat years.
+    grown = accrued_pension_growth(30.0, 0.02, 10)
+    flat = accrued_pension_growth(30.0, 0.0, 10)
+    assert grown > flat
+    assert grown == pytest.approx(30.0 * (1.02**10 - 1) / 0.02)
+    # A shrinking salary earns less.
+    assert accrued_pension_growth(30.0, -0.02, 10) < flat
+
+
+def test_estimate_pension_at_start_uses_the_salary_growth() -> None:
+    without = estimate_pension_at_start(
+        current_monthly_amount=350.0,
+        monthly_growth_per_working_year=30.0,
+        years_until_retirement=20,
+        penalty_fraction=0.0,
+    )
+    with_growth = estimate_pension_at_start(
+        current_monthly_amount=350.0,
+        monthly_growth_per_working_year=30.0,
+        years_until_retirement=20,
+        penalty_fraction=0.0,
+        salary_growth_rate=0.005,
+    )
+
+    assert with_growth > without
+    assert with_growth == pytest.approx(350.0 + 30.0 * (1.005**20 - 1) / 0.005)

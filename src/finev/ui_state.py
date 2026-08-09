@@ -245,7 +245,8 @@ def default_profile_state() -> dict[str, Any]:
         "currency": "EUR",
         "average_inflation_rate_pct": 2.0,
         "debt_interest_rate_pct": 8.0,
-        "annual_income": 50000.0,
+        "annual_income": 40000.0,
+        "annual_salary_growth_pct": 0.5,
     }
 
 
@@ -253,7 +254,7 @@ def default_withdrawal_state() -> dict[str, Any]:
     """Return default withdrawal values for UI inputs."""
     return {
         "monthly_withdrawal": 3000.0,
-        "state_pension_current_monthly_amount": 0.0,
+        "state_pension_current_monthly_amount": 350.0,
         "state_pension_growth_per_working_year": 0.0,
         "state_pension_start_age": 67,
         "state_pension_adjustment_rate_pct": 1.0,
@@ -605,6 +606,11 @@ def load_profile_state(cached_state: dict[str, Any] | None) -> dict[str, Any]:
     if raw_profile.get("annual_income") not in (None, ""):
         profile_state["annual_income"] = coerce_float(
             raw_profile.get("annual_income"), "profile.annual_income"
+        )
+    if raw_profile.get("annual_salary_growth_pct") not in (None, ""):
+        profile_state["annual_salary_growth_pct"] = coerce_float(
+            raw_profile.get("annual_salary_growth_pct"),
+            "profile.annual_salary_growth_pct",
         )
     return profile_state
 

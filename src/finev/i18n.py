@@ -116,6 +116,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # State pension card
         "pension.section": "State pension",
         "pension.annual_income": "Annual income",
+        "pension.salary_growth": "Average annual salary increase (%)",
         "pension.now_monthly": "State pension now (monthly)",
         "pension.start_age": "State pension start age",
         "pension.adjustment_rate": "Annual pension adjustment (%)",
@@ -174,7 +175,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "panel.pension.help": (
             "German state pension (DRV) inputs: your current gross annual "
             "income and the monthly pension you have already earned in today's "
-            "money, plus the age you start drawing it. The annual pension "
+            "money, plus the age you start drawing it. The average annual "
+            "salary increase makes later working years earn more pension than "
+            "earlier ones. The annual pension "
             "adjustment grows the pension over time independently of price "
             "inflation; when it is below your inflation rate, the pension loses "
             "real value. The read-only lines show the projected growth per "
@@ -283,6 +286,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # State pension card
         "pension.section": "Gesetzliche Rente",
         "pension.annual_income": "Jahreseinkommen",
+        "pension.salary_growth": (
+            "Durchschnittliche jährliche Gehaltssteigerung (%)"
+        ),
         "pension.now_monthly": "Gesetzliche Rente heute (monatlich)",
         "pension.start_age": "Rentenbeginn-Alter (gesetzlich)",
         "pension.adjustment_rate": "Rentenanpassung p.a. (%)",
@@ -350,7 +356,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "panel.pension.help": (
             "Eingaben zur gesetzlichen Rente (DRV): aktuelles Bruttojahresgehalt "
             "und die bereits erworbene Monatsrente in heutigem Geld sowie das "
-            "Alter des Rentenbeginns. Die Rentenanpassung p.a. lässt die Rente "
+            "Alter des Rentenbeginns. Durch die durchschnittliche jährliche "
+            "Gehaltssteigerung bringen spätere Arbeitsjahre mehr Rente als "
+            "frühere. Die Rentenanpassung p.a. lässt die Rente "
             "über die Zeit unabhängig von der Preisinflation wachsen; liegt sie "
             "unter deiner Inflationsrate, verliert die Rente real an Wert. Die "
             "schreibgeschützten Zeilen zeigen den jährlichen Rentenzuwachs, "

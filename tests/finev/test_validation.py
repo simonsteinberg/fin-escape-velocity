@@ -453,3 +453,15 @@ def test_validate_assets_rejects_notgroschen_rate_at_minus_100_pct() -> None:
         ValueError, match="Notgroschen inflation rate must be greater"
     ):
         _validate_assets([asset])
+
+
+def test_validate_withdrawal_rejects_salary_growth_at_minus_100_pct() -> None:
+    withdrawal = WithdrawalPlan(
+        monthly_withdrawal=1000.0,
+        state_pension=StatePension(salary_growth_rate=-1.0),
+    )
+
+    with pytest.raises(
+        ValueError, match="Salary growth rate must be greater than -100%"
+    ):
+        _validate_withdrawal(withdrawal)

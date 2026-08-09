@@ -10,6 +10,20 @@ version is retired.
 
 ## [Unreleased]
 
+### Added
+
+- "Average annual salary increase (%)" input in the State pension panel
+  (0.1% steps, default 0.5%). Pension points are earned in proportion to each
+  year's salary, so the accrued pension now compounds with the raise instead of
+  crediting every working year the same amount. The engine and the read-only
+  "Pension at age X" line share one formula
+  (`pension.accrued_pension_growth`), so they can no longer disagree.
+
+### Changed
+
+- The default example now starts with 350 EUR/month of state pension already
+  earned and a 40,000 EUR annual income (was 0 EUR and 50,000 EUR).
+
 ### Fixed
 
 - The Notgroschen retirement top-up no longer counts as spending. It is drawn

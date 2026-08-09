@@ -1863,3 +1863,85 @@ def test_notgroschen_topup_reports_only_its_tax_as_a_cost() -> None:
     assert result.loc[3, "taxes"] > 0
     assert result.loc[3, "net_cashflow"] == pytest.approx(-1_000.0)
     assert result.loc[3, "total"] < 500_000.0 + 15_000.0 - 3 * 1_000.0
+
+
+def test_salary_growth_raises_the_accrued_state_pension() -> None:
+    """Earn more pension in later working years as the salary grows."""
+    profile = UserProfile(
+        current_age_years=47,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
+    asset = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        current_value=0.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+
+    def total_at_end(salary_growth_rate: float) -> float:
+        pension = StatePension(
+            current_monthly_amount=350.0,
+            monthly_growth_per_working_year=30.0,
+            start_age=67,
+            tax_rate=0.0,
+            adjustment_rate=0.0,
+            salary_growth_rate=salary_growth_rate,
+        )
+        result = forecast_wealth(
+            profile=profile,
+            assets=[asset],
+            withdrawal=WithdrawalPlan(
+                monthly_withdrawal=3_000.0, state_pension=pension
+            ),
+        )
+        return float(result["total"].iloc[-1])
+
+    # A higher pension covers more of the withdrawal, so less is borrowed.
+    assert total_at_end(0.02) > total_at_end(0.0)
+    assert total_at_end(0.0) > total_at_end(-0.02)
+
+
+def test_salary_growth_accrues_progressively_over_working_years() -> None:
+    """Grow the accrued pension year by year, not in one jump."""
+    profile = UserProfile(
+        current_age_years=60,
+        retirement_age=67,
+        end_age=68,
+        average_inflation_rate=0.0,
+    )
+    etf = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        current_value=0.0,
+        annual_gain_rate=0.0,
+        monthly_contribution=0.0,
+    )
+    pension = StatePension(
+        current_monthly_amount=0.0,
+        monthly_growth_per_working_year=120.0,
+        # Drawn while still working, so the invested amount exposes the
+        # accrual month by month.
+        start_age=63,
+        tax_rate=0.0,
+        adjustment_rate=0.0,
+        salary_growth_rate=0.10,
+    )
+
+    result = forecast_wealth(
+        profile=profile,
+        assets=[etf],
+        withdrawal=WithdrawalPlan(
+            monthly_withdrawal=0.0, state_pension=pension
+        ),
+    )
+
+    # Pension paid at 4 and 6 working years, against the geometric accrual,
+    # reduced for the four years of early start (63 instead of 67).
+    reduction = 1 - get_config().drv.rentenabschlag_pro_jahr * 4
+    for years in (4, 6):
+        month = (63 - 60) * 12 + (years - 3) * 12
+        expected = 120.0 * (1.10**years - 1) / 0.10 * reduction
+        assert result.loc[month, "net_cashflow"] == pytest.approx(expected)

@@ -152,7 +152,8 @@ types slot in as additional steps/handlers rather than edits to a monolithic loo
 |---|---|---|
 | Current monthly amount (today-value) | Yes | Gross monthly state pension if the user stopped working today. |
 | Annual income | Yes (UI) | Drives the read-only pension-points estimate. |
-| Monthly growth per working year | Derived | Extra gross monthly pension per additional working year. Computed in `pension.py` from annual income and DRV params; shown read-only. |
+| Monthly growth per working year | Derived | Extra gross monthly pension earned in the *first* additional working year. Computed in `pension.py` from annual income and DRV params; shown read-only. |
+| Average annual salary increase | 0.5% (UI) / 0.005 (model) | Compounds the pension earned per working year, so later working years are worth more than earlier ones (§7.6). May be negative; must be > −100%. |
 | Start age | Yes | Must be **63–67** inclusive. |
 | Annual pension adjustment (*Rentenanpassung p.a.*) | 1% (UI) / 0.01 (model) | Annual growth applied to the accrued pension over time, **independent of price inflation**. When below the inflation rate, the pension loses real value. Must be > −100%. |
 | Tax rate | Optional | Defaults to `DRV_BRUTTO_RENTE_STEUERSATZ` when omitted; must be in `[0, 1)`. |
@@ -350,9 +351,19 @@ The allowance resets at the start of each forecast year.
 For months at/after the start age:
 
 ```
-accrued       = current_monthly + working_years × growth_per_working_year
+accrued       = current_monthly + accrued_growth(working_years)
 gross(month)  = accrued × adjustment_multiplier(month) × (1 − rentenabschlag × (67 − start_age))
 net(month)    = gross(month) × (1 − tax_rate)
+```
+
+`accrued_growth` (`pension.accrued_pension_growth`, shared by the engine and the
+read-only UI estimate) compounds each working year's earnings with the
+**average annual salary increase** *g*, since a year's pension points scale with
+that year's salary:
+
+```
+accrued_growth(t) = growth_per_working_year × ((1 + g)^t − 1) / g      (g ≠ 0)
+                  = growth_per_working_year × t                        (g = 0)
 ```
 
 `adjustment_multiplier(month)` compounds the **annual pension adjustment**
@@ -690,6 +701,7 @@ retiring at 67 with the forecast running to 100, holding
 |---|---|---|
 | ETF MSCI World | ETF | 100,000 €, 500 €/month, 6% p.a. |
 | Notgroschen | Cash (Notgroschen) | 15,000 €, no contribution, 0.5% p.a. |
+| (state pension) | — | 350 €/month already earned, 40,000 € annual income, 0.5% average salary increase |
 | Inheritance | Inheritance | 100,000 € gross at age 70, Klasse I (child) |
 | Car | Investment (one-time) | 50,000 € at age 40 |
 
@@ -712,7 +724,7 @@ arrives tax-free until the user changes it.
 | FR5 | Configurable default gain rates with per-asset overrides. |
 | FR6 | Inflation-adjusted withdrawal targets from today's currency to each retirement month. |
 | FR7 | bAV transfer at a configurable single retirement age (+ ETF ratio) and bAV monthly-gains income; bAV gains fully taxed at 26.25%. |
-| FR8 | State-pension stream starting at age 63–67, with earned growth, a configurable annual pension adjustment (*Rentenanpassung p.a.*, default 1%) applied independently of price inflation, early-retirement reduction, and configured tax rate; net pension offsets withdrawals. |
+| FR8 | State-pension stream starting at age 63–67, with earned growth compounded by a configurable average annual salary increase (default 0.5%), a configurable annual pension adjustment (*Rentenanpassung p.a.*, default 1%) applied independently of price inflation, early-retirement reduction, and configured tax rate; net pension offsets withdrawals. |
 | FR9 | Inheritance events at a configured age, taxed by Erbschaftsteuer class/Freibetrag; net proceeds credited to ETF (then Cash). |
 | FR10 | Per-asset activation toggle for what-if scenarios; deactivated assets excluded from calculations but preserved and persisted. |
 | FR11 | Inputs validated at the boundary (`forecast.py` validators, `config.py` on load, `ui_state` coercion); invalid inputs fail loudly. |
@@ -754,6 +766,7 @@ arrives tax-free until the user changes it.
 | AC20 | A one-time investment reduces the assets by its amount in exactly the month of `investment_age` and in no other month, borrowing anything the assets cannot cover. A financed investment lowers total wealth by the loan when taken on, transfers each payment from assets to loan (leaving the total unchanged apart from interest), stops when the loan is repaid, and continues across the retirement boundary. Inactive investments are ignored, and investments produce no value column. |
 | AC21 | A Notgroschen keeps its balance through retirement withdrawals (the need becomes debt once the other assets are exhausted), is refused as a bAV transfer target, still accepts pre-retirement contributions, stays flat while its retirement adaption is switched off (even with a rate configured), grows at exactly the configured rate once it is switched on and the other assets fund it, and is left untouched in months they cannot. |
 | AC22 | The Notgroschen top-up is drawn from the other assets on top of the withdrawal, but is reported as a transfer: `net_cashflow` shows only the month's withdrawal, while any capital-gains tax the draw triggered is counted in `taxes`. |
+| AC23 | A positive average annual salary increase raises the accrued state pension over the working years (and a negative one lowers it), progressively rather than in one jump, with the same formula behind the engine and the read-only UI estimate. |
 
 Each criterion is exercised by the test suite under [`tests/finev/`](../tests/finev/)
 (notably `test_forecast.py`, `test_forecast_golden.py`, `test_validation.py`,

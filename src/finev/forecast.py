@@ -21,6 +21,7 @@ from finev.models import (
     UserProfile,
     WithdrawalPlan,
 )
+from finev.pension import accrued_pension_growth
 
 if TYPE_CHECKING:
     from finev.config import FinevConfig
@@ -341,6 +342,8 @@ def _validate_withdrawal(withdrawal: WithdrawalPlan) -> None:
         raise ValueError("State pension start age must be between 63 and 67")
     if state_pension.adjustment_rate <= -1:
         raise ValueError("State pension adjustment rate must be above -100%")
+    if state_pension.salary_growth_rate <= -1:
+        raise ValueError("Salary growth rate must be greater than -100%")
     if (
         state_pension.tax_rate is not None
         and not 0 <= state_pension.tax_rate < 1
@@ -379,8 +382,13 @@ def _net_state_pension_for_month(
     if age_months < state_pension.start_age * 12:
         return 0.0
     working_years = _working_years_so_far(metadata, age_months)
-    accrued_monthly_pension = state_pension.current_monthly_amount + (
-        working_years * state_pension.monthly_growth_per_working_year
+    accrued_monthly_pension = (
+        state_pension.current_monthly_amount
+        + accrued_pension_growth(
+            state_pension.monthly_growth_per_working_year,
+            state_pension.salary_growth_rate,
+            working_years,
+        )
     )
     months_since_start = age_months - metadata.start_age_months
     adjustment_multiplier = _compound_growth_multiplier(

@@ -228,7 +228,9 @@ def test_default_withdrawal_state_includes_state_pension_inputs() -> None:
     state = _default_withdrawal_state()
 
     assert state["monthly_withdrawal"] == pytest.approx(3000.0)
-    assert state["state_pension_current_monthly_amount"] == pytest.approx(0.0)
+    assert state["state_pension_current_monthly_amount"] == pytest.approx(
+        350.0
+    )
     assert state["state_pension_growth_per_working_year"] == pytest.approx(0.0)
     assert state["state_pension_start_age"] == 67
     assert state["state_pension_adjustment_rate_pct"] == pytest.approx(1.0)

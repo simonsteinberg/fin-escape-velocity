@@ -260,7 +260,7 @@ class StatePension:
         current_monthly_amount: Current gross monthly state pension value in
             today's currency.
         monthly_growth_per_working_year: Additional gross monthly pension earned
-            per year the user keeps working until retirement.
+            in the *first* year the user keeps working until retirement.
         start_age: Age (years) when state pension starts, between 63 and 67.
         tax_rate: Optional flat tax rate applied to monthly state pension. When
             omitted, the configured default is used.
@@ -268,6 +268,11 @@ class StatePension:
             as a decimal fraction. The accrued pension grows at this rate over
             time, independently of price inflation. When it is below
             ``UserProfile.average_inflation_rate`` the pension loses real value.
+        salary_growth_rate: Average annual salary increase as a decimal
+            fraction. Each working year earns pension in proportion to that
+            year's salary, so a growing salary earns progressively more; 0
+            (the default) keeps every working year worth the same. Must be
+            greater than -100%.
     """
 
     current_monthly_amount: float = 0.0
@@ -275,6 +280,7 @@ class StatePension:
     start_age: int = 67
     tax_rate: float | None = None
     adjustment_rate: float = 0.01
+    salary_growth_rate: float = 0.0
 
 
 @dataclass(frozen=True)

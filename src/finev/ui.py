@@ -705,6 +705,7 @@ class _WealthPage:
     debt_interest_rate: ui.number
     withdrawal_input: ui.number
     annual_income: ui.number
+    annual_salary_growth: ui.number
     state_pension_current_monthly_amount: ui.number
     state_pension_growth_display: ui.label
     state_pension_penalty_display: ui.label
@@ -853,6 +854,8 @@ class _WealthPage:
         self.debt_interest_rate.update()
         self.annual_income.value = profile["annual_income"]
         self.annual_income.update()
+        self.annual_salary_growth.value = profile["annual_salary_growth_pct"]
+        self.annual_salary_growth.update()
         self.withdrawal_input.value = withdrawal["monthly_withdrawal"]
         self.withdrawal_input.update()
         self.state_pension_current_monthly_amount.value = withdrawal[
@@ -1219,6 +1222,10 @@ class _WealthPage:
                     self.state_pension_current_monthly_amount.value or 0
                 ),
                 monthly_growth_per_working_year=float(monthly_growth),
+                salary_growth_rate=float(
+                    self.annual_salary_growth.value or 0.0
+                )
+                / 100,
                 start_age=int(self.state_pension_start_age.value or 67),
                 adjustment_rate=float(
                     self.state_pension_adjustment_rate.value or 0.0
@@ -1254,6 +1261,7 @@ class _WealthPage:
                 ),
                 years_until_retirement=years_remaining,
                 penalty_fraction=penalty_fraction,
+                salary_growth_rate=state_pension.salary_growth_rate,
             )
 
             self.state_pension_growth_display.text = _format_currency(
@@ -1385,6 +1393,9 @@ class _WealthPage:
                     self.debt_interest_rate.value or 0.0
                 ),
                 "annual_income": float(self.annual_income.value or 0),
+                "annual_salary_growth_pct": float(
+                    self.annual_salary_growth.value or 0.0
+                ),
             },
             "withdrawal": {
                 "monthly_withdrawal": float(self.withdrawal_input.value or 0),
@@ -1536,6 +1547,18 @@ class _WealthPage:
                                     format="%.0f",
                                     min=0,
                                     step=1000,
+                                ),
+                                self._commit_profile_edit,
+                            )
+                            self.annual_salary_growth = _commit_on_enter(
+                                ui.number(
+                                    label=self.t("pension.salary_growth"),
+                                    value=profile_state.get(
+                                        "annual_salary_growth_pct", 0.5
+                                    ),
+                                    format="%.1f",
+                                    min=_MIN_ANNUAL_RATE_PCT,
+                                    step=0.1,
                                 ),
                                 self._commit_profile_edit,
                             )
