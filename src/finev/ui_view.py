@@ -184,17 +184,29 @@ def build_chart_options(log_scale: bool = False) -> dict[str, Any]:
 def yearly_display_frame(df: pd.DataFrame) -> pd.DataFrame:
     """Return a yearly-sampled DataFrame for presentation.
 
+    Rows are sampled on **birthdays** (``age_months == 0``), not every twelfth
+    month from the forecast start, so each row holds the balance at exactly the
+    age it is labelled with. Sampling by month offset would shift every row by
+    the start month-in-year (a forecast starting at 25y1m would label the 26y1m
+    balance as "26"), making the displayed value independent of the start month.
+    The forecast's first month is always kept so the view shows today's balance
+    even when the forecast does not start on a birthday.
+
     Args:
         df: Monthly forecast frame.
 
     Returns:
-        One row per whole year (every 12th month), with a ``year_index`` column;
-        the input frame is returned unchanged when empty.
+        One row per birthday plus the start month, with a ``year_index`` column
+        counting age-years since the first row; the input frame is returned
+        unchanged when empty.
     """
     if df.empty:
         return df
-    yearly = df[df["month_index"] % 12 == 0].copy()
-    yearly["year_index"] = (yearly["month_index"] // 12).astype(int)
+    on_birthday = df["age_months"] == 0
+    is_start = df["month_index"] == df["month_index"].min()
+    yearly = df[on_birthday | is_start].copy()
+    start_age_years = int(yearly["age_years"].iloc[0])
+    yearly["year_index"] = yearly["age_years"].astype(int) - start_age_years
     return yearly.reset_index(drop=True)
 
 

@@ -515,9 +515,17 @@ extra ETF return is assumed from having it.
 | *per-asset* | Balance for each balance-holding asset (column = asset name); inheritance, VBLklassik and investments hold no balance and have no column. |
 | `total` | Sum of all balance-holding asset balances, minus any outstanding debt and any unpaid investment loan (§7.12). The debt part is floored at the Privatinsolvenz threshold (§7.11); a running investment loan can take the reported total below it. |
 
-Presentation layers derive a **yearly** view (`ui_view.yearly_display_frame`,
-every 12th month; `cli.summarize_yearly`, aggregated per age-year) for the chart,
-table, and console output.
+Presentation layers derive a **yearly** view for the chart, table, and console
+output:
+
+- `ui_view.yearly_display_frame` samples each **birthday** (`age_months == 0`),
+  plus the forecast's first month so today's balance is always shown. Sampling
+  by age rather than by month offset keeps each row's value at exactly the age
+  it is labelled with when the forecast starts mid-year (e.g. at 25y1m the
+  next row is age 26, eleven months later, not 26y1m). `year_index` counts
+  age-years since the first row.
+- `cli.summarize_yearly` groups by `age_years` and takes the **last** month of
+  each age-year, so its rows are end-of-age-year balances.
 
 ---
 

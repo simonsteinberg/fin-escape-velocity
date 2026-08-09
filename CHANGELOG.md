@@ -10,6 +10,16 @@ version is retired.
 
 ## [Unreleased]
 
+### Fixed
+
+- Chart and data table now sample the forecast on birthdays instead of every
+  twelfth month from the forecast start. With a current age of, say, 25 years
+  and 1 month, the row labelled "26" held the balance at 26 years and 1 month
+  (12 monthly contributions), so changing the start month left every displayed
+  value unchanged. It now shows the balance at exactly 26 years and 0 months
+  (11 contributions). The forecast engine itself was already correct; only the
+  yearly display sampling was off.
+
 ## [0.5.0] - 2026-08-09
 
 ### Added

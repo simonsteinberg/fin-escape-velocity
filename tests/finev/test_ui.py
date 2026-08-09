@@ -1,11 +1,14 @@
 import pandas as pd
 import pytest
 
+from finev.forecast import forecast_wealth
 from finev.models import (
     DEFAULT_ANNUAL_GAIN_RATES,
+    Asset,
     AssetType,
     BAVStrategy,
     InvestmentKind,
+    UserProfile,
 )
 from finev.ui_state import (
     asset_from_row as _asset_from_row,
@@ -39,21 +42,77 @@ from finev.ui_view import (
 )
 
 
-def test_yearly_display_frame_samples_every_12_months() -> None:
-    data = pd.DataFrame(
+def _monthly_frame(
+    start_age_years: int, start_age_months: int, months: int
+) -> pd.DataFrame:
+    """Build a synthetic monthly frame starting at the given age."""
+    start = start_age_years * 12 + start_age_months
+    ages = [start + offset for offset in range(months)]
+    return pd.DataFrame(
         {
-            "month_index": list(range(0, 25)),
-            "age_years": [40] * 25,
-            "age_months": list(range(0, 25)),
-            "total": [float(value) for value in range(25)],
+            "month_index": list(range(months)),
+            "age_years": [age // 12 for age in ages],
+            "age_months": [age % 12 for age in ages],
+            "total": [float(value) for value in range(months)],
         }
     )
+
+
+def test_yearly_display_frame_samples_every_12_months() -> None:
+    data = _monthly_frame(40, 0, months=25)
 
     result = _yearly_display_frame(data)
 
     assert result["month_index"].tolist() == [0, 12, 24]
+    assert result["age_years"].tolist() == [40, 41, 42]
     assert result["year_index"].tolist() == [0, 1, 2]
     assert result.index.tolist() == [0, 1, 2]
+
+
+def test_yearly_display_frame_samples_on_birthdays_from_mid_year() -> None:
+    data = _monthly_frame(40, 1, months=25)
+
+    result = _yearly_display_frame(data)
+
+    # Start row plus each birthday; the age-41 row is 11 months in, not 12.
+    assert result["month_index"].tolist() == [0, 11, 23]
+    assert result["age_years"].tolist() == [40, 41, 42]
+    assert result["age_months"].tolist() == [1, 0, 0]
+    assert result["year_index"].tolist() == [0, 1, 2]
+
+
+def test_yearly_display_frame_start_month_shortens_first_year() -> None:
+    """A later start month means fewer contributions before the next birthday."""
+    etf = Asset(
+        name="ETF",
+        asset_type=AssetType.ETF,
+        current_value=10_000.0,
+        monthly_contribution=1_000.0,
+        annual_gain_rate=0.05,
+    )
+
+    def total_at_age_26(start_age_months: int) -> float:
+        profile = UserProfile(
+            current_age_years=25,
+            current_age_months=start_age_months,
+            retirement_age=30,
+            end_age=30,
+        )
+        display = _yearly_display_frame(
+            forecast_wealth(profile=profile, assets=[etf])
+        )
+        row = display[display["age_years"] == 26].iloc[0]
+        assert int(row["age_months"]) == 0
+        return float(row["total"])
+
+    from_birthday = total_at_age_26(0)
+    from_one_month_later = total_at_age_26(1)
+
+    # 11 monthly contributions instead of 12, so roughly one rate less.
+    assert from_one_month_later < from_birthday
+    assert from_birthday - from_one_month_later == pytest.approx(
+        1_000, abs=150
+    )
 
 
 def test_yearly_display_frame_handles_empty() -> None:
