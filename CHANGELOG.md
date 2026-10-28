@@ -16,6 +16,10 @@ version is retired.
   (NiceGUI 3.18.0, pandas 3.1.0, pytest 9.2.0, playwright 1.64.1,
   ruff 0.17.3, among others). Run `mise run install-browsers` after syncing
   to fetch the matching Chromium build.
+- Moved to Python 3.15.2. `mise.toml`, `.python-version`, `requires-python`
+  (now `>=3.15`), and the ruff and mypy targets all agree; previously
+  `mise.toml` and the venv disagreed. Rebuild an existing venv with
+  `rm -rf .venv && mise run sync`.
 
 ### Removed
 

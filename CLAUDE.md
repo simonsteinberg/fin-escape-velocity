@@ -67,7 +67,7 @@ When asked to work in a git worktree, create it under `.worktree/<worktree-name>
 
 ## Python and tooling
 
-- Python 3.12
+- Python 3.15.2
 - Dependency management via `mise run sync` (uv)
 - Use `mise` tasks for all common operations:
 
