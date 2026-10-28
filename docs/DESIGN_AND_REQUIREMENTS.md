@@ -1,8 +1,7 @@
 # Wealth Forecast App — Design and Requirements
 
 > **Status:** living document describing the *current* implementation of `finev`,
-> reflecting what the code actually does today. Engineering rationale
-> is in [SOFTWARE_ENGINEERING.md](../SOFTWARE_ENGINEERING.md); the operational
+> reflecting what the code actually does today. The operational
 > checklist is in [CLAUDE.md](../CLAUDE.md).
 
 ---

@@ -2,10 +2,6 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Engineering principles:** see [SOFTWARE_ENGINEERING.md](SOFTWARE_ENGINEERING.md) for the
-> reasoning ("why") behind the rules below. This file is the operational checklist; that file
-> is the rationale.
->
 > **Design and requirements:** see [docs/DESIGN_AND_REQUIREMENTS.md](docs/DESIGN_AND_REQUIREMENTS.md)
 > for what the system does and the requirements it satisfies. It is the canonical
 > spec — **keep it current** (see [Keeping the design doc current](#keeping-the-design-doc-current)).
