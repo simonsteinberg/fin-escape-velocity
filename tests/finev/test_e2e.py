@@ -102,7 +102,7 @@ def test_app_entrypoint_serves_the_page(tmp_path: Path) -> None:
                     assert response.status == 200
                     body = response.read().decode("utf-8", "replace")
                 break
-            except (urllib.error.URLError, ConnectionError, OSError):
+            except urllib.error.URLError, ConnectionError, OSError:
                 time.sleep(0.3)
 
         assert body is not None, "app server never answered on its port"
